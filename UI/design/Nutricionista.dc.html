@@ -1,0 +1,461 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;500;600&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #fafbfa; }
+    a { color: #356148; text-decoration: none; }
+    a:hover { color: #1f3a2b; }
+    button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+    input, textarea { font: inherit; color: inherit; }
+    textarea { resize: none; }
+    .num { font-variant-numeric: tabular-nums; }
+    .srf { font-family: 'IBM Plex Serif', Georgia, 'Times New Roman', serif; }
+    .ecell:hover { background: #f4f7f5 !important; }
+    .scroll::-webkit-scrollbar { width: 8px; }
+    .scroll::-webkit-scrollbar-thumb { background: #dfe6e1; border-radius: 4px; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 980px; display: flex; flex-direction: column; background: #fafbfa; color: #454f49; font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13px; line-height: 1.4; overflow: hidden;">
+
+  <!-- ============ HEADER ============ -->
+  <header style="display: flex; align-items: center; gap: 16px; height: 60px; flex: none; padding: 0 24px; background: #ffffff; border-bottom: 1px solid #e2e8e3;">
+    <div style="display: flex; align-items: center; gap: 9px;">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="{{t.g700}}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17.5c0-5 1.8-8.4 5.5-10.2"></path><path d="M14.6 3.2c1.6 3.6.6 7.4-2.3 9.1-1.9 1.1-4 .6-4.9-1.1-.9-1.8 0-3.9 1.9-5 1.5-.9 3.4-.9 5.3-3z"></path><path d="M3.4 8.6c2.6.3 4.4 2 4.7 4.4"></path></svg>
+      <span style="font-weight: 600; font-size: 14px; letter-spacing: -0.01em; color: #161c18;">fdiet</span>
+    </div>
+
+    <span style="display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 3px; background: {{t.g100}}; color: {{t.g700}}; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;">
+      <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.3 2.6l2.1 2.1-6.4 6.4-2.6.5.5-2.6z"></path></svg>
+      Modo edición
+    </span>
+
+    <div style="width: 1px; height: 22px; background: #e2e8e3;"></div>
+
+    <div style="position: relative;">
+      <button onClick="{{togglePatients}}" style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px 0 12px; border: 1px solid #e2e8e3; border-radius: 4px; background: #ffffff;">
+        <span style="font-weight: 500; color: #161c18;">{{patient}}</span>
+        <span style="font-size: 11px; color: #78837c;">Dieta 1</span>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#78837c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5 7 9l3.5-3.5"></path></svg>
+      </button>
+      <sc-if value="{{patientMenu}}" hint-placeholder-val="{{true}}">
+        <div style="position: absolute; top: 40px; left: 0; z-index: 90; width: 300px; padding: 5px; background: #ffffff; border: 1px solid #e2e8e3; border-radius: 5px; box-shadow: 0 8px 24px rgba(22,28,24,.10), 0 1px 3px rgba(22,28,24,.06);">
+          <sc-for list="{{patients}}" as="p" hint-placeholder-count="3">
+            <button onClick="{{p.pick}}" style="display: flex; width: 100%; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 4px; text-align: left; background: {{p.bg}};">
+              <span style="flex: none; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: {{t.g100}}; color: {{t.g700}}; font-size: 10px; font-weight: 600;">{{p.initial}}</span>
+              <span style="flex: 1 1 0; min-width: 0;">
+                <span style="display: block; font-weight: 500; color: #161c18;">{{p.name}}</span>
+                <span style="display: block; font-size: 11.5px; color: #78837c;">{{p.meta}}</span>
+              </span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+
+    <span class="num" style="color: #78837c;">Semana del 24 – 30 ago</span>
+
+    <div style="flex: 1 1 0;"></div>
+
+    <span style="font-size: 12px; color: {{dirtyFg}};">{{dirtyLabel}}</span>
+    <button onClick="{{discard}}" style="height: 34px; padding: 0 14px; border: 1px solid #e2e8e3; border-radius: 4px; font-weight: 500; color: {{discardFg}}; background: #ffffff;">Descartar</button>
+    <button onClick="{{publish}}" style="display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 15px; border-radius: 4px; font-weight: 500; color: #ffffff; background: {{publishBg}};">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11V3M3.6 6.4 7 3l3.4 3.4"></path></svg>
+      Publicar cambios
+    </button>
+  </header>
+
+  <!-- ============ GOAL STRIP (editable) ============ -->
+  <div style="display: flex; align-items: center; gap: 14px; height: 54px; flex: none; padding: 0 24px; background: #ffffff; border-bottom: 1px solid #e2e8e3;">
+    <span style="display: flex; align-items: center; gap: 7px; flex: none; font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: {{t.g700}};">
+      <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"></circle><circle cx="7" cy="7" r="2"></circle></svg>
+      Objetivo
+    </span>
+    <input value="{{goal}}" onChange="{{onGoal}}" class="srf" style="flex: 1 1 0; min-width: 0; height: 34px; padding: 0 11px; border: 1px solid #e2e8e3; border-radius: 4px; font-size: 14.5px; color: #161c18; background: #ffffff;">
+    <span style="display: flex; align-items: baseline; gap: 6px; flex: none;">
+      <span style="font-size: 11.5px; color: #78837c;">Media semanal</span>
+      <span class="srf num" style="font-size: 16px; font-weight: 500; color: #161c18;">{{weekAvg}}</span>
+      <span style="font-size: 11.5px; color: #78837c;">kcal</span>
+    </span>
+    <span style="width: 1px; height: 20px; background: #e2e8e3;"></span>
+    <span style="display: flex; align-items: baseline; gap: 6px; flex: none;">
+      <span style="font-size: 11.5px; color: #78837c;">Puntuación del paciente</span>
+      <span class="srf num" style="font-size: 16px; font-weight: 500; color: #161c18;">4,1</span>
+      <span style="font-size: 11.5px; color: #78837c;">/ 5</span>
+    </span>
+  </div>
+
+  <!-- ============ BODY ============ -->
+  <div style="flex: 1 1 0; min-height: 0; display: flex;">
+
+    <!-- editable grid -->
+    <div style="flex: 1 1 0; min-width: 0; min-height: 0; padding: 18px 20px 20px 24px;">
+      <div style="display: flex; flex-direction: column; gap: 1px; background: #e2e8e3; border: 1px solid #e2e8e3; border-radius: 5px;">
+
+        <div style="display: flex; gap: 1px; height: 60px; flex: none;">
+          <div style="width: 124px; flex: none; background: #f6f8f6;"></div>
+          <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+            <div style="flex: 1 1 0; min-width: 0; padding: 7px 10px; background: #f6f8f6;">
+              <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 6px;">
+                <span style="font-weight: 600; font-size: 12px; color: #161c18;">{{d.name}}</span>
+                <span class="num" style="font-size: 11px; color: #9aa49e;">{{d.date}}</span>
+              </div>
+              <div style="display: flex; align-items: baseline; gap: 4px; margin-top: 2px;">
+                <span class="srf num" style="font-size: 14px; font-weight: 500; color: #161c18;">{{d.total}}</span>
+                <span style="font-size: 10.5px; color: #9aa49e;">kcal</span>
+                <span class="num" style="margin-left: auto; font-size: 10.5px; font-weight: 500; color: {{d.deltaFg}};">{{d.delta}}</span>
+              </div>
+              <div style="margin-top: 5px; height: 3px; border-radius: 2px; background: #eef2ef; overflow: hidden;">
+                <div style="height: 100%; width: {{d.barW}}; background: {{d.barBg}};"></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <sc-for list="{{rows}}" as="row" hint-placeholder-count="11">
+          <sc-if value="{{row.isBand}}" hint-placeholder-val="{{false}}">
+            <div style="display: flex; gap: 1px; height: 24px; flex: none;">
+              <div style="display: flex; align-items: center; width: 124px; flex: none; padding: 0 12px; background: {{t.g100}};">
+                <span style="font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: {{t.g700}};">{{row.label}}</span>
+              </div>
+              <div style="flex: 1 1 0; background: {{t.g50}};"></div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{row.isMeal}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; gap: 1px; height: 78px; flex: none;">
+              <div style="display: flex; flex-direction: column; justify-content: center; width: 124px; flex: none; padding: 0 12px; background: #f6f8f6;">
+                <span style="font-weight: 500; font-size: 12px; color: #161c18;">{{row.label}}</span>
+                <span style="margin-top: 1px; font-size: 10.5px; color: #9aa49e;">{{row.sub}}</span>
+              </div>
+              <sc-for list="{{row.cells}}" as="c" hint-placeholder-count="7">
+                <button class="ecell" onClick="{{c.select}}" style="position: relative; flex: 1 1 0; min-width: 0; padding: 6px 9px 5px; text-align: left; background: {{c.bg}}; box-shadow: {{c.ring}};">
+                  <span style="display: -webkit-box; font-size: 11.5px; line-height: 1.32; color: #454f49; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">{{c.text}}</span>
+                  <span style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                    <span class="num" style="font-size: 10.5px; font-weight: 500; color: #78837c;">{{c.kcal}}</span>
+                    <sc-if value="{{c.edited}}" hint-placeholder-val="{{false}}">
+                      <span style="display: flex; align-items: center; gap: 4px; margin-left: auto; font-size: 10px; font-weight: 500; color: #9a6a35;">
+                        <span style="width: 5px; height: 5px; border-radius: 50%; background: #c9a26a;"></span>
+                        editado
+                      </span>
+                    </sc-if>
+                  </span>
+                </button>
+              </sc-for>
+            </div>
+          </sc-if>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- ============ EDIT PANEL ============ -->
+    <aside style="width: 380px; flex: none; padding: 18px 24px 20px 4px; display: flex; flex-direction: column; min-height: 0;">
+      <div style="display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; background: #ffffff; border: 1px solid #e2e8e3; border-radius: 6px; overflow: hidden;">
+
+        <div style="flex: none; padding: 14px 16px 13px; border-bottom: 1px solid #eef2ef;">
+          <div style="font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: {{t.g700}};">{{sel.slot}}</div>
+          <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
+            <span style="font-weight: 600; font-size: 14px; color: #161c18;">{{sel.day}}</span>
+            <span class="num" style="font-size: 11.5px; color: #9aa49e;">{{sel.date}}</span>
+          </div>
+        </div>
+
+        <div class="scroll" style="flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 14px 16px 16px;">
+
+          <label style="display: block; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #78837c;">Descripción del plato</label>
+          <textarea onChange="{{onText}}" value="{{sel.text}}" rows="5" style="display: block; width: 100%; margin-top: 7px; padding: 10px 11px; border: 1px solid #d7e0da; border-radius: 4px; font-size: 12.5px; line-height: 1.45; color: #161c18; background: #ffffff; outline: none;"></textarea>
+
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 18px;">
+            <span style="font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #78837c;">Ingredientes detectados</span>
+            <span class="num" style="margin-left: auto; font-size: 11px; color: #9aa49e;">{{sel.linkedLabel}}</span>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 8px;">
+            <sc-for list="{{sel.ingredients}}" as="g" hint-placeholder-count="4">
+              <div style="display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 1px solid #eef2ef; border-radius: 4px;">
+                <span style="flex: 1 1 0; min-width: 0; font-size: 12px; color: #161c18; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{g.name}}</span>
+                <span class="num" style="flex: none; font-size: 11.5px; color: #454f49;">{{g.qty}}</span>
+                <span style="flex: none; display: flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 3px; font-size: 10px; font-weight: 500; background: {{g.chipBg}}; color: {{g.chipFg}};">{{g.chip}}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <button style="display: flex; align-items: center; gap: 7px; width: 100%; justify-content: center; margin-top: 8px; height: 34px; border: 1px dashed #d7e0da; border-radius: 4px; font-size: 12px; font-weight: 500; color: {{t.g700}};">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="6.2" cy="6.2" r="4"></circle><path d="M9.2 9.2l2.6 2.6"></path></svg>
+            Buscar alimento en el catálogo
+          </button>
+
+          <div style="margin-top: 20px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #78837c;">Valores del plato</div>
+          <div style="display: flex; gap: 8px; margin-top: 9px;">
+            <sc-for list="{{sel.fields}}" as="fl" hint-placeholder-count="4">
+              <label style="flex: 1 1 0; min-width: 0;">
+                <span style="display: block; font-size: 10.5px; color: #9aa49e;">{{fl.label}}</span>
+                <input value="{{fl.value}}" onChange="{{fl.onChange}}" class="num" style="display: block; width: 100%; margin-top: 4px; height: 36px; padding: 0 9px; border: 1px solid #d7e0da; border-radius: 4px; font-size: 14px; font-weight: 500; color: #161c18; background: #ffffff; outline: none;">
+              </label>
+            </sc-for>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 9px; margin-top: 14px; padding: 11px 12px; background: {{t.g50}}; border-radius: 4px;">
+            <span style="font-size: 11.5px; color: #454f49;">Total del día tras el cambio</span>
+            <span class="srf num" style="margin-left: auto; font-size: 17px; font-weight: 500; color: #161c18;">{{sel.dayTotal}}</span>
+            <span class="num" style="font-size: 11px; color: #78837c;">/ 1.900 kcal</span>
+          </div>
+
+          <p style="margin: 16px 0 0; padding-top: 14px; border-top: 1px solid #eef2ef; font-size: 11.5px; line-height: 1.5; color: #9aa49e;">Los cambios sólo llegan al paciente al publicar. El paciente ve la dieta en modo lectura: puede puntuar los platos y añadir comidas fuera del plan, pero no editar el plan.</p>
+        </div>
+
+        <div style="display: flex; gap: 8px; flex: none; padding: 12px 16px; border-top: 1px solid #eef2ef;">
+          <button onClick="{{revertCell}}" style="flex: 1 1 0; height: 36px; border: 1px solid #e2e8e3; border-radius: 4px; font-weight: 500; color: #454f49;">Revertir plato</button>
+          <button onClick="{{publish}}" style="flex: 1 1 0; height: 36px; border-radius: 4px; font-weight: 500; color: #ffffff; background: {{publishBg}};">Publicar</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#356148","options":["#356148","#2f6b57","#46785a","#2c5a44"],"section":"Tema"},"$preview":{"width":1440,"height":980}}'>
+/* global DCLogic */
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      patient: '[Paciente 1]',
+      patientMenu: false,
+      sel: { r: 3, d: 2 },
+      goal: '1.900 kcal/día · ≥ 120 g de proteína',
+      edits: {}
+    };
+  }
+
+  data() {
+    return {
+      target: 1900,
+      days: [['Lunes', '24'], ['Martes', '25'], ['Miércoles', '26'], ['Jueves', '27'], ['Viernes', '28'], ['Sábado', '29'], ['Domingo', '30']],
+      meals: [
+        { label: 'Desayuno', sub: '' },
+        { label: 'Media mañana', sub: '' },
+        { band: 'Comida' },
+        { label: 'Primer plato', sub: 'Comida' },
+        { label: 'Segundo plato', sub: 'Comida' },
+        { label: 'Postre', sub: 'Comida' },
+        { label: 'Merienda', sub: '' },
+        { band: 'Cena' },
+        { label: 'Primer plato', sub: 'Cena' },
+        { label: 'Segundo plato', sub: 'Cena' },
+        { label: 'Postre', sub: 'Cena' }
+      ],
+      slots: ['Desayuno', 'Media mañana', 'Comida · Primer plato', 'Comida · Segundo plato', 'Comida · Postre', 'Merienda', 'Cena · Primer plato', 'Cena · Segundo plato', 'Cena · Postre'],
+      text: [
+        ['Tostada de pan integral (60 gr) con tomate rallado (80 gr) y 3 lonchas de pavo (60 gr) + 1 huevo cocido + 1 melocotón mediano (180 gr)', 'Tortilla francesa de 2 huevos grandes (120 gr) + 2 tostadas integrales (50 gr) + 1 loncha jamón serrano + 1 infusión sin azúcar', '1 vaso de leche semidesnatada (250 mL) + plátano pequeño (120 gr) + 2 tostadas integrales (50 gr) con 1/2 cdta AOVE', '2 tostadas integrales (60 gr) con aguacate (1/2 unidad, 80 gr) + tomate en rodajas (100 gr) + 2 lonchas de pavo (40 gr) + café con leche semidesnatada (150 mL) sin azúcar', '2 tostadas integrales (50 gr) con tomate (80 gr) + 1 cdta AOVE + 1 huevo cocido + 2 albaricoques (120 gr)', 'Pancakes de plátano y huevo: 2 huevos + 1 plátano + fresones (100 gr)', '2 tostadas integrales (50 gr) con aguacate (1/2 unidad, 80 gr) + salmón ahumado (50 gr) + 1 infusión sin azúcar + 1 kiwi (100 gr)'],
+        ['Nueces (25 gr) + 1 manzana (180 gr)', '1 pera (180 gr) + almendras (20 gr)', '1 manzana + 2 biscotes integrales con queso fresco tipo Burgos (60 gr) + 10 nueces (15 gr)', '1 naranja (180 gr) + 2 lonchas de jamón serrano (40 gr)', 'Rollitos de pavo y aguacate: 2-3 lonchas de pavo (40-60 gr) + 1/4 de aguacate en láminas (40 gr) + 10 almendras (15 gr)', 'Vaso de leche semidesnatada (250 mL) + 2 tostadas integrales (50 gr) con tomate rallado (80 gr)', '1 manzana (180 gr) + almendras (15 gr)'],
+        ['Ensalada: lechuga (80 gr) + tomate (100 gr) + pepino (80 gr) + zanahoria rallada (60 gr) + maíz (60 gr) con 1 cdta AOVE + zumo de limón', 'Sopa fría de pepino y menta: pepino (200 gr) + caldo vegetal frío (200 mL) + menta fresca (5 gr) + queso fresco tipo Burgos (40 gr) + 1 cdta AOVE + zumo de limón', 'Arroz integral salteado con verduras: arroz integral crudo (80 gr) + pimiento rojo (80 gr) + pimiento verde (60 gr) + cebolla (60 gr) + zanahoria (60 gr) + 1 cdta AOVE + salsa de soja baja en sodio (5 mL)', 'Ensalada: tomate maduro (150 gr) + cebolla morada (60 gr) + pepino (100 gr) + aceitunas (30 gr) + 1 cdta AOVE + orégano', 'Ensalada de sandía y pepino: sandía en dados (200 gr) + pepino en rodajas (50 gr) con aliño: 1 cdta AOVE + vinagre de manzana + pizca de sal', 'Ensalada: rúcula (60 gr) + sandía (150 gr) + queso fresco (60 gr) + pipas de girasol (15 gr) + 1 cdta AOVE', 'Salmorejo cordobés (250 mL): tomate maduro (220 gr) + pan integral duro (30 gr) + ajo (5 gr) + 1 cdta AOVE + vinagre'],
+        ['Pechuga de pollo a la plancha (180 gr) + judías verdes salteadas: judías verdes (200 gr) + 1 diente de ajo + 1 cdta AOVE', 'Solomillo de cerdo a la plancha (160 gr) + ensalada de rúcula (60 gr) + tomate cherry (100 gr) + 1 cdta AOVE', 'Filetes de bacalao desalado al horno (180 gr) con limón + tomillo + pimientos asados: pimiento rojo (120 gr) + pimiento amarillo (80 gr) + 1 cdta AOVE', 'Filetes de merluza a la plancha (180 gr) con sofrito: pimiento rojo (80 gr) + cebolla (60 gr) + tomate (80 gr) + 1 cdta AOVE + patata hervida (120 gr)', 'Pollo asado al limón (180 gr) con hierbas provenzales + boniato asado (100 gr) + ensalada verde: lechuga (60 gr) + rúcula (40 gr) + 1 cdta AOVE', 'Pechuga de pollo a la plancha (180 gr) con aliño de ajo y perejil + salteado mediterráneo: calabacín (100 gr) + pimiento rojo (80 gr) + tomate cherry (100 gr) + cebolla morada (60 gr) + 1 cdta AOVE', 'Filetes de bacalao desalado al horno (180 gr) con patata (120 gr) + tomate cherry (100 gr) + 1 cdta AOVE + perejil'],
+        ['1 kiwi', '1 melocotón (180 gr)', 'Fresones (150 gr) con zumo de naranja natural (60 mL)', '1 melocotón (180 gr)', '1 rodaja de melón (200 gr)', '1 melocotón (180 gr)', 'Ensalada de fruta: melocotón (100 gr) + fresones (80 gr) + uvas (80 gr)'],
+        ['Queso fresco tipo burgos (150 gr) + 6 fresas (80 gr) + 10 almendras (15 gr)', 'Pepino en rodajas (150 gr) + hummus casero (60 gr)', 'Palitos de zanahoria (100 gr) + apio (80 gr) con guacamole casero (60 gr)', 'Queso fresco tipo Burgos (100 gr) + nueces (20 gr)', 'Frutos secos variados: 25 gr de nueces + almendras + avellanas + 1 melocotón (180 gr)', 'Hummus casero (70 gr) + bastones de pepino (120 gr) + zanahoria (80 gr)', 'Queso fresco tipo Burgos (150 gr) + 1 cdta de semilla de chía (10 gr) + 4 nueces'],
+        ['Crema de calabacín y puerro: calabacín (200 gr) + puerro (80 gr) + caldo vegetal (300 mL)', 'Lentejas estofadas con verduras: lentejas cocidas (180 gr) + zanahoria (80 gr) + cebolla (60 gr) + tomate (60 gr) + pimentón + 1 cdta AOVE', 'Sopa de fideos: caldo de pollo casero (300 mL) + fideos integrales (40 gr) + zanahoria (60 gr) + apio (40 gr) + puerro (50 gr)', 'Crema de espárragos verdes: espárragos verdes (250 gr) + cebolla (60 gr) + caldo vegetal (250 mL)', 'Ensalada de legumbres: garbanzos cocidos (120 gr) + pimiento rojo (80 gr) + cebolla morada (50 gr) + tomate (80 gr) + perejil + 1 cdta AOVE', 'Pisto manchego: calabacín (120 gr) + pimiento rojo (80 gr) + pimiento verde (60 gr) + tomate (120 gr) + cebolla (60 gr) + 1 cdta AOVE', 'Vichyssoise fría: puerro (150 gr) + patata (100 gr) + caldo vegetal (300 mL) + 1 cdta AOVE'],
+        ['Filetes de merluza al horno (180 gr) con limón + espárragos trigueros al horno: espárragos (150 gr) + 1 cdta AOVE + sal', '1 huevo duro + lechuga (60 gr) + tomate (80 gr)', 'Pechuga de pavo a la plancha (160 gr) + espinacas salteadas: espinacas frescas (200 gr) + 2 dientes de ajo + 1 cdta AOVE', 'Tortilla de espinacas y champiñones: 2 huevos grandes + espinacas frescas (100 gr) + champiñones (120 gr) + 1 cdta AOVE + 1 pan integral (30 gr)', 'Atún al natural o a la plancha (160 gr) + judías verdes al vapor: judías verdes (200 gr) + sal + limón', 'Revuelto: 2 huevos + espárragos trigueros (120 gr) + jamón serrano (40 gr) + 1 cdta AOVE', 'Pechuga de pollo en papillote (180 gr) con limón + hierbas provenzales + zanahoria (80 gr) + calabacín (80 gr)'],
+        ['1 naranja', '1 ciruela (80 gr)', '1 kiwi (100 gr)', '1 pera pequeña', '1 kiwi (100 gr)', '1 naranja pequeña (150 gr)', '1 ciruela (80 gr) + 1 albaricoque (60 gr)']
+      ],
+      nut: [
+        [[378, 33, 45, 9], [385, 28, 26, 19], [345, 15, 52, 9], [380, 20, 40, 17], [316, 16, 38, 13], [293, 15, 32, 11], [355, 19, 36, 17]],
+        [[257, 5, 27, 16], [211, 6, 26, 12], [245, 10, 26, 12], [180, 12, 18, 6], [206, 14, 6, 15], [255, 13, 40, 5], [160, 4, 21, 7]],
+        [[175, 4, 22, 6], [145, 8, 9, 9], [315, 9, 58, 7], [195, 3, 16, 13], [107, 2, 17, 5], [240, 10, 17, 15], [205, 5, 20, 12]],
+        [[397, 58, 9, 12], [345, 45, 7, 15], [270, 36, 10, 9], [385, 36, 32, 11], [450, 56, 25, 14], [390, 55, 16, 13], [318, 37, 24, 9]],
+        [[45, 1, 10, 0], [70, 2, 16, 0], [76, 1, 17, 0], [70, 2, 16, 0], [68, 1, 16, 0], [70, 2, 16, 0], [100, 2, 24, 0]],
+        [[283, 20, 12, 16], [140, 5, 12, 8], [128, 3, 12, 8], [215, 13, 6, 15], [225, 6, 22, 14], [166, 6, 18, 8], [265, 19, 9, 17]],
+        [[120, 5, 14, 4], [330, 17, 45, 8], [195, 7, 33, 3], [130, 6, 14, 5], [280, 11, 34, 10], [185, 4, 18, 11], [175, 4, 22, 8]],
+        [[230, 34, 5, 7], [125, 9, 6, 7], [270, 37, 8, 11], [330, 22, 22, 18], [272, 42, 8, 8], [320, 24, 6, 23], [320, 52, 12, 8]],
+        [[62, 1, 15, 0], [37, 1, 9, 0], [61, 1, 14, 0], [70, 1, 17, 0], [61, 1, 14, 0], [70, 1, 17, 0], [66, 1, 16, 0]]
+      ]
+    };
+  }
+
+  mix(hex, amt) {
+    const h = String(hex).replace('#', '');
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    const m = (v) => Math.round(v + (255 - v) * amt).toString(16).padStart(2, '0');
+    return '#' + m(r) + m(g) + m(b);
+  }
+
+  fmt(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+
+  key(r, d) { return r + '-' + d; }
+
+  cellText(D, r, d) {
+    const e = this.state.edits[this.key(r, d)];
+    return e && e.text !== undefined ? e.text : D.text[r][d];
+  }
+
+  cellNut(D, r, d) {
+    const base = D.nut[r][d];
+    const e = this.state.edits[this.key(r, d)] || {};
+    return [
+      e.kcal !== undefined ? e.kcal : base[0],
+      e.p !== undefined ? e.p : base[1],
+      e.c !== undefined ? e.c : base[2],
+      e.f !== undefined ? e.f : base[3]
+    ];
+  }
+
+  /* Splits the dish text the nutritionist wrote into ingredient rows.
+     A part that carries an explicit quantity can be matched against the
+     food catalogue; one without has to be linked by hand. */
+  parseIngredients(text) {
+    const out = [];
+    const parts = String(text).split(/\s*\+\s*/);
+    for (const raw of parts) {
+      let s = raw.trim();
+      if (!s) continue;
+      const colon = s.indexOf(':');
+      if (colon > 0 && colon < 40) s = s.slice(colon + 1).trim();
+      const m = s.match(/\(([^)]*\d[^)]*)\)/);
+      const qty = m ? m[1] : '';
+      let name = s.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+      if (name.length > 44) name = name.slice(0, 44) + '…';
+      if (!name) continue;
+      out.push({ name: name, qty: qty || '—', linked: !!qty });
+    }
+    return out.slice(0, 8);
+  }
+
+  renderVals() {
+    const accent = this.props.accent || '#356148';
+    const D = this.data();
+    const t = {
+      g700: accent,
+      g600: this.mix(accent, 0.14),
+      g200: this.mix(accent, 0.72),
+      g100: this.mix(accent, 0.88),
+      g50: this.mix(accent, 0.945)
+    };
+
+    const totals = D.days.map((_, i) => {
+      let k = 0;
+      for (let r = 0; r < D.nut.length; r++) k += this.cellNut(D, r, i)[0];
+      return k;
+    });
+
+    const days = D.days.map((d, i) => {
+      const k = totals[i];
+      const over = k - D.target;
+      return {
+        name: d[0],
+        date: d[1],
+        total: this.fmt(k),
+        delta: (over >= 0 ? '+' : '−') + this.fmt(Math.abs(over)),
+        deltaFg: Math.abs(over) > 60 ? '#9a6a35' : '#b3bcb7',
+        barW: Math.min(112, Math.round(k / D.target * 100)) + '%',
+        barBg: Math.abs(over) > 60 ? '#c9a26a' : t.g600
+      };
+    });
+
+    let rIdx = 0;
+    const rows = D.meals.map((m) => {
+      if (m.band) return { isBand: true, isMeal: false, label: m.band, sub: '', cells: [] };
+      const r = rIdx++;
+      const cells = D.days.map((d, i) => {
+        const isSel = this.state.sel.r === r && this.state.sel.d === i;
+        return {
+          text: this.cellText(D, r, i),
+          kcal: this.fmt(this.cellNut(D, r, i)[0]),
+          edited: !!this.state.edits[this.key(r, i)],
+          bg: isSel ? t.g50 : '#ffffff',
+          ring: isSel ? 'inset 0 0 0 2px ' + accent : 'none',
+          select: () => this.setState({ sel: { r: r, d: i } })
+        };
+      });
+      return { isBand: false, isMeal: true, label: m.label, sub: m.sub, cells: cells };
+    });
+
+    const sr = this.state.sel.r;
+    const sd = this.state.sel.d;
+    const sText = this.cellText(D, sr, sd);
+    const sNut = this.cellNut(D, sr, sd);
+    const ing = this.parseIngredients(sText);
+    const linked = ing.filter((g) => g.linked).length;
+
+    const setField = (prop) => (e) => {
+      const v = parseInt(String(e.target.value).replace(/[^0-9]/g, ''), 10);
+      const all = Object.assign({}, this.state.edits);
+      const k = this.key(sr, sd);
+      all[k] = Object.assign({}, all[k]);
+      all[k][prop] = isNaN(v) ? 0 : v;
+      this.setState({ edits: all });
+    };
+
+    const fields = [
+      { label: 'kcal', value: String(sNut[0]), onChange: setField('kcal') },
+      { label: 'Proteínas g', value: String(sNut[1]), onChange: setField('p') },
+      { label: 'HC g', value: String(sNut[2]), onChange: setField('c') },
+      { label: 'Grasas g', value: String(sNut[3]), onChange: setField('f') }
+    ];
+
+    const dirty = Object.keys(this.state.edits).length;
+
+    return {
+      t: t,
+      patient: this.state.patient,
+      patientMenu: this.state.patientMenu,
+      patients: ['[Paciente 1]', '[Paciente 2]', '[Paciente 3]'].map((n, i) => ({
+        name: n,
+        initial: String(i + 1),
+        meta: i === 0 ? 'Dieta 1 · publicada hace 3 días' : (i === 1 ? 'Dieta Postoperatoria · día 4' : 'Sin dieta asignada'),
+        bg: n === this.state.patient ? t.g50 : 'transparent',
+        pick: () => this.setState({ patient: n, patientMenu: false })
+      })),
+      goal: this.state.goal,
+      weekAvg: this.fmt(totals.reduce((a, b) => a + b, 0) / D.days.length),
+      days: days,
+      rows: rows,
+      dirtyLabel: dirty ? dirty + (dirty === 1 ? ' plato sin publicar' : ' platos sin publicar') : 'Todo publicado',
+      dirtyFg: dirty ? '#9a6a35' : '#9aa49e',
+      discardFg: dirty ? '#454f49' : '#b3bcb7',
+      publishBg: dirty ? accent : '#c2ccc6',
+      sel: {
+        slot: D.slots[sr],
+        day: D.days[sd][0],
+        date: D.days[sd][1] + ' de agosto',
+        text: sText,
+        ingredients: ing.map((g) => ({
+          name: g.name,
+          qty: g.qty,
+          chip: g.linked ? 'Vinculado' : 'Sin vincular',
+          chipBg: g.linked ? t.g100 : '#f7efe3',
+          chipFg: g.linked ? t.g700 : '#9a6a35'
+        })),
+        linkedLabel: linked + ' de ' + ing.length + ' en el catálogo',
+        fields: fields,
+        dayTotal: this.fmt(totals[sd])
+      },
+      togglePatients: () => this.setState({ patientMenu: !this.state.patientMenu }),
+      onGoal: (e) => this.setState({ goal: e.target.value }),
+      onText: (e) => {
+        const all = Object.assign({}, this.state.edits);
+        const k = this.key(sr, sd);
+        all[k] = Object.assign({}, all[k], { text: e.target.value });
+        this.setState({ edits: all });
+      },
+      revertCell: () => {
+        const all = Object.assign({}, this.state.edits);
+        delete all[this.key(sr, sd)];
+        this.setState({ edits: all });
+      },
+      discard: () => this.setState({ edits: {} }),
+      publish: () => this.setState({ edits: {} })
+    };
+  }
+}
+</script>
+</body>
+</html>

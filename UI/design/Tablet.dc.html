@@ -1,0 +1,465 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;500;600&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #fafbfa; }
+    a { color: #356148; text-decoration: none; }
+    a:hover { color: #1f3a2b; }
+    button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+    .num { font-variant-numeric: tabular-nums; }
+    .srf { font-family: 'IBM Plex Serif', Georgia, 'Times New Roman', serif; }
+    .cell:hover { z-index: 50; }
+    .pop { pointer-events: none; }
+    .cell:hover .pop {
+      opacity: 1 !important;
+      visibility: visible !important;
+      transform: translateY(0) !important;
+      pointer-events: auto;
+    }
+    .pop-r { left: calc(100% + 9px); }
+    .pop-l { right: calc(100% + 9px); }
+    .pop-t { top: -12px; }
+    .pop-b { bottom: -12px; }
+  </style>
+</helmet>
+
+<div style="width: 834px; height: 1112px; display: flex; flex-direction: column; background: #fafbfa; color: #454f49; font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13px; line-height: 1.4; overflow: hidden;">
+
+  <!-- ============ HEADER ============ -->
+  <header style="display: flex; align-items: center; gap: 14px; height: 56px; flex: none; padding: 0 18px; background: #ffffff; border-bottom: 1px solid #e2e8e3;">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="{{t.g700}}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17.5c0-5 1.8-8.4 5.5-10.2"></path><path d="M14.6 3.2c1.6 3.6.6 7.4-2.3 9.1-1.9 1.1-4 .6-4.9-1.1-.9-1.8 0-3.9 1.9-5 1.5-.9 3.4-.9 5.3-3z"></path><path d="M3.4 8.6c2.6.3 4.4 2 4.7 4.4"></path></svg>
+    <span style="font-weight: 600; font-size: 14px; color: #161c18;">Dieta 1</span>
+    <span class="num" style="font-size: 12px; color: #78837c;">Semana del 24 – 30 ago</span>
+    <div style="flex: 1 1 0;"></div>
+    <div style="display: flex; gap: 2px; padding: 2px; background: #f1f4f2; border-radius: 5px;">
+      <button onClick="{{showWeek}}" style="height: 30px; padding: 0 14px; border-radius: 4px; font-weight: 500; background: {{ui.weekBg}}; color: {{ui.weekFg}}; box-shadow: {{ui.weekSh}};">Semana</button>
+      <button onClick="{{showDay}}" style="height: 30px; padding: 0 14px; border-radius: 4px; font-weight: 500; background: {{ui.dayBg}}; color: {{ui.dayFg}}; box-shadow: {{ui.daySh}};">Día</button>
+    </div>
+    <span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: {{t.g100}}; color: {{t.g700}}; font-size: 11px; font-weight: 600;">P</span>
+  </header>
+
+  <!-- ============ GOAL ============ -->
+  <div style="display: flex; align-items: center; gap: 14px; height: 48px; flex: none; padding: 0 18px; background: #ffffff; border-bottom: 1px solid #e2e8e3;">
+    <span style="display: flex; align-items: center; gap: 7px; flex: none; font-size: 10px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: {{t.g700}};">
+      <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"></circle><circle cx="7" cy="7" r="2"></circle></svg>
+      Objetivo
+    </span>
+    <span class="srf" style="flex: 1 1 0; min-width: 0; font-size: 14px; color: #161c18; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">1.900 kcal/día · ≥ 120 g de proteína</span>
+    <span style="display: flex; align-items: baseline; gap: 5px; flex: none;">
+      <span style="font-size: 11px; color: #78837c;">Media semanal</span>
+      <span class="srf num" style="font-size: 15px; font-weight: 500; color: #161c18;">{{weekAvg}}</span>
+      <span style="font-size: 11px; color: #78837c;">kcal</span>
+    </span>
+  </div>
+
+  <!-- ============ DAY SUMMARY STRIP (replaces the desktop rail) ============ -->
+  <div style="display: flex; align-items: center; gap: 18px; flex: none; margin: 14px 18px 0; padding: 12px 15px; background: #ffffff; border: 1px solid #e2e8e3; border-radius: 6px;">
+    <div style="flex: none;">
+      <div style="display: flex; align-items: baseline; gap: 7px;">
+        <span style="font-weight: 600; font-size: 12.5px; color: #161c18;">{{today.title}}</span>
+        <span style="font-size: 11px; color: #9aa49e;">{{today.sub}}</span>
+      </div>
+      <div style="display: flex; align-items: flex-end; gap: 6px; margin-top: 4px;">
+        <span class="srf num" style="font-size: 26px; line-height: .9; font-weight: 500; color: #161c18;">{{today.total}}</span>
+        <span class="num" style="padding-bottom: 2px; font-size: 11.5px; color: #78837c;">/ {{today.target}} kcal</span>
+      </div>
+    </div>
+    <div style="flex: 1 1 0; min-width: 0;">
+      <div style="display: flex; gap: 2px; height: 7px; border-radius: 4px; background: #eef2ef; overflow: hidden;">
+        <div style="height: 100%; width: {{today.planW}}; background: {{t.g600}};"></div>
+        <div style="height: 100%; width: {{today.extraW}}; background: #c9a26a;"></div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px; margin-top: 8px; font-size: 11.5px;">
+        <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; border-radius: 2px; background: {{t.g600}};"></span><span style="color: #78837c;">Plan</span><span class="num" style="font-weight: 500; color: #454f49;">{{today.plan}}</span></span>
+        <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; border-radius: 2px; background: #c9a26a;"></span><span style="color: #78837c;">Extra</span><span class="num" style="font-weight: 500; color: #454f49;">{{today.extra}}</span></span>
+        <span style="margin-left: auto; color: {{today.deltaFg}};">{{today.deltaText}}</span>
+      </div>
+    </div>
+    <button onClick="{{addExtra}}" style="flex: none; display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 13px; border: 1px dashed #dcbe95; border-radius: 4px; color: #9a6a35; font-weight: 500; font-size: 12px;">
+      <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 3v8M3 7h8"></path></svg>
+      Añadir comida extra
+    </button>
+  </div>
+
+  <!-- ============ CONTENT ============ -->
+  <div style="flex: 1 1 0; min-height: 0; padding: 14px 18px 18px;">
+
+    <!-- WEEK -->
+    <sc-if value="{{isWeek}}" hint-placeholder-val="{{true}}">
+      <div style="display: flex; flex-direction: column; gap: 1px; background: #e2e8e3; border: 1px solid #e2e8e3; border-radius: 5px;">
+
+        <div style="display: flex; gap: 1px; height: 56px; flex: none;">
+          <div style="width: 88px; flex: none; background: #f6f8f6;"></div>
+          <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+            <div style="flex: 1 1 0; min-width: 0; padding: 6px 7px; background: {{d.headBg}}; border-top: 2px solid {{d.headLine}};">
+              <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 4px;">
+                <span style="font-weight: 600; font-size: 11.5px; color: {{d.headFg}};">{{d.abbr}}</span>
+                <span class="num" style="font-size: 10.5px; color: #9aa49e;">{{d.date}}</span>
+              </div>
+              <div style="display: flex; align-items: baseline; gap: 3px; margin-top: 2px;">
+                <span class="srf num" style="font-size: 13px; font-weight: 500; color: #161c18;">{{d.total}}</span>
+                <span class="num" style="margin-left: auto; font-size: 10px; font-weight: 500; color: {{d.deltaFg}};">{{d.delta}}</span>
+              </div>
+              <div style="margin-top: 4px; height: 3px; border-radius: 2px; background: #eef2ef; overflow: hidden;">
+                <div style="height: 100%; width: {{d.barW}}; background: {{d.barBg}};"></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <sc-for list="{{rows}}" as="row" hint-placeholder-count="11">
+          <sc-if value="{{row.isBand}}" hint-placeholder-val="{{false}}">
+            <div style="display: flex; gap: 1px; height: 24px; flex: none;">
+              <div style="display: flex; align-items: center; width: 88px; flex: none; padding: 0 10px; background: {{t.g100}};">
+                <span style="font-size: 9.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: {{t.g700}};">{{row.label}}</span>
+              </div>
+              <div style="flex: 1 1 0; background: {{t.g50}};"></div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{row.isMeal}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; gap: 1px; height: 86px; flex: none;">
+              <div style="display: flex; flex-direction: column; justify-content: center; width: 88px; flex: none; padding: 0 10px; background: #f6f8f6;">
+                <span style="font-weight: 500; font-size: 11.5px; line-height: 1.25; color: #161c18;">{{row.label}}</span>
+                <span style="margin-top: 1px; font-size: 10px; color: #9aa49e;">{{row.sub}}</span>
+              </div>
+              <sc-for list="{{row.cells}}" as="c" hint-placeholder-count="7">
+                <div class="cell" style="position: relative; flex: 1 1 0; min-width: 0; padding: 6px 7px 5px; background: {{c.bg}};">
+                  <p style="margin: 0; font-size: 10.5px; line-height: 1.3; color: #454f49; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;">{{c.text}}</p>
+                  <div style="display: flex; align-items: center; gap: 5px; margin-top: 4px;">
+                    <span class="num" style="font-size: 10px; font-weight: 500; color: #78837c;">{{c.kcal}}</span>
+                    <span style="margin-left: auto; display: flex; align-items: center; gap: 2px; font-size: 10px; color: {{c.scoreFg}};">
+                      <svg width="9" height="9" viewBox="0 0 12 12" fill="{{c.scoreFill}}" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M6 1.4l1.4 3 3.2.4-2.4 2.2.6 3.2L6 8.7l-2.8 1.5.6-3.2L1.4 4.8l3.2-.4z"></path></svg>
+                      <span class="num">{{c.scoreLabel}}</span>
+                    </span>
+                  </div>
+
+                  <div class="{{c.popCls}}" style="position: absolute; z-index: 60; width: 300px; padding: 13px 14px 11px; background: #ffffff; border: 1px solid #dfe6e1; border-radius: 6px; box-shadow: 0 14px 34px rgba(22,28,24,.14), 0 2px 6px rgba(22,28,24,.07); opacity: 0; visibility: hidden; transform: translateY(3px); transition: opacity .12s ease, transform .12s ease;">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px;">
+                      <span style="font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: {{t.g700}};">{{c.popMeal}}</span>
+                      <span style="font-size: 11px; color: #9aa49e;">{{c.popDay}}</span>
+                    </div>
+                    <p style="margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: #161c18;">{{c.text}}</p>
+                    <div style="display: flex; align-items: flex-end; gap: 9px; margin-top: 12px; padding-top: 11px; border-top: 1px solid #eef2ef;">
+                      <span class="srf num" style="font-size: 25px; line-height: .95; font-weight: 500; color: #161c18;">{{c.kcal}}</span>
+                      <span style="font-size: 11px; color: #78837c; padding-bottom: 2px;">kcal</span>
+                      <span class="num" style="margin-left: auto; font-size: 11px; color: #78837c; padding-bottom: 2px;">{{c.pctLabel}}</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 7px; margin-top: 11px;">
+                      <sc-for list="{{c.macros}}" as="m" hint-placeholder-count="3">
+                        <div style="display: flex; align-items: center; gap: 9px;">
+                          <span style="width: 88px; flex: none; font-size: 11px; color: #454f49;">{{m.name}}</span>
+                          <span style="flex: 1 1 0; height: 5px; border-radius: 3px; background: #eef2ef; overflow: hidden;">
+                            <span style="display: block; height: 100%; width: {{m.w}}; background: {{m.color}};"></span>
+                          </span>
+                          <span class="num" style="width: 40px; flex: none; text-align: right; font-size: 11px; font-weight: 500; color: #161c18;">{{m.g}}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #eef2ef;">
+                      <span style="font-size: 11px; color: #78837c;">Puntúa el plato</span>
+                      <span style="margin-left: auto; display: flex; gap: 2px;">
+                        <button onClick="{{c.st1.pick}}" style="display: flex; padding: 2px;"><svg width="16" height="16" viewBox="0 0 12 12" fill="{{c.st1.fill}}" stroke="{{c.st1.stroke}}" stroke-width="1.1" stroke-linejoin="round"><path d="M6 1.4l1.4 3 3.2.4-2.4 2.2.6 3.2L6 8.7l-2.8 1.5.6-3.2L1.4 4.8l3.2-.4z"></path></svg></button>
+                        <button onClick="{{c.st2.pick}}" style="display: flex; padding: 2px;"><svg width="16" height="16" viewBox="0 0 12 12" fill="{{c.st2.fill}}" stroke="{{c.st2.stroke}}" stroke-width="1.1" stroke-linejoin="round"><path d="M6 1.4l1.4 3 3.2.4-2.4 2.2.6 3.2L6 8.7l-2.8 1.5.6-3.2L1.4 4.8l3.2-.4z"></path></svg></button>
+                        <button onClick="{{c.st3.pick}}" style="display: flex; padding: 2px;"><svg width="16" height="16" viewBox="0 0 12 12" fill="{{c.st3.fill}}" stroke="{{c.st3.stroke}}" stroke-width="1.1" stroke-linejoin="round"><path d="M6 1.4l1.4 3 3.2.4-2.4 2.2.6 3.2L6 8.7l-2.8 1.5.6-3.2L1.4 4.8l3.2-.4z"></path></svg></button>
+                        <button onClick="{{c.st4.pick}}" style="display: flex; padding: 2px;"><svg width="16" height="16" viewBox="0 0 12 12" fill="{{c.st4.fill}}" stroke="{{c.st4.stroke}}" stroke-width="1.1" stroke-linejoin="round"><path d="M6 1.4l1.4 3 3.2.4-2.4 2.2.6 3.2L6 8.7l-2.8 1.5.6-3.2L1.4 4.8l3.2-.4z"></path></svg></button>
+                        <button onClick="{{c.st5.pick}}" style="display: flex; padding: 2px;"><svg width="16" height="16" viewBox="0 0 12 12" fill="{{c.st5.fill}}" stroke="{{c.st5.stroke}}" stroke-width="1.1" stroke-linejoin="round"><path d="M6 1.4l1.4 3 3.2.4-2.4 2.2.6 3.2L6 8.7l-2.8 1.5.6-3.2L1.4 4.8l3.2-.4z"></path></svg></button>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <!-- DAY -->
+    <sc-if value="{{isDay}}" hint-placeholder-val="{{false}}">
+      <div style="display: flex; flex-direction: column; gap: 12px; height: 100%;">
+        <div style="display: flex; gap: 5px; flex: none;">
+          <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+            <button onClick="{{d.pick}}" style="flex: 1 1 0; min-width: 0; padding: 7px 8px; border: 1px solid {{d.pillLine}}; border-radius: 5px; text-align: left; background: {{d.pillBg}};">
+              <span style="display: flex; align-items: baseline; justify-content: space-between; gap: 4px;">
+                <span style="font-weight: 600; font-size: 11.5px; color: {{d.pillFg}};">{{d.abbr}}</span>
+                <span class="num" style="font-size: 10.5px; color: #9aa49e;">{{d.date}}</span>
+              </span>
+              <span class="srf num" style="display: block; margin-top: 2px; font-size: 13px; font-weight: 500; color: #161c18;">{{d.total}}</span>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 1px; background: #e2e8e3; border: 1px solid #e2e8e3; border-radius: 5px;">
+          <sc-for list="{{dayRows}}" as="r" hint-placeholder-count="11">
+            <sc-if value="{{r.isBand}}" hint-placeholder-val="{{false}}">
+              <div style="flex: none; padding: 5px 14px; background: {{t.g100}};">
+                <span style="font-size: 9.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: {{t.g700}};">{{r.label}}</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{r.isMeal}}" hint-placeholder-val="{{true}}">
+              <div style="display: flex; align-items: center; gap: 14px; height: 68px; flex: none; padding: 0 14px; background: #ffffff;">
+                <div style="width: 104px; flex: none;">
+                  <div style="font-weight: 500; font-size: 12px; color: #161c18;">{{r.label}}</div>
+                  <div style="font-size: 10px; color: #9aa49e;">{{r.sub}}</div>
+                </div>
+                <p style="flex: 1 1 0; min-width: 0; margin: 0; font-size: 12px; line-height: 1.4; color: #454f49; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">{{r.text}}</p>
+                <div class="srf num" style="width: 56px; flex: none; text-align: right; font-size: 16px; font-weight: 500; color: #161c18;">{{r.kcal}}</div>
+                <div style="display: flex; gap: 1px; flex: none;">
+                  <button onClick="{{r.st1.pick}}" style="display: flex; padding: 3px;"><svg width="15" height="15" viewBox="0 0 12 12" fill="{{r.st1.fill}}" stroke="{{r.st1.stroke}}" stroke-width="1.1" stroke-linejoin="round"><path d="M6 1.4l1.4 3 3.2.4-2.4 2.2.6 3.2L6 8.7l-2.8 1.5.6-3.2L1.4 4.8l3.2-.4z"></path></svg></button>
+                  <button onClick="{{r.st2.pick}}" style="display: flex; padding: 3px;"><svg width="15" height="15" viewBox="0 0 12 12" fill="{{r.st2.fill}}" stroke="{{r.st2.stroke}}" stroke-width="1.1" stroke-linejoin="round"><path d="M6 1.4l1.4 3 3.2.4-2.4 2.2.6 3.2L6 8.7l-2.8 1.5.6-3.2L1.4 4.8l3.2-.4z"></path></svg></button>
+                  <button onClick="{{r.st3.pick}}" style="display: flex; padding: 3px;"><svg width="15" height="15" viewBox="0 0 12 12" fill="{{r.st3.fill}}" stroke="{{r.st3.stroke}}" stroke-width="1.1" stroke-linejoin="round"><path d="M6 1.4l1.4 3 3.2.4-2.4 2.2.6 3.2L6 8.7l-2.8 1.5.6-3.2L1.4 4.8l3.2-.4z"></path></svg></button>
+                  <button onClick="{{r.st4.pick}}" style="display: flex; padding: 3px;"><svg width="15" height="15" viewBox="0 0 12 12" fill="{{r.st4.fill}}" stroke="{{r.st4.stroke}}" stroke-width="1.1" stroke-linejoin="round"><path d="M6 1.4l1.4 3 3.2.4-2.4 2.2.6 3.2L6 8.7l-2.8 1.5.6-3.2L1.4 4.8l3.2-.4z"></path></svg></button>
+                  <button onClick="{{r.st5.pick}}" style="display: flex; padding: 3px;"><svg width="15" height="15" viewBox="0 0 12 12" fill="{{r.st5.fill}}" stroke="{{r.st5.stroke}}" stroke-width="1.1" stroke-linejoin="round"><path d="M6 1.4l1.4 3 3.2.4-2.4 2.2.6 3.2L6 8.7l-2.8 1.5.6-3.2L1.4 4.8l3.2-.4z"></path></svg></button>
+                </div>
+              </div>
+            </sc-if>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#356148","options":["#356148","#2f6b57","#46785a","#2c5a44"],"section":"Tema"},"startView":{"editor":"enum","options":["Semana","Día"],"default":"Semana","section":"Tema"},"$preview":{"width":834,"height":1112}}'>
+/* global DCLogic */
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      view: (props && props.startView) === 'Día' ? 'day' : 'week',
+      day: 1,
+      scores: {
+        '0-0': 4, '1-0': 5, '2-0': 3, '3-0': 5, '4-0': 4, '5-0': 4, '6-0': 3, '7-0': 4, '8-0': 5,
+        '0-1': 5, '1-1': 4, '2-1': 4, '3-1': 5, '4-1': 3
+      },
+      extras: { '1': 239 }
+    };
+  }
+
+  data() {
+    return {
+      target: 1900,
+      days: [['Lun', '24'], ['Mar', '25'], ['Mié', '26'], ['Jue', '27'], ['Vie', '28'], ['Sáb', '29'], ['Dom', '30']],
+      full: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'],
+      today: 1,
+      meals: [
+        { label: 'Desayuno', sub: '' },
+        { label: 'Media mañana', sub: '' },
+        { band: 'Comida' },
+        { label: 'Primer plato', sub: 'Comida' },
+        { label: 'Segundo plato', sub: 'Comida' },
+        { label: 'Postre', sub: 'Comida' },
+        { label: 'Merienda', sub: '' },
+        { band: 'Cena' },
+        { label: 'Primer plato', sub: 'Cena' },
+        { label: 'Segundo plato', sub: 'Cena' },
+        { label: 'Postre', sub: 'Cena' }
+      ],
+      text: [
+        ['Tostada de pan integral (60 gr) con tomate rallado (80 gr) y 3 lonchas de pavo (60 gr) + 1 huevo cocido + 1 melocotón mediano (180 gr)', 'Tortilla francesa de 2 huevos grandes (120 gr) + 2 tostadas integrales (50 gr) + 1 loncha jamón serrano + 1 infusión sin azúcar', '1 vaso de leche semidesnatada (250 mL) + plátano pequeño (120 gr) + 2 tostadas integrales (50 gr) con 1/2 cdta AOVE', '2 tostadas integrales (60 gr) con aguacate (1/2 unidad, 80 gr) + tomate en rodajas (100 gr) + 2 lonchas de pavo (40 gr) + café con leche semidesnatada (150 mL) sin azúcar', '2 tostadas integrales (50 gr) con tomate (80 gr) + 1 cdta AOVE + 1 huevo cocido + 2 albaricoques (120 gr)', 'Pancakes de plátano y huevo: 2 huevos + 1 plátano + fresones (100 gr)', '2 tostadas integrales (50 gr) con aguacate (1/2 unidad, 80 gr) + salmón ahumado (50 gr) + 1 infusión sin azúcar + 1 kiwi (100 gr)'],
+        ['Nueces (25 gr) + 1 manzana (180 gr)', '1 pera (180 gr) + almendras (20 gr)', '1 manzana + 2 biscotes integrales con queso fresco tipo Burgos (60 gr) + 10 nueces (15 gr)', '1 naranja (180 gr) + 2 lonchas de jamón serrano (40 gr)', 'Rollitos de pavo y aguacate: 2-3 lonchas de pavo (40-60 gr) + 1/4 de aguacate en láminas (40 gr) + 10 almendras (15 gr)', 'Vaso de leche semidesnatada (250 mL) + 2 tostadas integrales (50 gr) con tomate rallado (80 gr)', '1 manzana (180 gr) + almendras (15 gr)'],
+        ['Ensalada: lechuga (80 gr) + tomate (100 gr) + pepino (80 gr) + zanahoria rallada (60 gr) + maíz (60 gr) con 1 cdta AOVE + zumo de limón', 'Sopa fría de pepino y menta: pepino (200 gr) + caldo vegetal frío (200 mL) + menta fresca (5 gr) + queso fresco tipo Burgos (40 gr) + 1 cdta AOVE + zumo de limón', 'Arroz integral salteado con verduras: arroz integral crudo (80 gr) + pimiento rojo (80 gr) + pimiento verde (60 gr) + cebolla (60 gr) + zanahoria (60 gr) + 1 cdta AOVE + salsa de soja baja en sodio (5 mL)', 'Ensalada: tomate maduro (150 gr) + cebolla morada (60 gr) + pepino (100 gr) + aceitunas (30 gr) + 1 cdta AOVE + orégano', 'Ensalada de sandía y pepino: sandía en dados (200 gr) + pepino en rodajas (50 gr) con aliño: 1 cdta AOVE + vinagre de manzana + pizca de sal', 'Ensalada: rúcula (60 gr) + sandía (150 gr) + queso fresco (60 gr) + pipas de girasol (15 gr) + 1 cdta AOVE', 'Salmorejo cordobés (250 mL): tomate maduro (220 gr) + pan integral duro (30 gr) + ajo (5 gr) + 1 cdta AOVE + vinagre'],
+        ['Pechuga de pollo a la plancha (180 gr) + judías verdes salteadas: judías verdes (200 gr) + 1 diente de ajo + 1 cdta AOVE', 'Solomillo de cerdo a la plancha (160 gr) + ensalada de rúcula (60 gr) + tomate cherry (100 gr) + 1 cdta AOVE', 'Filetes de bacalao desalado al horno (180 gr) con limón + tomillo + pimientos asados: pimiento rojo (120 gr) + pimiento amarillo (80 gr) + 1 cdta AOVE', 'Filetes de merluza a la plancha (180 gr) con sofrito: pimiento rojo (80 gr) + cebolla (60 gr) + tomate (80 gr) + 1 cdta AOVE + patata hervida (120 gr)', 'Pollo asado al limón (180 gr) con hierbas provenzales + boniato asado (100 gr) + ensalada verde: lechuga (60 gr) + rúcula (40 gr) + 1 cdta AOVE', 'Pechuga de pollo a la plancha (180 gr) con aliño de ajo y perejil + salteado mediterráneo: calabacín (100 gr) + pimiento rojo (80 gr) + tomate cherry (100 gr) + cebolla morada (60 gr) + 1 cdta AOVE', 'Filetes de bacalao desalado al horno (180 gr) con patata (120 gr) + tomate cherry (100 gr) + 1 cdta AOVE + perejil'],
+        ['1 kiwi', '1 melocotón (180 gr)', 'Fresones (150 gr) con zumo de naranja natural (60 mL)', '1 melocotón (180 gr)', '1 rodaja de melón (200 gr)', '1 melocotón (180 gr)', 'Ensalada de fruta: melocotón (100 gr) + fresones (80 gr) + uvas (80 gr)'],
+        ['Queso fresco tipo burgos (150 gr) + 6 fresas (80 gr) + 10 almendras (15 gr)', 'Pepino en rodajas (150 gr) + hummus casero (60 gr)', 'Palitos de zanahoria (100 gr) + apio (80 gr) con guacamole casero (60 gr)', 'Queso fresco tipo Burgos (100 gr) + nueces (20 gr)', 'Frutos secos variados: 25 gr de nueces + almendras + avellanas + 1 melocotón (180 gr)', 'Hummus casero (70 gr) + bastones de pepino (120 gr) + zanahoria (80 gr)', 'Queso fresco tipo Burgos (150 gr) + 1 cdta de semilla de chía (10 gr) + 4 nueces'],
+        ['Crema de calabacín y puerro: calabacín (200 gr) + puerro (80 gr) + caldo vegetal (300 mL)', 'Lentejas estofadas con verduras: lentejas cocidas (180 gr) + zanahoria (80 gr) + cebolla (60 gr) + tomate (60 gr) + pimentón + 1 cdta AOVE', 'Sopa de fideos: caldo de pollo casero (300 mL) + fideos integrales (40 gr) + zanahoria (60 gr) + apio (40 gr) + puerro (50 gr)', 'Crema de espárragos verdes: espárragos verdes (250 gr) + cebolla (60 gr) + caldo vegetal (250 mL)', 'Ensalada de legumbres: garbanzos cocidos (120 gr) + pimiento rojo (80 gr) + cebolla morada (50 gr) + tomate (80 gr) + perejil + 1 cdta AOVE', 'Pisto manchego: calabacín (120 gr) + pimiento rojo (80 gr) + pimiento verde (60 gr) + tomate (120 gr) + cebolla (60 gr) + 1 cdta AOVE', 'Vichyssoise fría: puerro (150 gr) + patata (100 gr) + caldo vegetal (300 mL) + 1 cdta AOVE'],
+        ['Filetes de merluza al horno (180 gr) con limón + espárragos trigueros al horno: espárragos (150 gr) + 1 cdta AOVE + sal', '1 huevo duro + lechuga (60 gr) + tomate (80 gr)', 'Pechuga de pavo a la plancha (160 gr) + espinacas salteadas: espinacas frescas (200 gr) + 2 dientes de ajo + 1 cdta AOVE', 'Tortilla de espinacas y champiñones: 2 huevos grandes + espinacas frescas (100 gr) + champiñones (120 gr) + 1 cdta AOVE + 1 pan integral (30 gr)', 'Atún al natural o a la plancha (160 gr) + judías verdes al vapor: judías verdes (200 gr) + sal + limón', 'Revuelto: 2 huevos + espárragos trigueros (120 gr) + jamón serrano (40 gr) + 1 cdta AOVE', 'Pechuga de pollo en papillote (180 gr) con limón + hierbas provenzales + zanahoria (80 gr) + calabacín (80 gr)'],
+        ['1 naranja', '1 ciruela (80 gr)', '1 kiwi (100 gr)', '1 pera pequeña', '1 kiwi (100 gr)', '1 naranja pequeña (150 gr)', '1 ciruela (80 gr) + 1 albaricoque (60 gr)']
+      ],
+      nut: [
+        [[378, 33, 45, 9], [385, 28, 26, 19], [345, 15, 52, 9], [380, 20, 40, 17], [316, 16, 38, 13], [293, 15, 32, 11], [355, 19, 36, 17]],
+        [[257, 5, 27, 16], [211, 6, 26, 12], [245, 10, 26, 12], [180, 12, 18, 6], [206, 14, 6, 15], [255, 13, 40, 5], [160, 4, 21, 7]],
+        [[175, 4, 22, 6], [145, 8, 9, 9], [315, 9, 58, 7], [195, 3, 16, 13], [107, 2, 17, 5], [240, 10, 17, 15], [205, 5, 20, 12]],
+        [[397, 58, 9, 12], [345, 45, 7, 15], [270, 36, 10, 9], [385, 36, 32, 11], [450, 56, 25, 14], [390, 55, 16, 13], [318, 37, 24, 9]],
+        [[45, 1, 10, 0], [70, 2, 16, 0], [76, 1, 17, 0], [70, 2, 16, 0], [68, 1, 16, 0], [70, 2, 16, 0], [100, 2, 24, 0]],
+        [[283, 20, 12, 16], [140, 5, 12, 8], [128, 3, 12, 8], [215, 13, 6, 15], [225, 6, 22, 14], [166, 6, 18, 8], [265, 19, 9, 17]],
+        [[120, 5, 14, 4], [330, 17, 45, 8], [195, 7, 33, 3], [130, 6, 14, 5], [280, 11, 34, 10], [185, 4, 18, 11], [175, 4, 22, 8]],
+        [[230, 34, 5, 7], [125, 9, 6, 7], [270, 37, 8, 11], [330, 22, 22, 18], [272, 42, 8, 8], [320, 24, 6, 23], [320, 52, 12, 8]],
+        [[62, 1, 15, 0], [37, 1, 9, 0], [61, 1, 14, 0], [70, 1, 17, 0], [61, 1, 14, 0], [70, 1, 17, 0], [66, 1, 16, 0]]
+      ]
+    };
+  }
+
+  mix(hex, amt) {
+    const h = String(hex).replace('#', '');
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    const m = (v) => Math.round(v + (255 - v) * amt).toString(16).padStart(2, '0');
+    return '#' + m(r) + m(g) + m(b);
+  }
+
+  fmt(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+
+  dayTotal(D, i) {
+    let k = 0;
+    for (let r = 0; r < D.nut.length; r++) k += D.nut[r][i][0];
+    const plan = k;
+    const x = this.state.extras[String(i)] || 0;
+    return { k: k + x, plan: plan, extra: x };
+  }
+
+  stars(key, score, accent) {
+    const out = {};
+    for (let i = 1; i <= 5; i++) {
+      const on = score >= i;
+      out['st' + i] = {
+        fill: on ? accent : 'none',
+        stroke: on ? accent : '#c2ccc6',
+        pick: () => {
+          const s = Object.assign({}, this.state.scores);
+          s[key] = s[key] === i ? 0 : i;
+          this.setState({ scores: s });
+        }
+      };
+    }
+    return out;
+  }
+
+  macroBars(p, c, f, accent) {
+    const kp = p * 4, kc = c * 4, kf = f * 9;
+    const tot = Math.max(1, kp + kc + kf);
+    return [
+      { name: 'Proteínas', g: Math.round(p) + ' g', w: Math.round(kp / tot * 100) + '%', color: accent },
+      { name: 'H. de carbono', g: Math.round(c) + ' g', w: Math.round(kc / tot * 100) + '%', color: this.mix(accent, 0.4) },
+      { name: 'Grasas', g: Math.round(f) + ' g', w: Math.round(kf / tot * 100) + '%', color: '#c9a26a' }
+    ];
+  }
+
+  renderVals() {
+    const accent = this.props.accent || '#356148';
+    const D = this.data();
+    const dayIdx = this.state.day;
+    const isWeek = this.state.view === 'week';
+    const t = {
+      g700: accent,
+      g600: this.mix(accent, 0.14),
+      g200: this.mix(accent, 0.72),
+      g100: this.mix(accent, 0.88),
+      g50: this.mix(accent, 0.945)
+    };
+
+    const totals = D.days.map((_, i) => this.dayTotal(D, i));
+
+    const days = D.days.map((d, i) => {
+      const tot = totals[i];
+      const over = tot.k - D.target;
+      const sel = i === dayIdx;
+      return {
+        abbr: d[0],
+        date: d[1],
+        total: this.fmt(tot.k),
+        delta: (over >= 0 ? '+' : '−') + this.fmt(Math.abs(over)),
+        deltaFg: over > 60 ? '#9a6a35' : '#b3bcb7',
+        barW: Math.min(112, Math.round(tot.k / D.target * 100)) + '%',
+        barBg: over > 60 ? '#c9a26a' : t.g600,
+        headBg: i === D.today ? t.g50 : '#f6f8f6',
+        headFg: i === D.today ? t.g700 : '#161c18',
+        headLine: i === D.today ? accent : 'transparent',
+        pillBg: sel ? t.g50 : '#ffffff',
+        pillLine: sel ? t.g200 : '#e2e8e3',
+        pillFg: sel ? t.g700 : '#161c18',
+        pick: () => this.setState({ day: i })
+      };
+    });
+
+    let rIdx = 0;
+    const rows = D.meals.map((m) => {
+      if (m.band) return { isBand: true, isMeal: false, label: m.band, sub: '', cells: [] };
+      const r = rIdx++;
+      const cells = D.days.map((d, i) => {
+        const v = D.nut[r][i];
+        const key = r + '-' + i;
+        const score = this.state.scores[key] || 0;
+        return Object.assign({
+          text: D.text[r][i],
+          kcal: this.fmt(v[0]),
+          bg: i === D.today ? t.g50 : '#ffffff',
+          scoreLabel: score ? String(score) : '—',
+          scoreFg: score ? t.g700 : '#c2ccc6',
+          scoreFill: score ? accent : 'none',
+          popCls: 'pop ' + (i >= 5 ? 'pop-l' : 'pop-r') + ' ' + (r >= 6 ? 'pop-b' : 'pop-t'),
+          popMeal: m.sub ? m.sub + ' · ' + m.label : m.label,
+          popDay: D.full[i] + ' ' + d[1],
+          pctLabel: Math.round(v[0] / D.target * 100) + ' % del objetivo',
+          macros: this.macroBars(v[1], v[2], v[3], accent)
+        }, this.stars(key, score, accent));
+      });
+      return { isBand: false, isMeal: true, label: m.label, sub: m.sub, cells: cells };
+    });
+
+    let dIdx = 0;
+    const dayRows = D.meals.map((m) => {
+      if (m.band) return { isBand: true, isMeal: false, label: m.band, sub: '', text: '', kcal: '' };
+      const r = dIdx++;
+      const v = D.nut[r][dayIdx];
+      const key = r + '-' + dayIdx;
+      const score = this.state.scores[key] || 0;
+      return Object.assign({
+        isBand: false, isMeal: true,
+        label: m.label, sub: m.sub,
+        text: D.text[r][dayIdx],
+        kcal: this.fmt(v[0])
+      }, this.stars(key, score, accent));
+    });
+
+    let sum = 0;
+    for (const x of totals) sum += x.k;
+
+    const tot = totals[dayIdx];
+    const over = tot.k - D.target;
+
+    return {
+      t: t,
+      isWeek: isWeek,
+      isDay: !isWeek,
+      days: days,
+      rows: rows,
+      dayRows: dayRows,
+      weekAvg: this.fmt(sum / D.days.length),
+      today: {
+        title: D.full[dayIdx],
+        sub: dayIdx === D.today ? 'hoy · ' + D.days[dayIdx][1] : D.days[dayIdx][1],
+        total: this.fmt(tot.k),
+        target: this.fmt(D.target),
+        plan: this.fmt(tot.plan),
+        extra: tot.extra ? '+' + this.fmt(tot.extra) : '0',
+        planW: Math.min(100, Math.round(tot.plan / D.target * 100)) + '%',
+        extraW: Math.min(100, Math.round(tot.extra / D.target * 100)) + '%',
+        deltaFg: over > 60 ? '#9a6a35' : '#78837c',
+        deltaText: over > 60
+          ? this.fmt(over) + ' kcal por encima del objetivo'
+          : (over < -60 ? this.fmt(-over) + ' kcal por debajo del objetivo' : 'Dentro del objetivo del día')
+      },
+      ui: {
+        weekBg: isWeek ? '#ffffff' : 'transparent',
+        weekFg: isWeek ? '#161c18' : '#78837c',
+        weekSh: isWeek ? '0 1px 2px rgba(22,28,24,.10)' : 'none',
+        dayBg: !isWeek ? '#ffffff' : 'transparent',
+        dayFg: !isWeek ? '#161c18' : '#78837c',
+        daySh: !isWeek ? '0 1px 2px rgba(22,28,24,.10)' : 'none'
+      },
+      showWeek: () => this.setState({ view: 'week' }),
+      showDay: () => this.setState({ view: 'day' }),
+      addExtra: () => {
+        const all = Object.assign({}, this.state.extras);
+        const k = String(dayIdx);
+        all[k] = (all[k] || 0) + 239;
+        this.setState({ extras: all });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>
