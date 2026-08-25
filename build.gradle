@@ -1,7 +1,20 @@
+buildscript {
+	repositories {
+		mavenCentral()
+	}
+	dependencies {
+		// Puts the MySQL driver and Flyway MySQL module on the classpath that
+		// the standalone flyway* Gradle tasks run with.
+		classpath("com.mysql:mysql-connector-j:9.7.0")
+		classpath("org.flywaydb:flyway-mysql:12.4.0")
+	}
+}
+
 plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.1.0'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'org.flywaydb.flyway' version '12.4.0'
 }
 
 group = 'com.fdiet'
@@ -17,33 +30,66 @@ repositories {
 	mavenCentral()
 }
 
+// --- .env support -----------------------------------------------------------
+// Values in .env are used by bootRun/test and by the flyway* Gradle tasks.
+// A real environment variable always wins over the .env entry.
+def dotenv = [:]
+def dotenvFile = file('.env')
+if (dotenvFile.exists()) {
+	dotenvFile.eachLine('UTF-8') { line ->
+		def trimmed = line.trim()
+		if (trimmed.isEmpty() || trimmed.startsWith('#')) {
+			return
+		}
+		def separator = trimmed.indexOf('=')
+		if (separator < 0) {
+			return
+		}
+		def key = trimmed.substring(0, separator).trim()
+		def value = trimmed.substring(separator + 1).trim()
+		if (value.length() > 1 && (value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'"))) {
+			value = value.substring(1, value.length() - 1)
+		}
+		dotenv[key] = value
+	}
+}
+
+def env = { String key, String fallback -> System.getenv(key) ?: dotenv[key] ?: fallback }
+
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-web")
-	implementation("org.springframework.boot:spring-boot-starter-security")
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 
-	// SQLite
-	implementation("org.xerial:sqlite-jdbc:3.46.0.0")
-	implementation("com.github.gwenn:sqlite-dialect:0.1.0") // or use community-dialects below
-	implementation("com.vladmihalcea:hibernate-types-60:2.21.1") // optional, helpful utilities
+	// MySQL
+	runtimeOnly("com.mysql:mysql-connector-j")
 
-	// JWT
-	implementation("io.jsonwebtoken:jjwt-api:0.12.6")
-	runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
-	runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
+	// Flyway migrations
+	implementation("org.flywaydb:flyway-core")
+	implementation("org.flywaydb:flyway-mysql")
 
 	// Swagger / OpenAPI
-	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0")
+	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1")
 
-	// Lombok (optional, reduces boilerplate — fully optional given records)
+	// Lombok — used on the JPA entities to keep the accessor boilerplate out of sight.
 	compileOnly("org.projectlombok:lombok:1.18.34")
 	annotationProcessor("org.projectlombok:lombok:1.18.34")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
-	testImplementation("org.springframework.security:spring-security-test")
+}
+
+flyway {
+	url = "jdbc:mysql://${env('MYSQL_HOST', 'localhost')}:${env('MYSQL_PORT', '3306')}/${env('MYSQL_DATABASE', 'fdiet')}?useUnicode=true&characterEncoding=UTF-8"
+	user = env('MYSQL_USER', 'root')
+	password = env('MYSQL_PASSWORD', '')
+	locations = ['filesystem:src/main/resources/db/migration']
+}
+
+tasks.named('bootRun') {
+	environment dotenv
 }
 
 tasks.named('test') {
 	useJUnitPlatform()
+	environment dotenv
 }

@@ -19,3 +19,9 @@ gradle-app.setting
 .project
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
+
+# Local environment
+.env
+
+# Leftover SQLite database from the pre-MySQL setup
+fdiet.db
