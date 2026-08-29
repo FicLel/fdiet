@@ -32,10 +32,18 @@ public class DataReader {
     }
 
     public List<List<String>> foodData() {
-        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+        return read(file);
+    }
+
+    /**
+     * Any CSV of the same dialect. The composition database ships one too, so
+     * the parser is shared rather than written twice.
+     */
+    public List<List<String>> read(Path csv) {
+        try (Reader reader = Files.newBufferedReader(csv, StandardCharsets.UTF_8)) {
             return parse(reader);
         } catch (IOException e) {
-            throw new UncheckedIOException("Could not read food data from " + file.toAbsolutePath(), e);
+            throw new UncheckedIOException("Could not read food data from " + csv.toAbsolutePath(), e);
         }
     }
 

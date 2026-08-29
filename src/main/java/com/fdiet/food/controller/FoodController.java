@@ -4,7 +4,7 @@ import com.fdiet.common.dto.PageDto;
 import com.fdiet.food.dto.FoodItemDto;
 import com.fdiet.food.dto.ImportSummaryDto;
 import com.fdiet.food.service.FoodImportService;
-import com.fdiet.food.service.FoodItemService;
+import com.fdiet.food.service.IFoodItemService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
@@ -21,10 +21,10 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Food controller", description = "Food actions and controller")
 public class FoodController {
 
-    private final FoodItemService foodItemService;
+    private final IFoodItemService foodItemService;
     private final FoodImportService foodImportService;
 
-    public FoodController(FoodItemService foodItemService, FoodImportService foodImportService) {
+    public FoodController(IFoodItemService foodItemService, FoodImportService foodImportService) {
         this.foodItemService = foodItemService;
         this.foodImportService = foodImportService;
     }

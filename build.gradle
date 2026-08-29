@@ -65,11 +65,16 @@ dependencies {
 	runtimeOnly("com.mysql:mysql-connector-j")
 
 	// Flyway migrations
-	implementation("org.flywaydb:flyway-core")
+	// spring-boot-flyway carries the auto-configuration that runs the migrations at
+	// startup (Boot 4 moved it out of spring-boot-autoconfigure) and brings flyway-core.
+	implementation("org.springframework.boot:spring-boot-flyway")
 	implementation("org.flywaydb:flyway-mysql")
 
 	// Swagger / OpenAPI
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1")
+
+	// Apache POI — reads the .xlsx a diet is imported from.
+	implementation("org.apache.poi:poi-ooxml:5.4.1")
 
 	// Lombok — used on the JPA entities to keep the accessor boilerplate out of sight.
 	compileOnly("org.projectlombok:lombok:1.18.34")

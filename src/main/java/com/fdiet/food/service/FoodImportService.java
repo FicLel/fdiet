@@ -1,5 +1,7 @@
 package com.fdiet.food.service;
 
+import com.fdiet.common.helper.Numbers;
+import com.fdiet.common.helper.Texts;
 import com.fdiet.food.dto.CategoryDto;
 import com.fdiet.food.dto.FoodCsvRowDto;
 import com.fdiet.food.dto.FoodItemImportResultDto;
@@ -58,12 +60,12 @@ public class FoodImportService {
     private final DataReader dataReader;
     private final CategoryService categoryService;
     private final SubCategoryService subCategoryService;
-    private final FoodItemService foodItemService;
+    private final IFoodItemService foodItemService;
 
     public FoodImportService(DataReader dataReader,
                              CategoryService categoryService,
                              SubCategoryService subCategoryService,
-                             FoodItemService foodItemService) {
+                             IFoodItemService foodItemService) {
         this.dataReader = dataReader;
         this.categoryService = categoryService;
         this.subCategoryService = subCategoryService;
@@ -157,36 +159,18 @@ public class FoodImportService {
     }
 
     private static String text(String value, int maxLength) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return null;
-        }
-        return trimmed.length() > maxLength ? trimmed.substring(0, maxLength) : trimmed;
+        return Texts.clean(value, maxLength);
     }
 
     private static Long toLong(String value) {
-        BigDecimal decimal = toDecimal(value);
-        return decimal == null ? null : decimal.longValue();
+        return Numbers.toLong(value);
     }
 
     private static Integer toInteger(String value) {
-        BigDecimal decimal = toDecimal(value);
-        return decimal == null ? null : decimal.intValue();
+        return Numbers.toInteger(value);
     }
 
-    /** Accepts both {@code 12.5} and the comma-decimal {@code 12,5}; anything else is null. */
     private static BigDecimal toDecimal(String value) {
-        String trimmed = text(value, Integer.MAX_VALUE);
-        if (trimmed == null) {
-            return null;
-        }
-        try {
-            return new BigDecimal(trimmed.replace(',', '.'));
-        } catch (NumberFormatException e) {
-            return null;
-        }
+        return Numbers.toDecimal(value);
     }
 }

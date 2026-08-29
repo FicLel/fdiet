@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,6 +25,13 @@ public interface FoodItemRepository extends JpaRepository<FoodItem, Long>, FoodI
 
     @EntityGraph(attributePaths = {"category", "subcategory"})
     Optional<FoodItem> findByEan(String ean);
+
+    /**
+     * The rows carrying any of those commercial names, cheapest first. The
+     * column's {@code utf8mb4_unicode_ci} collation is case- and
+     * accent-insensitive, so {@code lechuga} finds {@code LECHUGA}.
+     */
+    List<FoodItem> findByCommercialNameInOrderByIdAsc(Collection<String> names);
 
     @Query("select f.ean from FoodItem f")
     List<String> findAllEans();

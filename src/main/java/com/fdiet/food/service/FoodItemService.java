@@ -20,19 +20,27 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Owns the {@code food_items} table. Categories are reached through their own
  * services, so this class only ever calls {@link FoodItemRepository}.
  */
 @Service
-public class FoodItemService {
+public class FoodItemService implements IFoodItemService {
 
     private static final Sort DEFAULT_SORT = Sort.by(Sort.Direction.ASC, "id");
+
+    /** How many names go into one {@code IN (…)}. */
+    private static final int LOOKUP_CHUNK = 500;
 
     private final FoodItemRepository foodItemRepository;
     private final FoodItemMapper foodItemMapper;
@@ -56,6 +64,7 @@ public class FoodItemService {
      * A page of food items, optionally narrowed to those whose commercial name
      * contains {@code name}.
      */
+    @Override
     @Transactional(readOnly = true)
     public PageDto<FoodItemDto> search(String name, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, DEFAULT_SORT);
@@ -65,17 +74,59 @@ public class FoodItemService {
         return PageDto.of(result, foodItemMapper::toDto);
     }
 
+    @Override
     @Transactional(readOnly = true)
     public FoodItemDto findById(Long id) {
+        return foodItemMapper.toDto(entityById(id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public FoodItem entityById(Long id) {
         return foodItemRepository.findWithCategoriesById(id)
-                .map(foodItemMapper::toDto)
                 .orElseThrow(() -> new FoodItemNotFoundException(id));
+    }
+
+    /**
+     * Looks the names up in chunks, so a whole imported week costs a handful of
+     * queries instead of one per ingredient. Two catalogue rows can share a
+     * commercial name; the lowest id wins, so the same text always resolves to
+     * the same product.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, FoodItem> entitiesByName(Collection<String> names) {
+        List<String> wanted = names.stream()
+                .map(IFoodItemService::normalise)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<String, FoodItem> found = new HashMap<>();
+        for (int from = 0; from < wanted.size(); from += LOOKUP_CHUNK) {
+            List<String> chunk = wanted.subList(from, Math.min(from + LOOKUP_CHUNK, wanted.size()));
+            for (FoodItem item : foodItemRepository.findByCommercialNameInOrderByIdAsc(chunk)) {
+                found.putIfAbsent(IFoodItemService.normalise(item.getCommercialName()), item);
+            }
+        }
+        return found;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, FoodItem> entitiesByIds(Collection<Long> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return foodItemRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(FoodItem::getId, Function.identity(), (a, b) -> a));
     }
 
     /**
      * Stores every row whose EAN is not in the table yet. Existing rows are
      * left untouched, so the import can be run again safely.
      */
+    @Override
     @Transactional
     public FoodItemImportResultDto importRows(List<FoodCsvRowDto> rows) {
         Set<String> knownEans = new HashSet<>(foodItemRepository.findAllEans());
