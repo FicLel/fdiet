@@ -4,7 +4,9 @@ import EditorHeader from '@/components/EditorHeader.vue'
 import GoalStrip from '@/components/GoalStrip.vue'
 import WeekGrid from '@/components/WeekGrid.vue'
 import DishEditPanel from '@/components/DishEditPanel.vue'
+import FoodLinkPanel from '@/components/FoodLinkPanel.vue'
 import { useDietDraft } from '@/stores/dietDraft'
+import { useFoodLink } from '@/stores/foodLink'
 import type { DishTotals } from '@/domain/nutrition'
 
 /**
@@ -14,6 +16,7 @@ import type { DishTotals } from '@/domain/nutrition'
  */
 
 const draft = useDietDraft()
+const link = useFoodLink()
 
 onMounted(() => {
   if (draft.status.value === 'idle') {
@@ -63,6 +66,8 @@ const week = computed<DishTotals>(() =>
       v-model:goal-note="draft.goalNote.value"
       :week-average-kcal="draft.weekAverageKcal.value"
       :week="week"
+      :unmatched="draft.unmatched.value.length"
+      @review="link.review()"
     />
 
     <p v-if="draft.error.value && draft.status.value === 'ready'" class="banner">
@@ -86,7 +91,11 @@ const week = computed<DishTotals>(() =>
           @select="draft.select"
         />
       </div>
-      <DishEditPanel />
+      <!-- One rail, two jobs. While an ingredient is being matched the choice
+           of food is the whole of the work, and the dish's figures are what it
+           is about to change; the editor comes back the moment it is done. -->
+      <FoodLinkPanel v-if="link.open.value" />
+      <DishEditPanel v-else />
     </div>
   </div>
 </template>

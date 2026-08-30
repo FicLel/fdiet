@@ -23,6 +23,7 @@ import com.fdiet.diet.model.PlannedDish;
 import com.fdiet.diet.model.PlannedIngredient;
 import com.fdiet.diet.model.PlannedMeal;
 import com.fdiet.diet.repository.DietRepository;
+import com.fdiet.diet.repository.PlannedDishRepository;
 import com.fdiet.diet.repository.PlannedIngredientRepository;
 import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.model.FoodItem;
@@ -51,6 +52,7 @@ public class DietService implements IDietService {
 
     private final DietRepository dietRepository;
     private final PlannedIngredientRepository ingredientRepository;
+    private final PlannedDishRepository dishRepository;
     private final IDietMapper dietMapper;
     private final IMealTextParser mealTextParser;
     private final IFoodResolverService foodResolverService;
@@ -60,6 +62,7 @@ public class DietService implements IDietService {
 
     public DietService(DietRepository dietRepository,
                        PlannedIngredientRepository ingredientRepository,
+                       PlannedDishRepository dishRepository,
                        IDietMapper dietMapper,
                        IMealTextParser mealTextParser,
                        IFoodResolverService foodResolverService,
@@ -68,6 +71,7 @@ public class DietService implements IDietService {
                        @Value("${fdiet.diet.suggestion-limit:5}") int suggestionLimit) {
         this.dietRepository = dietRepository;
         this.ingredientRepository = ingredientRepository;
+        this.dishRepository = dishRepository;
         this.dietMapper = dietMapper;
         this.mealTextParser = mealTextParser;
         this.foodResolverService = foodResolverService;
@@ -140,6 +144,21 @@ public class DietService implements IDietService {
         Page<DietPlan> archived =
                 dietRepository.findByStatusNotOrderByStartedOnDesc(DietStatus.ACTIVE, pageable);
         return PageDto.of(archived, dietMapper::toSummary);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean exists(Long dietId) {
+        return dietId != null && dietRepository.existsById(dietId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasDishAt(Long dietId, DayOfWeek day, MealType mealType, int dishIndex) {
+        if (dietId == null || day == null || mealType == null || dishIndex < 0) {
+            return false;
+        }
+        return dishRepository.existsAtSlot(dietId, day, mealType, dishIndex);
     }
 
     /**

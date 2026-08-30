@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useDietDraft } from '@/stores/dietDraft'
+import { locate, useDietDraft } from '@/stores/dietDraft'
+import { useFoodLink } from '@/stores/foodLink'
+import type { DishIngredient } from '@/api/types'
 import { grams, integer, NO_VALUE, quantity } from '@/domain/format'
 import { complete } from '@/domain/nutrition'
 import { cellKey } from '@/domain/slots'
 
 const draft = useDietDraft()
+const link = useFoodLink()
 
 const row = draft.selectedRow
 const day = draft.selectedDay
@@ -71,6 +74,30 @@ const coverage = computed(() => {
   return `Cuentan ${of.counted} de ${of.ingredients} ingredientes — ${parts.join(', ')}.`
 })
 
+/**
+ * An ingredient can only be matched once it is stored: the PATCH addresses a
+ * row, and a cell with unpublished changes has none for what it now says. So
+ * the cell is published first, and the panel says so rather than offering a
+ * button that could not do anything.
+ */
+const linkable = computed(() => edit.value === undefined)
+
+const firstUnmatched = computed(() =>
+  ingredients.value.find(
+    (ingredient) => ingredient.foodItemId === null && ingredient.bedcaFoodId === null,
+  ),
+)
+
+function openLink(ingredient: DishIngredient): void {
+  if (!row.value || !day.value || !linkable.value) {
+    return
+  }
+  const at = locate(row.value, day.value.day, ingredient)
+  if (at) {
+    link.focus(at)
+  }
+}
+
 function onInput(event: Event): void {
   if (row.value && day.value) {
     draft.setText(row.value, day.value.day, (event.target as HTMLTextAreaElement).value)
@@ -125,23 +152,43 @@ function revert(): void {
         </div>
 
         <ul class="ingredients">
-          <li v-for="(ingredient, index) in ingredients" :key="index" class="ingredient">
-            <span class="ingredient-name" :title="ingredient.name">{{ ingredient.name }}</span>
-            <span class="num ingredient-qty">{{ quantity(ingredient.quantity, ingredient.unit) }}</span>
-            <span
-              class="chip"
-              :class="{ linked: ingredient.foodItemId !== null || ingredient.bedcaFoodId !== null }"
-              :title="ingredient.matchedName ?? 'Ningún alimento del catálogo se llama así'"
+          <li v-for="(ingredient, index) in ingredients" :key="index">
+            <button
+              class="ingredient"
+              type="button"
+              :disabled="!linkable"
+              :title="
+                linkable
+                  ? 'Elegir a qué alimento del catálogo corresponde'
+                  : 'Publica los cambios de esta celda para poder vincular sus ingredientes'
+              "
+              @click="openLink(ingredient)"
             >
-              {{ ingredient.matchedName ? 'Vinculado' : 'Sin vincular' }}
-            </span>
+              <span class="ingredient-name">{{ ingredient.name }}</span>
+              <span class="num ingredient-qty">
+                {{ quantity(ingredient.quantity, ingredient.unit) }}
+              </span>
+              <span
+                class="chip"
+                :class="{
+                  linked: ingredient.foodItemId !== null || ingredient.bedcaFoodId !== null,
+                }"
+              >
+                {{ ingredient.matchedName ?? 'Sin vincular' }}
+              </span>
+            </button>
           </li>
           <li v-if="ingredients.length === 0" class="ingredient empty-row">
             Esta celda no describe ningún ingrediente.
           </li>
         </ul>
 
-        <button class="search" type="button" disabled>
+        <button
+          class="search"
+          type="button"
+          :disabled="!linkable || !firstUnmatched"
+          @click="firstUnmatched && openLink(firstUnmatched)"
+        >
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
             <circle cx="6.2" cy="6.2" r="4" />
             <path d="M9.2 9.2l2.6 2.6" />
@@ -149,8 +196,16 @@ function revert(): void {
           Buscar alimento en el catálogo
         </button>
         <p class="hint">
-          Vincular un ingrediente a mano llega con la lista de repaso, la siguiente parte de esta
-          pantalla.
+          <template v-if="!linkable">
+            Esta celda tiene cambios sin publicar. Publícalos y sus ingredientes podrán vincularse.
+          </template>
+          <template v-else-if="firstUnmatched">
+            Vincular no cambia lo que lee el paciente, sólo de qué alimento salen las cifras. Se
+            guarda al momento.
+          </template>
+          <template v-else>
+            Todos los ingredientes de este plato están vinculados. Pulsa uno para corregirlo.
+          </template>
         </p>
 
         <div class="label section-title">Valores del plato</div>
@@ -316,11 +371,23 @@ function revert(): void {
 
 .ingredient {
   display: flex;
+  width: 100%;
   align-items: center;
   gap: 9px;
   padding: 8px 10px;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius);
+  text-align: left;
+  background: var(--surface);
+}
+
+.ingredient:hover:not(:disabled) {
+  border-color: var(--sage-200);
+  background: var(--sage-50);
+}
+
+.ingredient:disabled .ingredient-name {
+  color: var(--ink-muted);
 }
 
 .ingredient.empty-row {
@@ -344,15 +411,21 @@ function revert(): void {
   color: var(--ink);
 }
 
+/* The chip names the food it was matched to, so it says what the figures are
+   of; a name too long for the rail is cut rather than allowed to wrap. */
 .chip {
   flex: none;
-  display: flex;
-  align-items: center;
+  display: block;
+  max-width: 122px;
   height: 20px;
   padding: 0 7px;
   border-radius: 3px;
   font-size: 10px;
+  line-height: 20px;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   background: var(--amber-50);
   color: var(--amber-700);
 }

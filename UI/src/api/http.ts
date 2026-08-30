@@ -63,4 +63,6 @@ export const http = {
     request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  /** Answers 204, which `request` reads back as undefined rather than parsing. */
+  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 }

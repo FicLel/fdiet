@@ -33,7 +33,22 @@
   --amber-400: #c9a26a;
   --amber-50: #f7efe3;
 
+  /* The three macronutrient bars, and only those. Protein carries the sage
+     because it is the component the goal is written against; fat borrows the
+     amber the "off the goal" marks use, so a plate heavy in it reads as one. */
+  --macro-protein: var(--sage-700);
+  --macro-carbs: #86a091;
+  --macro-fat: var(--amber-400);
+
+  /* Off-plan. Everything the patient ate beside the week wears this, so a
+     total's two halves are never mistaken for each other. */
+  --extra-ink: var(--amber-700);
+  --extra-line: #f0e3ce;
+  --extra-surface: #f9f4ec;
+  --extra-dash: #dcbe95;
+
   --shadow-menu: 0 8px 24px rgba(22, 28, 24, 0.1), 0 1px 3px rgba(22, 28, 24, 0.06);
+  --shadow-card: 0 14px 34px rgba(22, 28, 24, 0.14), 0 2px 6px rgba(22, 28, 24, 0.07);
 
   --sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
   --serif: 'IBM Plex Serif', Georgia, 'Times New Roman', serif;

@@ -6,8 +6,11 @@ import com.fdiet.diet.dto.DietRequestDto;
 import com.fdiet.diet.dto.DietSummaryDto;
 import com.fdiet.diet.dto.Dish;
 import com.fdiet.diet.dto.DishIngredient;
+import com.fdiet.diet.dto.MealType;
 import com.fdiet.diet.dto.ParseDishRequestDto;
 import com.fdiet.diet.dto.ResolveIngredientDto;
+
+import java.time.DayOfWeek;
 
 /**
  * Owns the stored diet: the {@code diets} row and the meals, dishes and
@@ -33,6 +36,20 @@ public interface IDietService {
 
     /** The archived diets, most recently started first. */
     PageDto<DietSummaryDto> history(int page, int size);
+
+    /** Whether the diet is stored at all, without loading its week. */
+    boolean exists(Long dietId);
+
+    /**
+     * Whether a dish sits at that place in the week — the day, the meal slot,
+     * and its position within the meal.
+     *
+     * <p>Asked by {@code com.fdiet.journal}, which records what the patient
+     * thought of a plate against the slot rather than against the dish row,
+     * since a republish renumbers every row in the week. Only this service can
+     * answer it: the dishes are its table.
+     */
+    boolean hasDishAt(Long dietId, DayOfWeek day, MealType mealType, int dishIndex);
 
     /**
      * A page of the diet's ingredients.

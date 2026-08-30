@@ -1,0 +1,101 @@
+package com.fdiet.journal.model;
+
+import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.FoodItem;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.math.BigDecimal;
+import java.time.DayOfWeek;
+import java.time.LocalDateTime;
+
+/**
+ * Something eaten on a day of the week that the plan did not prescribe.
+ *
+ * <p>Shaped like {@link com.fdiet.diet.model.PlannedIngredient} on purpose,
+ * because it is the same idea seen from the other side: a name as it was
+ * written, a quantity with its own unit, and at most one of the two catalogues
+ * pointed at. {@code rawName} is always kept — an entry nothing matched is
+ * still an entry, and dropping it would quietly shorten the record of what was
+ * actually eaten.
+ *
+ * <p>The branded catalogue is the usual match here, the reverse of the week: a
+ * patient logging an extra is normally holding a wrapper with an EAN on it,
+ * while a diet says "lechuga".
+ */
+@Entity
+@Table(name = "extra_foods")
+@Getter
+@Setter
+public class ExtraFood {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "diet_id", nullable = false)
+    private Long dietId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "day_of_week", length = 16, nullable = false)
+    private DayOfWeek dayOfWeek;
+
+    /** What the patient logged. Never null, matched or not. */
+    @Column(name = "raw_name", length = 255, nullable = false)
+    private String rawName;
+
+    @Column(name = "quantity", precision = 10, scale = 2, nullable = false)
+    private BigDecimal quantity;
+
+    @Column(name = "unit", length = 32, nullable = false)
+    private String unit;
+
+    /** The generic food of the composition database, when that is the match. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "bedca_food_id")
+    private BedcaFood bedcaFood;
+
+    /** The branded product, the usual match for an extra. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "food_item_id")
+    private FoodItem foodItem;
+
+    @Column(name = "logged_at", nullable = false)
+    private LocalDateTime loggedAt;
+
+    protected ExtraFood() {
+    }
+
+    public ExtraFood(Long dietId,
+                     DayOfWeek dayOfWeek,
+                     String rawName,
+                     BigDecimal quantity,
+                     String unit,
+                     BedcaFood bedcaFood,
+                     FoodItem foodItem) {
+        this.dietId = dietId;
+        this.dayOfWeek = dayOfWeek;
+        this.rawName = rawName;
+        this.quantity = quantity;
+        this.unit = unit;
+        this.bedcaFood = bedcaFood;
+        this.foodItem = foodItem;
+        this.loggedAt = LocalDateTime.now();
+    }
+
+    /** True once the entry points at a food, whichever half it came from. */
+    public boolean isMatched() {
+        return bedcaFood != null || foodItem != null;
+    }
+}

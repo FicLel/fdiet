@@ -9,9 +9,11 @@ const props = defineProps<{
   weekAverageKcal: number | null
   /** Every ingredient of the week, so the average is read against its coverage. */
   week: DishTotals
+  /** How many can still be matched to a food — the queue the review walks. */
+  unmatched: number
 }>()
 
-defineEmits<{ 'update:goalNote': [value: string] }>()
+defineEmits<{ 'update:goalNote': [value: string]; review: [] }>()
 
 const average = computed(() =>
   props.weekAverageKcal === null ? NO_VALUE : integer(props.weekAverageKcal),
@@ -55,6 +57,18 @@ const partial = computed(() => props.week.ingredients > 0 && props.week.counted 
       <span class="figure-label">Ingredientes contados</span>
       <span class="srf num figure-value" :class="{ partial }">{{ coverage }}</span>
     </span>
+
+    <!-- What is missing from the average is mostly ingredients nobody has
+         matched yet, so the count is also the way into fixing them. -->
+    <button
+      v-if="unmatched > 0"
+      class="review"
+      type="button"
+      :title="`Vincular los ${unmatched} ingredientes que aún no están en el catálogo`"
+      @click="$emit('review')"
+    >
+      Repasar <span class="num">{{ integer(unmatched) }}</span> sin vincular
+    </button>
   </div>
 </template>
 
@@ -120,5 +134,21 @@ const partial = computed(() => props.week.ingredients > 0 && props.week.counted 
   width: 1px;
   height: 20px;
   background: var(--line);
+}
+
+.review {
+  flex: none;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--amber-400);
+  border-radius: var(--radius);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--amber-700);
+  background: var(--surface);
+}
+
+.review:hover {
+  background: var(--amber-50);
 }
 </style>

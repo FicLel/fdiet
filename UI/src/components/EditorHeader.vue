@@ -37,6 +37,13 @@ const dirtyLabel = computed(() => {
 
     <span class="spacer" />
 
+    <!-- The other side of the same week, read-only and with the patient's own
+         rows on it. Nothing enforces the split — there is no security layer —
+         so it is a link, not a boundary. -->
+    <RouterLink class="to-patient" to="/mi-dieta" title="Ver la dieta como la ve el paciente">
+      Vista del paciente
+    </RouterLink>
+
     <span class="dirty" :class="{ pending: dirtyCount > 0 }">{{ dirtyLabel }}</span>
 
     <button
@@ -97,6 +104,24 @@ const dirtyLabel = computed(() => {
 
 .spacer {
   flex: 1 1 0;
+}
+
+.to-patient {
+  flex: none;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.to-patient:hover {
+  border-color: var(--line-input);
+  color: var(--sage-700);
 }
 
 .dirty {

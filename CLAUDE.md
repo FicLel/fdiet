@@ -24,12 +24,15 @@ tasks. A real exported environment variable always wins over the `.env` entry.
 ## Architecture
 
 fdiet is a Spring Boot backend organized per bounded context under `src/main/java/com/fdiet/<feature>/`.
-The feature modules are `food` (the product catalogue), `diet` (the plan built on it) and
-`alternative` (what one food may be swapped for);
-`common` holds the shared transport types.
+The feature modules are `food` (the product catalogue), `diet` (the plan built on it),
+`alternative` (what one food may be swapped for) and `journal` (what the patient thought of the
+plan and what they ate beside it); `common` holds the shared transport types.
 
 **No security layer.** No Spring Security, no JWT, no authentication anywhere — every route is
 open. This is intentional for the current stage; the previous `users` bounded context was removed.
+The consequence reaches `journal`: a score and an off-plan entry belong to a *patient*, and there
+is no patient to attribute them to, so they hang off the diet alone. When users come back, both
+tables need an owner column and the endpoints need to stop trusting the URL.
 
 ### Layering rules
 
@@ -305,6 +308,52 @@ different meanings: `category` null (no rule recognised the name, so nothing was
 `inCategory` zero (the shelf is empty), or `ranked` short of `inCategory` (foods were eligible but
 published too few figures to compare).
 
+### `journal`
+
+**The patient's side of the plan.** A diet says what to eat; the journal says what was thought of
+it and what was eaten instead. It owns two tables and adds nothing to the week — the same reason
+`alternative` is a context of its own rather than a second job for the catalogue.
+
+- `model/DishScore` → `dish_scores` — what the patient thought of one plate, 1–5.
+- `model/ExtraFood` → `extra_foods` — something eaten that the plan did not prescribe.
+- `service/JournalService` — owns both tables. It reaches the week through `IDietService` and the
+  catalogue through `IBedcaFoodService` / `IFoodItemService`, never through their repositories.
+- `service/JournalNutritionService` — the mirror of `DietNutritionService` over this context's own
+  rows. It **borrows `IPortionScaler`** rather than keeping a unit table of its own: there is one
+  answer to what a millilitre weighs, and two copies of it would drift until a day's plan and that
+  day's extras disagreed about the same word.
+
+**A score points at a slot, not at a dish row, and this is the whole design.** `PUT /api/diets/{id}`
+replaces a diet's *whole week*, so every `diet_dishes` id is new after any publish. A score holding
+one of those ids would be taken by the cascade every time the nutritionist edited a single cell —
+the patient's entire record wiped by a change to one breakfast. So `uk_dish_scores_slot` keys on
+`(diet_id, day_of_week, meal_type, dish_index)`, which is what `uk_diet_meals_slot` already treats
+as the identity of a place in the week, and `update()` keeps the same `diets` row so the diet
+foreign key survives too. The cost is stated rather than hidden: if a republish puts a *different*
+dish in the slot, the score stays and now describes that one. Losing every score on every publish
+is worse, and `scored_at` is there so the two can be told apart.
+
+`ExtraFood` is shaped like `PlannedIngredient` because it is the same idea from the other side:
+`raw_name` always kept, a quantity with its own unit, and **at most one** of `bedca_food_id` /
+`food_item_id` set. Both null is an entry nothing matched — kept on the record, counted towards
+nothing. The branded half is the usual match here, the reverse of the week: a diet says `lechuga`,
+while a patient logging an extra is normally holding a wrapper with an EAN on it.
+
+There is **no score of zero**. Having no opinion has to stay out of the average rather than drag it
+down, so taking a rating back is a DELETE of the slot's score. `averageScore` is null while nothing
+has been scored, and travels with `scored` — the count it was worked out over — the way every other
+total in this codebase travels with its counts.
+
+`JournalController` at `/api/journal`:
+
+- `GET /api/journal/{dietId}` — a whole week's scores and off-plan entries in one answer, since the
+  screen that reads it draws all seven days at once.
+- `PUT /api/journal/{dietId}/scores/{day}/{mealType}/{dishIndex}` — score one plate, writing over
+  any earlier opinion of the same slot. 400 when the diet has no dish there, checked with one count
+  query through `IDietService.hasDishAt`.
+- `DELETE /api/journal/{dietId}/scores/{day}/{mealType}/{dishIndex}` — take a score back.
+- `POST /api/journal/{dietId}/extras` (201) / `DELETE /api/journal/{dietId}/extras/{extraId}` (204).
+
 ## Persistence
 
 MySQL via `com.mysql:mysql-connector-j`. **Flyway owns the schema** — migrations live in
@@ -319,6 +368,7 @@ changing an entity, add a migration to match or startup fails.
 | `V3__diet_ingredient_raw_name.sql` | `food_item_id` becomes nullable, `raw_name` appears |
 | `V4__create_bedca_schema.sql` | `bedca_foods`, and `diet_ingredients.bedca_food_id` |
 | `V5__diet_dish_raw_text.sql` | `diet_dishes.raw_text` — the cell as the nutritionist wrote it |
+| `V6__create_journal_schema.sql` | `dish_scores` and `extra_foods` — the two tables the patient writes |
 
 ## Data files and licensing
 

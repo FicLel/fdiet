@@ -1,7 +1,7 @@
-import { computed, reactive, ref, shallowRef } from 'vue'
+import { computed, reactive, ref, shallowRef, triggerRef } from 'vue'
 import { ApiError } from '@/api/http'
 import { dietsApi, type DietRequest, type RequestDish, type RequestMeal } from '@/api/diets'
-import type { DayOfWeek, Diet, Dish, MealType } from '@/api/types'
+import type { DayOfWeek, Diet, Dish, DishIngredient, MealType } from '@/api/types'
 import { buildRows, cellKey, dishAt, mealOf, type GridRow, type MealRow } from '@/domain/slots'
 import { renderDish } from '@/domain/dishText'
 import { dishTotals, type DishTotals } from '@/domain/nutrition'
@@ -39,6 +39,45 @@ export interface CellEdit {
   failed: boolean
 }
 
+/**
+ * One stored ingredient and the cell it sits in — what the link drawer needs to
+ * address it and to show where in the week it is.
+ *
+ * The id is the stored row's, so only a *stored* ingredient can be one of
+ * these. An ingredient read out of a cell being edited has no row of its own
+ * yet, and nothing for a PATCH to address; it is matched by publishing first.
+ */
+export interface IngredientAt {
+  /** The stored row's id — what `PATCH …/ingredients/{id}` addresses. */
+  id: number
+  name: string
+  quantity: number
+  unit: string
+  /** The catalogue's own name for the food, when it is already matched. */
+  matchedName: string | null
+  row: MealRow
+  day: DayOfWeek
+}
+
+/** Where an ingredient of a stored cell sits, or null if it has no row yet. */
+export function locate(
+  row: MealRow,
+  day: DayOfWeek,
+  ingredient: DishIngredient,
+): IngredientAt | null {
+  return ingredient.id === null
+    ? null
+    : {
+        id: ingredient.id,
+        name: ingredient.name,
+        quantity: ingredient.quantity,
+        unit: ingredient.unit,
+        matchedName: ingredient.matchedName,
+        row,
+        day,
+      }
+}
+
 export interface DayColumn {
   day: DayOfWeek
   name: string
@@ -54,6 +93,13 @@ const publishing = ref(false)
 const error = ref<string | null>(null)
 const edits = reactive<Record<string, CellEdit>>({})
 const selection = ref<{ day: DayOfWeek; mealType: MealType; dishIndex: number } | null>(null)
+
+/**
+ * Bumped whenever the stored week is replaced wholesale — a load, or a publish.
+ * The rows are written afresh each time, so every ingredient id from before it
+ * is gone; anything holding ids against a week compares this and refetches.
+ */
+const weekVersion = ref(0)
 
 /** Placeholders, browser-only, until the backend carries a goal and a patient. */
 const goalNote = ref('1.900 kcal/día · 120 g de proteína o más')
@@ -162,6 +208,65 @@ function isEdited(row: MealRow, day: DayOfWeek): boolean {
   return edits[cellKey(row, day)] !== undefined
 }
 
+/**
+ * Every ingredient of the week still waiting to be matched, in the order the
+ * grid reads: along a slot's row across the days, then down to the next slot.
+ *
+ * A cell with unpublished changes is skipped. Its stored ingredients are about
+ * to be replaced by the publish, so matching one of them would be work thrown
+ * away without anything saying so.
+ */
+const unmatched = computed<IngredientAt[]>(() => {
+  const waiting: IngredientAt[] = []
+  for (const row of mealRows.value) {
+    for (const column of days.value) {
+      if (edits[cellKey(row, column.day)]) {
+        continue
+      }
+      const dish = storedDish(column.day, row.mealType, row.dishIndex)
+      for (const ingredient of dish?.ingredients ?? []) {
+        if (ingredient.foodItemId !== null || ingredient.bedcaFoodId !== null) {
+          continue
+        }
+        const at = locate(row, column.day, ingredient)
+        if (at) {
+          waiting.push(at)
+        }
+      }
+    }
+  }
+  return waiting
+})
+
+/**
+ * Puts one ingredient back where it came from, after a PATCH matched it to a
+ * food. The whole week is not re-fetched: the backend hands the corrected
+ * ingredient back with its matched name and its own scaled figures, which is
+ * everything that changed.
+ */
+function applyIngredient(updated: DishIngredient): boolean {
+  const plan = diet.value
+  if (!plan || updated.id === null) {
+    return false
+  }
+  for (const day of plan.days) {
+    for (const meal of day.meals) {
+      for (const dish of meal.dishes) {
+        const at = dish.ingredients.findIndex((candidate) => candidate.id === updated.id)
+        if (at !== -1) {
+          dish.ingredients[at] = updated
+          // `diet` is a shallowRef — the week arrives whole and is replaced
+          // whole, so nothing under it is tracked. One ingredient changing
+          // beneath it is the exception, and this is it saying so.
+          triggerRef(diet)
+          return true
+        }
+      }
+    }
+  }
+  return false
+}
+
 function selectFirstCell(): void {
   const row = mealRows.value[0]
   const day = days.value[0]
@@ -174,6 +279,7 @@ async function load(): Promise<void> {
   error.value = null
   try {
     diet.value = await dietsApi.active()
+    weekVersion.value++
     status.value = 'ready'
     selectFirstCell()
   } catch (cause) {
@@ -366,6 +472,7 @@ async function publish(): Promise<void> {
   try {
     await settleParses()
     diet.value = await dietsApi.update(plan.id, weekRequest(plan))
+    weekVersion.value++
     discardAll()
   } catch (cause) {
     error.value = `No se pudieron publicar los cambios${
@@ -387,6 +494,7 @@ export function useDietDraft() {
     selection,
     goalNote,
     targetKcal,
+    weekVersion,
     // derived
     rows,
     mealRows,
@@ -396,6 +504,7 @@ export function useDietDraft() {
     weekAverageKcal,
     selectedRow,
     selectedDay,
+    unmatched,
     // reads
     dishFor,
     storedDish,
@@ -409,5 +518,6 @@ export function useDietDraft() {
     revert,
     discardAll,
     publish,
+    applyIngredient,
   }
 }

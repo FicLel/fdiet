@@ -29,3 +29,16 @@ export function signed(value: number): string {
 export function quantity(amount: number, unit: string): string {
   return `${grams(amount)} ${unit}`.trim()
 }
+
+/** `4,2` — an average of whole stars, to one decimal. */
+export function decimal(value: number | null | undefined): string {
+  return value === null || value === undefined ? NO_VALUE : ONE_DECIMAL.format(value)
+}
+
+/** `62 %`, the share of a target a figure accounts for. */
+export function percent(part: number | null, whole: number): string {
+  if (part === null || whole <= 0) {
+    return NO_VALUE
+  }
+  return `${INTEGER.format((part / whole) * 100)} %`
+}

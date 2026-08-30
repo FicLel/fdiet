@@ -96,3 +96,18 @@ const FULL_MONTHS = [
 function fullMonth(date: Date): string {
   return FULL_MONTHS[date.getMonth()]
 }
+
+const SHORT_NAMES: Record<DayOfWeek, string> = {
+  MONDAY: 'Lun',
+  TUESDAY: 'Mar',
+  WEDNESDAY: 'Mié',
+  THURSDAY: 'Jue',
+  FRIDAY: 'Vie',
+  SATURDAY: 'Sáb',
+  SUNDAY: 'Dom',
+}
+
+/** `Lun` — the tablet header and the mobile day strip have no room for more. */
+export function shortDayName(day: DayOfWeek): string {
+  return SHORT_NAMES[day]
+}
