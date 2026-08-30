@@ -4,7 +4,9 @@ import com.fdiet.common.dto.PageDto;
 import com.fdiet.diet.dto.DietDto;
 import com.fdiet.diet.dto.DietRequestDto;
 import com.fdiet.diet.dto.DietSummaryDto;
+import com.fdiet.diet.dto.Dish;
 import com.fdiet.diet.dto.DishIngredient;
+import com.fdiet.diet.dto.ParseDishRequestDto;
 import com.fdiet.diet.dto.ResolveIngredientDto;
 
 /**
@@ -45,4 +47,14 @@ public interface IDietService {
 
     /** Matches one stored ingredient to a food, or corrects it. */
     DishIngredient resolveIngredient(Long dietId, Long ingredientId, ResolveIngredientDto change);
+
+    /**
+     * Reads one written cell as a dish and its ingredients, matched against the
+     * catalogues and priced, without storing a thing.
+     *
+     * <p>The parsing a diet is written by lives in one place. An editor that
+     * re-implemented it would drift from the importer, and the two would then
+     * disagree about what the same line of text means.
+     */
+    Dish parse(ParseDishRequestDto request);
 }

@@ -5,7 +5,9 @@ import com.fdiet.diet.dto.DietDto;
 import com.fdiet.diet.dto.DietImportSummaryDto;
 import com.fdiet.diet.dto.DietRequestDto;
 import com.fdiet.diet.dto.DietSummaryDto;
+import com.fdiet.diet.dto.Dish;
 import com.fdiet.diet.dto.DishIngredient;
+import com.fdiet.diet.dto.ParseDishRequestDto;
 import com.fdiet.diet.dto.ResolveIngredientDto;
 import com.fdiet.diet.exception.InvalidDietException;
 import com.fdiet.diet.service.IDietImportService;
@@ -109,6 +111,14 @@ public class DietController {
             @PathVariable Long ingredientId,
             @RequestBody @Valid ResolveIngredientDto change) {
         return dietService.resolveIngredient(id, ingredientId, change);
+    }
+
+    @PostMapping("/parse")
+    @Operation(summary = "Read one written cell as a dish and its ingredients, matched against "
+            + "the catalogues, without storing anything. The editor asks for this so the text a "
+            + "diet is written in is read by the same parser the workbook import uses")
+    public Dish parse(@RequestBody @Valid ParseDishRequestDto request) {
+        return dietService.parse(request);
     }
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

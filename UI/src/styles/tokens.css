@@ -1,0 +1,43 @@
+/* The palette of the design canvas (UI/design/*.dc.html), sober clinical:
+   paper ground, muted sage primary, hairline borders, no fills.
+   Light only — there is no dark mode by decision. */
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --paper: #fafbfa;
+  --surface: #ffffff;
+  --surface-muted: #f6f8f6;
+
+  /* Hairlines, softest last */
+  --line: #e2e8e3;
+  --line-soft: #eef2ef;
+  --line-input: #d7e0da;
+
+  /* Ink, strongest first */
+  --ink-strong: #161c18;
+  --ink: #454f49;
+  --ink-muted: #78837c;
+  --ink-faint: #9aa49e;
+  --ink-disabled: #b3bcb7;
+
+  /* Sage primary and the tints mixed off it. */
+  --sage-700: #356148;
+  --sage-600: #517762;
+  --sage-200: #c6d3cc;
+  --sage-100: #e7ece9;
+  --sage-50: #f4f6f5;
+
+  /* Amber, and only for "changed but not published" and "off the goal". */
+  --amber-700: #9a6a35;
+  --amber-400: #c9a26a;
+  --amber-50: #f7efe3;
+
+  --shadow-menu: 0 8px 24px rgba(22, 28, 24, 0.1), 0 1px 3px rgba(22, 28, 24, 0.06);
+
+  --sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --serif: 'IBM Plex Serif', Georgia, 'Times New Roman', serif;
+
+  --radius: 4px;
+  --radius-lg: 6px;
+}

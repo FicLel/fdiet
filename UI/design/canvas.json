@@ -1,9 +1,32 @@
 {
   "artboards": [
-    { "file": "Main.dc.html", "title": "Paciente · escritorio", "x": 0, "y": 0, "w": 1440, "h": 980, "is_interactive": true },
-    { "file": "Nutricionista.dc.html", "title": "Nutricionista · edición", "x": 1560, "y": 0, "w": 1440, "h": 980, "is_interactive": true },
-    { "file": "Tablet.dc.html", "title": "Tablet 834 px", "x": 0, "y": 1100, "w": 834, "h": 1112, "is_interactive": true },
-    { "file": "Movil.dc.html", "title": "Móvil 390 px", "x": 954, "y": 1100, "w": 390, "h": 844, "is_interactive": true }
+    {
+      "file": "Main.dc.html",
+      "title": "Paciente · escritorio",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 980,
+      "is_interactive": true
+    },
+    {
+      "file": "Tablet.dc.html",
+      "title": "Tablet 834 px",
+      "x": 0,
+      "y": 1100,
+      "w": 834,
+      "h": 1112,
+      "is_interactive": true
+    },
+    {
+      "file": "Movil.dc.html",
+      "title": "Móvil 390 px",
+      "x": 954,
+      "y": 1100,
+      "w": 390,
+      "h": 844,
+      "is_interactive": true
+    }
   ],
   "annotations": [
     {
@@ -21,13 +44,6 @@
       "text": "De dónde salen los datos.\nLos platos son literales de example-ui.xlsx. El buscador de \"comida extra\" usa filas reales de fooddata.csv (nombre comercial, marca, EAN, kcal/100 g), como las devolvería GET /api/food?name=.\nLas kcal y macros por plato son ESTIMACIONES de muestra: sirven para que sumen los totales, no son valores clínicos."
     },
     {
-      "id": "nota-nutricionista",
-      "x": 1560,
-      "y": -210,
-      "w": 440,
-      "text": "Vista del nutricionista.\nLa misma rejilla, pero cada celda se selecciona y se edita en el panel derecho: descripción, ingredientes detectados del texto y valores del plato.\nLos ingredientes con cantidad se pueden vincular al catálogo; los que no, quedan marcados \"Sin vincular\".\nNada llega al paciente hasta pulsar Publicar cambios."
-    },
-    {
       "id": "nota-tablet",
       "x": 0,
       "y": 2260,
@@ -42,5 +58,7 @@
       "text": "Móvil (390 px).\nAquí sólo existe la vista de día: no hay interruptor Semana / Día.\nComo no hay hover, la ficha nutricional se abre pulsando la comida. Total del día y \"Añadir\" quedan fijos abajo. Objetivos táctiles ≥ 44 px."
     }
   ],
-  "launch": { "view": "canvas" }
+  "launch": {
+    "view": "canvas"
+  }
 }

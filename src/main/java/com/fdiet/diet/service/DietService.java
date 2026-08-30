@@ -10,9 +10,12 @@ import com.fdiet.diet.dto.DietSummaryDto;
 import com.fdiet.diet.dto.Dish;
 import com.fdiet.diet.dto.DishIngredient;
 import com.fdiet.diet.dto.MealDto;
+import com.fdiet.diet.dto.MealType;
+import com.fdiet.diet.dto.ParseDishRequestDto;
 import com.fdiet.diet.dto.ResolveIngredientDto;
 import com.fdiet.diet.exception.DietNotFoundException;
 import com.fdiet.diet.exception.InvalidDietException;
+import com.fdiet.diet.helpers.IMealTextParser;
 import com.fdiet.diet.mapper.IDietMapper;
 import com.fdiet.diet.model.DietPlan;
 import com.fdiet.diet.model.DietStatus;
@@ -33,6 +36,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -48,6 +52,7 @@ public class DietService implements IDietService {
     private final DietRepository dietRepository;
     private final PlannedIngredientRepository ingredientRepository;
     private final IDietMapper dietMapper;
+    private final IMealTextParser mealTextParser;
     private final IFoodResolverService foodResolverService;
     private final IFoodItemService foodItemService;
     private final IBedcaFoodService bedcaFoodService;
@@ -56,6 +61,7 @@ public class DietService implements IDietService {
     public DietService(DietRepository dietRepository,
                        PlannedIngredientRepository ingredientRepository,
                        IDietMapper dietMapper,
+                       IMealTextParser mealTextParser,
                        IFoodResolverService foodResolverService,
                        IFoodItemService foodItemService,
                        IBedcaFoodService bedcaFoodService,
@@ -63,6 +69,7 @@ public class DietService implements IDietService {
         this.dietRepository = dietRepository;
         this.ingredientRepository = ingredientRepository;
         this.dietMapper = dietMapper;
+        this.mealTextParser = mealTextParser;
         this.foodResolverService = foodResolverService;
         this.foodItemService = foodItemService;
         this.bedcaFoodService = bedcaFoodService;
@@ -189,6 +196,30 @@ public class DietService implements IDietService {
             ingredient.setUnit(change.unit());
         }
         return dietMapper.toDto(ingredientRepository.save(ingredient));
+    }
+
+    /**
+     * One written cell, read the way the workbook import reads it. Nothing is
+     * stored: the ingredients are mapped through transient entities so the
+     * editor is handed the same shape — matched name, scaled figures — that a
+     * stored ingredient comes back as, without a row existing for it.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Dish parse(ParseDishRequestDto request) {
+        Dish written = mealTextParser.parse(request.text(), request.slotName());
+        if (written == null) {
+            throw new InvalidDietException("The cell is blank; there is no dish to read");
+        }
+        Foods foods = foodsOf(List.of(
+                new DietDay(DayOfWeek.MONDAY, List.of(new MealDto(
+                        MealType.BREAKFAST, written.name(), List.of(written))))));
+
+        List<DishIngredient> resolved = written.ingredients().stream()
+                .map(ingredient -> dietMapper.toDto(
+                        dietMapper.toEntity(ingredient, foods.of(ingredient))))
+                .toList();
+        return new Dish(written.name(), resolved);
     }
 
     private DishIngredient withSuggestions(PlannedIngredient ingredient, boolean suggest) {

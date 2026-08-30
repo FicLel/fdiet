@@ -1,0 +1,85 @@
+@import './tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 13px/1.4 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--sage-700);
+  text-decoration: none;
+}
+a:hover {
+  color: #1f3a2b;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+}
+
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+textarea {
+  resize: none;
+}
+
+/* Figures line up column-wise wherever they are compared. */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The serif carries the diet's name and the large numbers, nothing else. */
+.srf {
+  font-family: var(--serif);
+}
+
+.scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #dfe6e1 transparent;
+}
+.scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll::-webkit-scrollbar-thumb {
+  background: #dfe6e1;
+  border-radius: 4px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--sage-600);
+  outline-offset: 1px;
+}
+
+/* Marks a control the backend cannot answer yet — the patient selector and the
+   goal line. Removed when the users context returns. */
+.placeholder-data {
+  --placeholder-mark: 1;
+}
