@@ -219,7 +219,7 @@ public class DietService implements IDietService {
                 .map(ingredient -> dietMapper.toDto(
                         dietMapper.toEntity(ingredient, foods.of(ingredient))))
                 .toList();
-        return new Dish(written.name(), resolved);
+        return written.withIngredients(resolved);
     }
 
     private DishIngredient withSuggestions(PlannedIngredient ingredient, boolean suggest) {

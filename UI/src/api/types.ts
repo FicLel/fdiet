@@ -65,6 +65,13 @@ export interface DishIngredient {
 
 export interface Dish {
   name: string
+  /**
+   * The cell as it was written, when the backend has it. Reading a sentence
+   * into a name and quantities cannot be undone, so this is the only faithful
+   * text there is; null for a dish stored before the column existed, and the
+   * grid falls back to rebuilding one.
+   */
+  rawText: string | null
   ingredients: DishIngredient[]
 }
 

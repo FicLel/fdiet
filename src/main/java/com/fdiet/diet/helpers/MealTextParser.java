@@ -37,6 +37,9 @@ public class MealTextParser implements IMealTextParser {
     /** The width of {@code diet_ingredients.raw_name} and of the dish/meal name columns. */
     private static final int NAME_MAX = 255;
 
+    /** The width of {@code diet_dishes.raw_text}. */
+    private static final int TEXT_MAX = 1000;
+
     private static final String DEFAULT_UNIT = "unidad";
     private static final BigDecimal DEFAULT_QUANTITY = BigDecimal.ONE;
 
@@ -74,7 +77,11 @@ public class MealTextParser implements IMealTextParser {
             // The body held no readable fragment; the cell itself is the ingredient.
             ingredients.add(new DishIngredient(clean(cell), DEFAULT_QUANTITY, DEFAULT_UNIT));
         }
-        return new Dish(clean(name == null ? cell : name), List.copyOf(ingredients));
+        // The cell travels beside what was read out of it: reading is lossy, and
+        // whoever wrote the sentence is entitled to get that sentence back.
+        return new Dish(clean(name == null ? cell : name),
+                Texts.truncate(cell, TEXT_MAX),
+                List.copyOf(ingredients));
     }
 
     /** One fragment between two {@code +}. Null only when it is blank. */

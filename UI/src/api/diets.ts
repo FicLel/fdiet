@@ -32,6 +32,13 @@ export interface RequestIngredient {
 
 export interface RequestDish {
   name: string
+  /**
+   * The cell as written. Sent back untouched for a cell nobody edited, and left
+   * out when the diet never carried one — a rebuilt sentence is not the one the
+   * nutritionist typed, and storing it as if it were would make the loss
+   * permanent.
+   */
+  rawText?: string | null
   ingredients: RequestIngredient[]
 }
 

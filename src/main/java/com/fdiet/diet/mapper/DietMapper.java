@@ -99,7 +99,8 @@ public class DietMapper implements IDietMapper {
 
     @Override
     public Dish toDto(PlannedDish dish) {
-        return new Dish(dish.getName(), dish.getIngredients().stream().map(this::toDto).toList());
+        return new Dish(dish.getName(), dish.getRawText(),
+                dish.getIngredients().stream().map(this::toDto).toList());
     }
 
     @Override
@@ -125,7 +126,7 @@ public class DietMapper implements IDietMapper {
 
     @Override
     public PlannedDish toEntity(Dish dish) {
-        return new PlannedDish(dish.name());
+        return new PlannedDish(dish.name(), dish.rawText());
     }
 
     @Override

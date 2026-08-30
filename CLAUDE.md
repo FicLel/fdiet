@@ -155,6 +155,16 @@ lose part of the week. Nutrition figures for an ingredient are only available on
 The entity associations are mappings, not layer crossings — when the diet service needs food
 *data* it goes through `IBedcaFoodService` / `IFoodItemService`, never a food repository.
 
+`PlannedDish` carries `raw_text` for the same reason one level up: **the cell as it was written**.
+Reading a sentence into a name and quantities cannot be undone — `MealTextParser` keeps one
+quantity per ingredient and no brackets in a name, so `Tostada (60 gr) con tomate (80 gr)` puts
+back together as `Tostada con tomate (80 gr) (60 gr)`, the same food and a moved weight. Since
+`PUT /api/diets/{id}` replaces the whole week, an editor changing one cell has to send the other
+sixty-nine back; without the sentence it could only send rebuilt ones, and a nutritionist would be
+editing a rewrite of what they typed. **It is nullable and never reconstructed**: null means "what
+was written is not known", which is the truth for every dish stored before `V5`, and an invented
+original would make the loss permanent instead of visible.
+
 ### Nutrition
 
 Once an ingredient is matched, `service/DietNutritionService` scales the food's per-100 g figures
@@ -198,6 +208,10 @@ parameters:
 - `PATCH /api/diets/{id}/ingredients/{ingredientId}` — match one ingredient to a food
   (`bedcaFoodId` or `foodItemId`, not both — matching to one releases the other), or correct its
   name, quantity or unit. Fields left out are left alone.
+- `POST /api/diets/parse` — reads one written cell (`text`, optional `slotName`) into a dish with
+  its ingredients matched and priced, **storing nothing**. It exists so the editor never has a
+  parser of its own: a second implementation would drift from the importer, and the two would then
+  disagree about what the same line of text means.
 - `POST /api/diets/import` — multipart `file`, optional `sheet`, `name`, `startedOn`.
 
 Creating or importing a diet archives the one it replaces (`ARCHIVED`, `ended_on = today`) in the
@@ -304,6 +318,7 @@ changing an entity, add a migration to match or startup fails.
 | `V2__create_diet_schema.sql` | the diet and its week |
 | `V3__diet_ingredient_raw_name.sql` | `food_item_id` becomes nullable, `raw_name` appears |
 | `V4__create_bedca_schema.sql` | `bedca_foods`, and `diet_ingredients.bedca_food_id` |
+| `V5__diet_dish_raw_text.sql` | `diet_dishes.raw_text` — the cell as the nutritionist wrote it |
 
 ## Data files and licensing
 

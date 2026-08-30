@@ -309,6 +309,11 @@ function dishesRequest(day: DayOfWeek, mealType: MealType): RequestDish[] {
     }
     dishes.push({
       name: dish.name,
+      // Whatever the backend last held for this cell: the text just typed, for
+      // an edited one, since the parse answers with the sentence it read. Never
+      // a rebuilt line — a cell with none stays without one rather than gaining
+      // an invented original.
+      rawText: dish.rawText,
       ingredients: dish.ingredients.map((ingredient) => ({
         name: ingredient.name,
         quantity: ingredient.quantity,

@@ -118,6 +118,22 @@ class MealTextParserTest {
         });
     }
 
+    /**
+     * The parts do not add back up to the sentence — this is the cell that
+     * showed it, and why {@code raw_text} exists.
+     */
+    @Test
+    void keepsTheCellAsItWasWritten() {
+        String cell = "Tostada de pan integral (60 gr) con tomate rallado (80 gr) "
+                + "y 3 lonchas de pavo (60 gr)";
+
+        Dish dish = parser.parse("  " + cell + "  ", "Desayuno");
+
+        assertThat(dish.rawText()).isEqualTo(cell);
+        assertThat(dish.ingredients()).extracting(DishIngredient::name)
+                .doesNotContain(cell);
+    }
+
     @Test
     void returnsNothingForAnEmptyCell() {
         assertThat(parser.parse("   ", "Postre")).isNull();

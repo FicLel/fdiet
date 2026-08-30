@@ -73,6 +73,16 @@ class DietImportServiceTest {
                 });
     }
 
+    /** The cell reaches the diet as it was typed, not only as it was read. */
+    @Test
+    void carriesEachCellAsItWasWritten() {
+        DietRequestDto stored = importAndCapture();
+
+        assertThat(mealOf(stored, DayOfWeek.MONDAY, MealType.LUNCH).dishes())
+                .extracting("rawText")
+                .containsExactly("Ensalada: lechuga (80 gr)", "Pechuga de pollo (180 gr)", "1 kiwi");
+    }
+
     @Test
     void keepsOnlyTheDaysTheHeaderRowNames() {
         DietRequestDto stored = importAndCapture();

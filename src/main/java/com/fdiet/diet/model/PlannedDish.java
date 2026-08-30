@@ -43,6 +43,18 @@ public class PlannedDish {
     @Column(name = "name", length = 255, nullable = false)
     private String name;
 
+    /**
+     * The cell as it was written, when it is known.
+     *
+     * <p>The name and the ingredients are what the sentence was read as, and
+     * reading it is not reversible. This is the sentence, so an editor that has
+     * to send the whole week back can return the cells it did not touch exactly
+     * as they were. Null where nothing wrote one — never a reconstruction,
+     * which would be a different sentence dressed up as the original.
+     */
+    @Column(name = "raw_text", length = 1000)
+    private String rawText;
+
     /** Its place in the meal, from 0. Unique within the meal. */
     @Column(name = "position", nullable = false)
     private int position;
@@ -56,6 +68,11 @@ public class PlannedDish {
 
     public PlannedDish(String name) {
         this.name = name;
+    }
+
+    public PlannedDish(String name, String rawText) {
+        this.name = name;
+        this.rawText = rawText;
     }
 
     public void addIngredient(PlannedIngredient ingredient) {
