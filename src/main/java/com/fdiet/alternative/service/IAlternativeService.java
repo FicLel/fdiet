@@ -1,0 +1,50 @@
+package com.fdiet.alternative.service;
+
+import com.fdiet.alternative.dto.FoodAlternativesDto;
+
+import java.math.BigDecimal;
+
+/**
+ * What else a diet could put on the plate in place of a given food.
+ *
+ * <p>It owns no table. The composition database is reached through
+ * {@link com.fdiet.food.service.IBedcaFoodService} and read through
+ * {@link com.fdiet.food.service.INutritionService}, the same way the diet module
+ * reaches it — this context adds a judgement about foods, not a store of them.
+ *
+ * <p>The judgement is in two halves and they are not interchangeable. A
+ * category decides <em>who is eligible</em>: grilled chicken may be replaced by
+ * a fish or another meat and never by a lettuce, however well the figures happen
+ * to line up. Composition then decides <em>the order</em> of the eligible. The
+ * arithmetic is never allowed to make the first decision, because it would; a
+ * large enough portion of anything meets a small enough portion of anything
+ * else on paper.
+ */
+public interface IAlternativeService {
+
+    /**
+     * Alternatives to the composition-database food with that id.
+     *
+     * @param foodId   the food being replaced; 404 if the catalogue has no such row
+     * @param limit    how many to hand back, best first
+     * @param grams    the portion the diet prescribes, or null to answer per 100 g
+     * @param sameFood whether other preparations of the same food stay in the
+     *                 list. False by default, because six more cuts of chicken
+     *                 are not an alternative to chicken; true is what to pass
+     *                 when the question really is "which other cheese", since
+     *                 there the same word is the whole family
+     */
+    FoodAlternativesDto forFoodId(Long foodId, int limit, BigDecimal grams, boolean sameFood);
+
+    /**
+     * The same answer for a food named rather than pointed at, which is how a
+     * diet is written.
+     *
+     * <p>The name has to be one the catalogue carries, matched exactly — the
+     * collation is case- and accent-insensitive, so {@code lechuga} finds
+     * {@code Lechuga}, and anything less than exact is a 404 rather than a
+     * guess. An ingredient whose name is not in the catalogue is matched first
+     * through {@code GET /api/diets/{id}/ingredients?suggest=true}, by a person.
+     */
+    FoodAlternativesDto forName(String name, int limit, BigDecimal grams, boolean sameFood);
+}

@@ -42,6 +42,19 @@ public interface IBedcaFoodService {
     Map<Long, BedcaFood> entitiesByIds(Collection<Long> ids);
 
     /**
+     * The whole table, in one query, for a caller that has to look at every
+     * food to answer at all.
+     *
+     * <p>Offered because the alternative to it is worse: the question
+     * {@code com.fdiet.alternative} asks — which foods share this one's family
+     * — is answered off a name and a composition, neither of which the database
+     * can be asked to filter on, so a per-candidate query would be 957 of them.
+     * At 957 rows this is a select the size of the one {@link #storeAll} already
+     * runs. It is not a listing: {@link #search} is.
+     */
+    List<BedcaFood> entitiesAll();
+
+    /**
      * The foods whose names best fit some ingredient text, best first.
      *
      * <p>Offers, not decisions — nothing in this module assigns a suggestion to

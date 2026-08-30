@@ -24,7 +24,8 @@ tasks. A real exported environment variable always wins over the `.env` entry.
 ## Architecture
 
 fdiet is a Spring Boot backend organized per bounded context under `src/main/java/com/fdiet/<feature>/`.
-The feature modules are `food` (the product catalogue) and `diet` (the plan built on it);
+The feature modules are `food` (the product catalogue), `diet` (the plan built on it) and
+`alternative` (what one food may be swapped for);
 `common` holds the shared transport types.
 
 **No security layer.** No Spring Security, no JWT, no authentication anywhere — every route is
@@ -174,10 +175,11 @@ liquids (water, broth, milk, juice) are within a few percent of.
 
 ### Interfaces and injection
 
-Every class in `diet/` is injected through an interface (`IDietService`, `IDietMapper`,
-`IMealTextParser`, `IPortionScaler`, `IDietNutritionService`, …), as are the food services the
-diet module depends on: `IFoodItemService`, `IBedcaFoodService`, `INutritionService`,
-`IBedcaImportService`, `IBedcaFoodMapper`, `INameMatcher`. The older `food/` classes
+Every class in `diet/` and `alternative/` is injected through an interface (`IDietService`,
+`IDietMapper`, `IMealTextParser`, `IPortionScaler`, `IDietNutritionService`,
+`IAlternativeService`, `IFoodCategoriser`, `INutritionSimilarity`, …), as are the food services
+they depend on: `IFoodItemService`, `IBedcaFoodService`, `INutritionService`, `INameMatcher`,
+`IBedcaImportService`, `IBedcaFoodMapper`. The older `food/` classes
 (`FoodItemService`'s siblings, `FoodImportService`) still use their concrete types. The
 repositories are Spring Data interfaces already.
 
@@ -229,6 +231,65 @@ diet. A blank is better than a wrong number, so the machine offers and the nutri
 
 Importing example-ui.xlsx matches 32 of its 210 ingredients outright; the other 178 come back
 from the fix-up endpoint each with its candidates.
+
+### `alternative`
+
+What else could go on the plate instead of this. It owns **no table and no schema**: it reaches
+the composition database through `IBedcaFoodService` and reads it through `INutritionService`,
+the same way `diet` does, and adds a judgement about foods rather than a store of them. It is a
+context of its own, and one endpoint, so that neither the catalogue nor the week has to grow a
+second job.
+
+**The judgement is in two halves and they are not interchangeable.** A *category* decides who is
+eligible, and only then does *composition* decide the order. Grilled chicken is answered with
+meats and fish, never with a lettuce, however well the figures line up — and they do line up: a
+large enough portion of anything meets a small enough portion of anything else on paper, which is
+exactly why the arithmetic is never allowed to make the first decision.
+
+- `domain/FoodCategory` — the sixteen families, split the way a person cooking would split them
+  rather than botanically. A tomato sits with the vegetables and a potato in `TUBER`, because
+  neither is a plausible swap for the other.
+- `helpers/FoodCategoriser` — the word list, and the first word of a name that any rule claims
+  wins. BEDCA names are written head first (`Pollo, pechuga, plancha`), so the head is the food
+  and the rest is preparation; reading left to right is what keeps `Aceite de hígado de bacalao`
+  an oil, `Café, con leche` a drink and `Flan de huevo` a dessert. Two-word rules go first at
+  each position for the few foods named after something they are not — `judía verde`,
+  `nuez moscada`. It claims **956 of the 957** names; the one it does not is left uncategorised
+  and offered nothing, and a word claimed by two families is a startup failure rather than a
+  silent tie.
+- `helpers/NutritionSimilarity` — the distance, and nothing else. Relative differences on five
+  components (energy and protein weighted heaviest, then fat and carbohydrate, fibre breaking
+  ties), each measured against a floor so a gram of fat against two reads as rounding. **Only
+  components both foods publish are compared**, and fewer than two shared components is a null
+  rather than a score resting on one number. Sugars are published for 205 of 957 foods and
+  sodium says how a food was canned, so neither is counted.
+- `service/AlternativeService` — one pass over the catalogue per request: the category is read
+  off every name, the wrong shelf is dropped before a figure is looked at, and the rest is
+  ordered. 957 rows is one query and no index of its own to fall stale after a sync, which is
+  why `IBedcaFoodService.entitiesAll()` exists.
+
+**Categories are derived on read and never stored**, like a kcal figure converted from kilojoules.
+The source publishes a group for 182 of its 957 foods, so a stored category would exist for one
+food in five; the name is the one thing every row has.
+
+`AlternativeController` at `/api/alternatives`:
+
+- `GET /api/alternatives/{foodId}?limit=&grams=&sameFood=` — alternatives to a composition-database
+  food, best first.
+- `GET /api/alternatives?name=&limit=&grams=&sameFood=` — the same for a food named the way a diet
+  names it. **Exact only**, case- and accent-insensitively; anything less is a 404 rather than a
+  guess, and is resolved by a person through the diet's fix-up list first.
+
+`grams` asks what weight of each alternative carries the same **energy** as that portion — energy
+because it is the one figure every row publishes — and a food whose energy is unpublished gets no
+equivalent weight rather than an invented one. `sameFood` is false by default: six more cuts of
+chicken are not an alternative to chicken, but `sameFood=true` is the right question for cheese,
+where the same word is the whole family.
+
+**The list travels with its counts**, as the diet's totals do. An empty `alternatives` has three
+different meanings: `category` null (no rule recognised the name, so nothing was ever eligible),
+`inCategory` zero (the shelf is empty), or `ranked` short of `inCategory` (foods were eligible but
+published too few figures to compare).
 
 ## Persistence
 

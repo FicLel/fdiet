@@ -1,0 +1,222 @@
+package com.fdiet.alternative.service;
+
+import com.fdiet.alternative.domain.FoodCategory;
+import com.fdiet.alternative.dto.AlternativeDto;
+import com.fdiet.alternative.dto.FoodAlternativesDto;
+import com.fdiet.alternative.helpers.FoodCategoriser;
+import com.fdiet.alternative.helpers.NutritionSimilarity;
+import com.fdiet.food.exception.BedcaFoodNotFoundException;
+import com.fdiet.food.helpers.NameMatcher;
+import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.NutrientValue;
+import com.fdiet.food.service.IBedcaFoodService;
+import com.fdiet.food.service.NutritionService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+/**
+ * The catalogue here is a small slice of bedca_foods.csv: real ids, real names
+ * and the real published figures, kilojoules and all.
+ */
+class AlternativeServiceTest {
+
+    private static final Long CHICKEN_BREAST = 2297L;
+    private static final Long LETTUCE = 2399L;
+    private static final Long OIL = 1L;
+
+    private final IBedcaFoodService bedcaFoodService = mock(IBedcaFoodService.class);
+
+    private final AlternativeService service = new AlternativeService(
+            bedcaFoodService,
+            new NutritionService(),
+            new FoodCategoriser(),
+            new NutritionSimilarity(),
+            new NameMatcher());
+
+    private List<BedcaFood> catalogue;
+
+    @BeforeEach
+    void catalogue() {
+        catalogue = List.of(
+                // Meats.
+                food(CHICKEN_BREAST, "Pollo, pechuga, plancha", "690", "31", "3.6", "0"),
+                food(994L, "Pollo, pechuga, con piel, crudo", "705", "30.5", "5.2", "0"),
+                food(688L, "Cerdo, lomo, asado", "661", "30", "4.1", "0"),
+                food(2000L, "Ternera, solomillo, asado", "728", "32", "6.1", "0"),
+                food(770L, "Chorizo", "1770", "17", "38", "2"),
+                // Fish — a different shelf, however near the figures.
+                food(2100L, "Merluza fresca", "297", "15.9", "0.8", "0"),
+                // Vegetables — the shelf that must never be offered for a meat.
+                food(LETTUCE, "Lechuga", "65", "1.3", "0.2", "1.4"),
+                food(2422L, "Tomate, asado", "80", "1", "0.3", "1.2"),
+                // A food the catalogue publishes nothing about.
+                blank(3000L, "Cordero, parte sin especificar"),
+                // A food no rule claims.
+                food(4000L, "Cremoso san millan", "1200", "20", "25", "1"),
+                // A fat, so an oil has somewhere to go.
+                food(OIL, "Aceite de oliva", "3700", "0", "100", "0"));
+
+        when(bedcaFoodService.entitiesAll()).thenReturn(catalogue);
+        for (BedcaFood food : catalogue) {
+            when(bedcaFoodService.entityById(food.getId())).thenReturn(food);
+        }
+    }
+
+    @Test
+    void neverLeavesTheFoodsOwnFamily() {
+        FoodAlternativesDto alternatives = service.forFoodId(CHICKEN_BREAST, 10, null, false);
+
+        assertThat(alternatives.category()).isEqualTo(FoodCategory.MEAT);
+        assertThat(alternatives.alternatives())
+                .extracting(AlternativeDto::name)
+                .containsExactlyInAnyOrder("Cerdo, lomo, asado", "Ternera, solomillo, asado", "Chorizo")
+                .doesNotContain("Lechuga", "Tomate, asado", "Merluza fresca");
+    }
+
+    /**
+     * A lettuce can be made to look like a chicken breast on paper — a large
+     * enough portion of one meets a small enough portion of the other — which
+     * is the whole reason the category decides eligibility and the figures only
+     * decide the order.
+     */
+    @Test
+    void offersNoMeatForAVegetable() {
+        FoodAlternativesDto alternatives = service.forFoodId(LETTUCE, 10, null, false);
+
+        assertThat(alternatives.category()).isEqualTo(FoodCategory.VEGETABLE);
+        assertThat(alternatives.alternatives())
+                .extracting(AlternativeDto::name)
+                .containsExactly("Tomate, asado");
+    }
+
+    @Test
+    void putsTheNearestCompositionFirst() {
+        assertThat(service.forFoodId(CHICKEN_BREAST, 10, null, false).alternatives())
+                .extracting(AlternativeDto::name)
+                .startsWith("Cerdo, lomo, asado")
+                .endsWith("Chorizo");
+    }
+
+    @Test
+    void leavesOutAnotherCutOfTheSameFood() {
+        assertThat(service.forFoodId(CHICKEN_BREAST, 10, null, false).alternatives())
+                .extracting(AlternativeDto::name)
+                .doesNotContain("Pollo, pechuga, con piel, crudo");
+    }
+
+    @Test
+    void keepsThemWhenTheCallerAsksFor() {
+        assertThat(service.forFoodId(CHICKEN_BREAST, 10, null, true).alternatives())
+                .extracting(AlternativeDto::name)
+                .contains("Pollo, pechuga, con piel, crudo");
+    }
+
+    @Test
+    void neverOffersTheFoodItself() {
+        assertThat(service.forFoodId(CHICKEN_BREAST, 10, null, true).alternatives())
+                .extracting(AlternativeDto::bedcaFoodId)
+                .doesNotContain(CHICKEN_BREAST);
+    }
+
+    /** The counts are what tell a short list from an unreadable one. */
+    @Test
+    void saysHowManyWereEligibleAndHowManyCouldBeCompared() {
+        FoodAlternativesDto alternatives = service.forFoodId(CHICKEN_BREAST, 10, null, false);
+
+        // Cerdo, Ternera, Chorizo and the lamb nothing is published about.
+        assertThat(alternatives.inCategory()).isEqualTo(4);
+        assertThat(alternatives.ranked()).isEqualTo(3);
+    }
+
+    @Test
+    void answersAFoodNoRuleClaimsWithNothingRatherThanAnything() {
+        FoodAlternativesDto alternatives = service.forFoodId(4000L, 10, null, false);
+
+        assertThat(alternatives.category()).isNull();
+        assertThat(alternatives.categoryLabel()).isNull();
+        assertThat(alternatives.alternatives()).isEmpty();
+        assertThat(alternatives.inCategory()).isZero();
+        assertThat(alternatives.nutrition().energyKcal()).isNotNull();
+    }
+
+    @Test
+    void keepsToTheLimitAskedFor() {
+        assertThat(service.forFoodId(CHICKEN_BREAST, 1, null, false).alternatives()).hasSize(1);
+    }
+
+    /**
+     * 100 g of grilled chicken breast is 690 kJ, which is 164.9 kcal; the same
+     * energy in roast pork loin, at 661 kJ per 100 g, is 104 g of it.
+     */
+    @Test
+    void saysHowMuchOfTheAlternativeCarriesTheSameEnergy() {
+        FoodAlternativesDto alternatives =
+                service.forFoodId(CHICKEN_BREAST, 10, new BigDecimal("100"), false);
+
+        assertThat(alternatives.grams()).isEqualByComparingTo("100");
+        assertThat(alternatives.portion().energyKcal()).isEqualByComparingTo("164.91");
+
+        AlternativeDto pork = alternatives.alternatives().get(0);
+        assertThat(pork.name()).isEqualTo("Cerdo, lomo, asado");
+        assertThat(pork.equivalentGrams()).isEqualByComparingTo("104");
+        assertThat(pork.equivalentPortion().energyKcal()).isEqualByComparingTo("164.30");
+    }
+
+    @Test
+    void leavesThePortionOutWhenNoneWasAskedAbout() {
+        FoodAlternativesDto alternatives = service.forFoodId(CHICKEN_BREAST, 10, null, false);
+
+        assertThat(alternatives.grams()).isNull();
+        assertThat(alternatives.portion()).isNull();
+        assertThat(alternatives.alternatives())
+                .allSatisfy(alternative -> {
+                    assertThat(alternative.equivalentGrams()).isNull();
+                    assertThat(alternative.equivalentPortion()).isNull();
+                });
+    }
+
+    @Test
+    void findsTheFoodByTheNameADietWrites() {
+        when(bedcaFoodService.entitiesByName(anyCollection()))
+                .thenReturn(Map.of("lechuga", catalogue.get(6)));
+
+        assertThat(service.forName("Lechuga", 10, null, false).foodId()).isEqualTo(LETTUCE);
+    }
+
+    @Test
+    void refusesANameTheCatalogueDoesNotCarry() {
+        when(bedcaFoodService.entitiesByName(anyCollection())).thenReturn(Map.of());
+
+        assertThatThrownBy(() -> service.forName("pechuga de pollo", 10, null, false))
+                .isInstanceOf(BedcaFoodNotFoundException.class)
+                .hasMessageContaining("pechuga de pollo");
+    }
+
+    /** Energy as published: kilojoules, which is what 947 of the 957 rows use. */
+    private static BedcaFood food(Long id, String name,
+                                  String kj, String protein, String fat, String fibre) {
+        BedcaFood food = blank(id, name);
+        food.setEnergy(new NutrientValue(new BigDecimal(kj), "kJ"));
+        food.setProtein(new NutrientValue(new BigDecimal(protein), "g"));
+        food.setFat(new NutrientValue(new BigDecimal(fat), "g"));
+        food.setFiber(new NutrientValue(new BigDecimal(fibre), "g"));
+        return food;
+    }
+
+    private static BedcaFood blank(Long id, String name) {
+        BedcaFood food = new BedcaFood();
+        food.setId(id);
+        food.setName(name);
+        return food;
+    }
+}

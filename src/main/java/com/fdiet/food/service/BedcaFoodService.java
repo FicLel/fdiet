@@ -114,6 +114,12 @@ public class BedcaFoodService implements IBedcaFoodService {
                 .collect(Collectors.toMap(BedcaFood::getId, Function.identity(), (a, b) -> a));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<BedcaFood> entitiesAll() {
+        return bedcaFoodRepository.findAll(BY_NAME);
+    }
+
     /**
      * Ranked by how much of each food's name the text accounts for. Foods
      * sharing nothing with it are dropped, and a tie goes to the more specific
