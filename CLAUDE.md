@@ -24,15 +24,23 @@ tasks. A real exported environment variable always wins over the `.env` entry.
 ## Architecture
 
 fdiet is a Spring Boot backend organized per bounded context under `src/main/java/com/fdiet/<feature>/`.
-The feature modules are `food` (the product catalogue), `diet` (the plan built on it),
-`alternative` (what one food may be swapped for) and `journal` (what the patient thought of the
-plan and what they ate beside it); `common` holds the shared transport types.
+The feature modules are `patient` (who a diet is written for), `food` (the product catalogue),
+`diet` (the plan built on it), `alternative` (what one food may be swapped for) and `journal`
+(what the patient thought of the plan and what they ate beside it); `common` holds the shared
+transport types.
 
 **No security layer.** No Spring Security, no JWT, no authentication anywhere — every route is
-open. This is intentional for the current stage; the previous `users` bounded context was removed.
-The consequence reaches `journal`: a score and an off-plan entry belong to a *patient*, and there
-is no patient to attribute them to, so they hang off the diet alone. When users come back, both
-tables need an owner column and the endpoints need to stop trusting the URL.
+open. This is intentional for the current stage.
+
+**A patient is a name, not an account.** `patients` exists so a diet, and the journal hanging off
+it, can say *whose* it is — nothing more. It authenticates nobody and hides nothing: every
+patient's week is readable and writable through the same endpoints as every other's, and the UI's
+patient selector is a control over which data is on screen rather than a login. Ownership is now
+recorded, so when accounts arrive the endpoints need to stop trusting the `patientId` in the URL,
+and that is the only step left — the column they would need is already there.
+
+The journal still hangs off the diet rather than off a patient directly, and correctly: a diet
+belongs to exactly one patient, so `dish_scores.diet_id` already says who wrote the score.
 
 ### Layering rules
 
@@ -125,10 +133,41 @@ The current fooddata.csv only fills 19 of the `food_items` columns; the rest (ma
 manufacturer, subbrand, portion size, sodium, fibre, …) are kept for richer exports of the same
 dataset and stay null after an import.
 
+### `patient`
+
+Who a diet is written for. It owns `patients` — an id, a name, a free note, a creation stamp — and
+that is the whole of it.
+
+- `model/Patient`, `repository/PatientRepository`, `service/PatientService` (+ `IPatientService`),
+  `mapper/PatientMapper`, `controller/PatientController` at `/api/patients`, and the two
+  exceptions.
+
+**The dependency runs one way: a diet points at its patient, and a patient row holds no diets.**
+`Patient` has no `diets` association and `PatientService` never calls into `com.fdiet.diet`; the
+diet service calls `IPatientService.entityById` for the row it has to point at, which is a service
+handing an entity to a service — one layer talking to itself. That is also why "which diet is each
+patient on" is `GET /api/diets/current` and not a field on `PatientDto`: the answer belongs to the
+module that owns `diets`, and putting it here would turn the arrow around.
+
+**The name is the whole identity while there are no accounts**, so `uk_patients_name` forbids two
+of them — a list with two `Victor`s names nobody. The collation is case- and accent-insensitive,
+which is how a person reading the list compares. `PatientService` checks it first for a message
+somebody can act on and leaves the index underneath for the write that check races with.
+
+Deleting a patient who still has diets is **refused**, not cascaded: `fk_diets_patient` has no
+`ON DELETE`, and the service turns the resulting integrity violation into a 400. The weeks written
+for somebody are the record of them, and dropping a name should not drop the record. The check is
+the foreign key itself rather than a query, because `diets` is another context's table.
+
+`V7` seeds one patient, `Victor`, and hands every diet that already existed to them — they were all
+written for one person. The row is seeded on an empty database too: a screen that picks a patient
+before it can do anything needs one to exist before the first diet does.
+
 ### `diet`
 
-There is **one active diet at a time** plus a record of the archived ones; nothing generates a
-week, the nutritionist writes it. The module keeps two shapes of the same idea apart:
+Every diet belongs to one patient, and there is **one active diet per patient** plus a record of
+their archived ones; nothing generates a week, the nutritionist writes it. The module keeps two
+shapes of the same idea apart:
 
 - `model/` — the JPA entities `DietPlan`, `PlannedMeal`, `PlannedDish`, `PlannedIngredient` →
   `diets`, `diet_meals`, `diet_dishes`, `diet_ingredients`. Named `Planned*` so the bare `Diet`
@@ -137,17 +176,33 @@ week, the nutritionist writes it. The module keeps two shapes of the same idea a
   once per diet, a meal once per slot) and hand it back ordered by `DayOfWeek` / `MealType`
   through their `EnumMap`s. Entities read from the database get their ordering from here rather
   than from an `@OrderBy` on the days.
-- `repository/DietRepository` — `findFirstByStatus(ACTIVE)` is the main question: the diet in
-  force now. `findByStatusNotOrderByStartedOnDesc` is the history.
+- `repository/DietRepository` — `findFirstByPatientIdAndStatus(patientId, ACTIVE)` is the main
+  question: the diet in force now, for one person.
+  `findByPatientIdAndStatusNotOrderByStartedOnDesc` is that patient's history, and
+  `findByStatusOrderByPatientNameAsc(ACTIVE)` is everybody's diet in force in one query. Every
+  query is scoped by patient except the two that address a diet by its own id — an id is already
+  somebody's.
 
 Two invariants live in the schema, not only in the code:
 
-- `diets.active_flag` is a generated column (1 while `status = 'ACTIVE'`, NULL once archived)
-  under the unique index `uk_diets_active`. MySQL allows many NULLs in a unique index, so any
-  number of archived diets fit and a second active one cannot be inserted. **The entity does not
-  map that column** — Hibernate validates only mapped columns, so an insert can never write it.
+- `diets.active_flag` is a generated column (1 while `status = 'ACTIVE'`, NULL once archived) and
+  `uk_diets_active` spans **`(patient_id, active_flag)`**. MySQL allows a unique index to hold any
+  number of rows with a NULL in them, so every patient keeps all of their archived diets and no
+  patient can hold a second active one. **The entity does not map the generated column** —
+  Hibernate validates only mapped columns, so an insert can never write it.
 - `uk_diet_meals_slot (diet_id, day_of_week, meal_type)` restates `domain/Meal`'s one-meal-per-slot
   rule at the database level.
+
+`DietPlan.patient` is a `@ManyToOne`, a mapping rather than a layer crossing — the same way an
+ingredient maps the food it was matched to, and for the same reason: `DietDto` and `DietSummaryDto`
+carry `patientName` beside `patientId` so a heading never fetches a patient to write itself. The
+repository's entity graphs fetch it, since every one of those rows is read back saying whose it is.
+
+**A diet never changes hands through an edit.** `PUT /api/diets/{id}` requires the body's
+`patientId` to be the one the diet already belongs to and refuses anything else, because moving a
+diet would take the patient's journal with it — the scores and off-plan entries hang off the diet
+id — and the week would arrive under a new name carrying somebody else's opinion of it.
+`POST /api/diets/{id}/copy` is the answer, and it leaves both diets alone.
 
 `PlannedIngredient` carries `raw_name` — what the diet calls the food — and *may* point at one of
 the two catalogues: `bedca_food_id` for a generic composition-database food, the usual match, or
@@ -188,9 +243,10 @@ liquids (water, broth, milk, juice) are within a few percent of.
 
 ### Interfaces and injection
 
-Every class in `diet/` and `alternative/` is injected through an interface (`IDietService`,
-`IDietMapper`, `IMealTextParser`, `IPortionScaler`, `IDietNutritionService`,
-`IAlternativeService`, `IFoodCategoriser`, `INutritionSimilarity`, …), as are the food services
+Every class in `diet/`, `alternative/` and `patient/` is injected through an interface
+(`IDietService`, `IDietMapper`, `IMealTextParser`, `IPortionScaler`, `IDietNutritionService`,
+`IAlternativeService`, `IFoodCategoriser`, `INutritionSimilarity`, `IPatientService`,
+`IPatientMapper`, …), as are the food services
 they depend on: `IFoodItemService`, `IBedcaFoodService`, `INutritionService`, `INameMatcher`,
 `IBedcaImportService`, `IBedcaFoodMapper`. The older `food/` classes
 (`FoodItemService`'s siblings, `FoodImportService`) still use their concrete types. The
@@ -198,13 +254,29 @@ repositories are Spring Data interfaces already.
 
 ### Endpoints
 
-`DietController` at `/api/diets` — plain REST, no HATEOAS envelope, pagination as query
-parameters:
+`PatientController` at `/api/patients` — the caseload is a handful of rows, so the listing is not
+paged:
 
-- `POST /api/diets` — store a week as the diet in force (201).
-- `PUT /api/diets/{id}` — replace a diet's whole week.
-- `GET /api/diets/active`, `GET /api/diets/{id}` — the week, ordered by day and slot.
-- `GET /api/diets?page=&size=` — the archived diets, without their weeks.
+- `GET /api/patients`, `GET /api/patients/{id}` — everybody, by name; or one of them.
+- `POST /api/patients` (201) — `{name, notes?}`; the name must not be one somebody already holds.
+- `PUT /api/patients/{id}` — rename, or rewrite the note.
+- `DELETE /api/patients/{id}` (204) — a patient with no diets. One who still has diets is a 400.
+
+`DietController` at `/api/diets` — plain REST, no HATEOAS envelope, pagination as query
+parameters. `patientId` is required wherever the question is about a person, and absent wherever a
+diet is addressed by its own id:
+
+- `POST /api/diets` — store a week as that patient's diet in force (201); `patientId` in the body.
+- `PUT /api/diets/{id}` — replace a diet's whole week. The body's `patientId` must be the patient
+  the diet already belongs to.
+- `POST /api/diets/{id}/copy` (201) — `{patientId, name?, startedOn?}`. Writes the same week again
+  for another patient: its days, dishes, `raw_text` and every food match already made. It becomes
+  their diet in force, archiving what they were on; the source is untouched and the **journal is
+  not copied**.
+- `GET /api/diets/active?patientId=`, `GET /api/diets/{id}` — the week, ordered by day and slot.
+- `GET /api/diets/current` — every patient's diet in force, without their weeks: who is on a diet
+  right now, in one query. This is the board the UI's patient selector is drawn from.
+- `GET /api/diets?patientId=&page=&size=` — that patient's archived diets, without their weeks.
 - `GET /api/diets/{id}/ingredients?resolved=false&suggest=true&page=&size=` — the fix-up list.
   `suggest=true` attaches the composition database's best candidates to each unmatched
   ingredient, ranked, costing no query.
@@ -215,10 +287,12 @@ parameters:
   its ingredients matched and priced, **storing nothing**. It exists so the editor never has a
   parser of its own: a second implementation would drift from the importer, and the two would then
   disagree about what the same line of text means.
-- `POST /api/diets/import` — multipart `file`, optional `sheet`, `name`, `startedOn`.
+- `POST /api/diets/import` — multipart `file`, required `patientId`, optional `sheet`, `name`,
+  `startedOn`.
 
-Creating or importing a diet archives the one it replaces (`ARCHIVED`, `ended_on = today`) in the
-same transaction, flushed before the insert so `uk_diets_active` is never held by two rows.
+Creating, importing or copying a diet archives the one it replaces — that patient's, and only
+theirs (`ARCHIVED`, `ended_on = today`) — in the same transaction, flushed before the insert so
+their half of `uk_diets_active` is never held by two rows.
 
 ### Importing a diet
 
@@ -369,6 +443,7 @@ changing an entity, add a migration to match or startup fails.
 | `V4__create_bedca_schema.sql` | `bedca_foods`, and `diet_ingredients.bedca_food_id` |
 | `V5__diet_dish_raw_text.sql` | `diet_dishes.raw_text` — the cell as the nutritionist wrote it |
 | `V6__create_journal_schema.sql` | `dish_scores` and `extra_foods` — the two tables the patient writes |
+| `V7__create_patient_schema.sql` | `patients`, seeded with `Victor`; `diets.patient_id`; `uk_diets_active` becomes per patient |
 
 ## Data files and licensing
 

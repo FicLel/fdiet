@@ -1,6 +1,7 @@
 import { computed, reactive, ref, shallowRef, triggerRef } from 'vue'
 import { ApiError } from '@/api/http'
 import { dietsApi, type DietRequest, type RequestDish, type RequestMeal } from '@/api/diets'
+import { usePatients } from '@/stores/patients'
 import type { DayOfWeek, Diet, Dish, DishIngredient, MealType } from '@/api/types'
 import { buildRows, cellKey, dishAt, mealOf, type GridRow, type MealRow } from '@/domain/slots'
 import { renderDish } from '@/domain/dishText'
@@ -14,6 +15,12 @@ import { addDays, dayName, dayNumber, longDate, mondayOf, WEEK } from '@/domain/
  * the text that was typed plus the dish the backend read out of it; the stored
  * diet is left exactly as it was until `publish` writes the whole week.
  *
+ * **One patient at a time.** Which one is not held here — it is the selection
+ * in `stores/patients`, shared with the patient's own screen so the two are
+ * never looking at different people. Switching patient throws the draft away
+ * and loads theirs: an unpublished edit belongs to the week it was typed into,
+ * and carrying it across would write one person's breakfast into another's.
+ *
  * The kcal a cell shows are worked out here rather than taken from the diet's
  * own summaries, because a figure has to move as the text is typed — and it is
  * the same arithmetic either way, over the same per-ingredient figures.
@@ -23,9 +30,11 @@ import { addDays, dayName, dayNumber, longDate, mondayOf, WEEK } from '@/domain/
 const PARSE_DEBOUNCE_MS = 450
 
 /**
- * Placeholder. The backend has no goal and no patient — the `users` bounded
- * context was removed — so the goal line and the patient selector are the
- * nutritionist's own note for now, held in the browser and never sent.
+ * Placeholder. The backend carries no goal — a patient row is a name and a
+ * note, nothing about what they should be eating — so the goal line is the
+ * nutritionist's own, held in the browser and never sent. It is also the same
+ * one for everybody, which is the honest consequence: a goal is per patient and
+ * this is not stored per patient.
  */
 const PLACEHOLDER_TARGET_KCAL = 1900
 
@@ -101,7 +110,7 @@ const selection = ref<{ day: DayOfWeek; mealType: MealType; dishIndex: number } 
  */
 const weekVersion = ref(0)
 
-/** Placeholders, browser-only, until the backend carries a goal and a patient. */
+/** Placeholders, browser-only, until the backend carries a goal per patient. */
 const goalNote = ref('1.900 kcal/día · 120 g de proteína o más')
 const targetKcal = ref(PLACEHOLDER_TARGET_KCAL)
 
@@ -274,19 +283,36 @@ function selectFirstCell(): void {
     row && day ? { day: day.day, mealType: row.mealType, dishIndex: row.dishIndex } : null
 }
 
+/**
+ * Loads the selected patient's week, throwing away whatever was being edited.
+ * An unpublished edit belongs to the week it was typed into: keeping it across
+ * a switch would put one patient's breakfast into another patient's day.
+ */
 async function load(): Promise<void> {
+  const patients = usePatients()
+  const patientId = patients.selectedId.value
+  discardAll()
+  if (patientId === null) {
+    // Nobody to write a diet for yet. Not an error — the very first thing the
+    // editor does is add somebody.
+    diet.value = null
+    error.value = 'Añade un paciente para empezar a escribirle una dieta.'
+    status.value = 'error'
+    return
+  }
   status.value = 'loading'
   error.value = null
   try {
-    diet.value = await dietsApi.active()
+    diet.value = await dietsApi.active(patientId)
     weekVersion.value++
     status.value = 'ready'
     selectFirstCell()
   } catch (cause) {
     diet.value = null
+    const who = patients.selected.value?.name ?? 'Este paciente'
     error.value =
       cause instanceof ApiError && cause.status === 404
-        ? 'No hay ninguna dieta activa. Importa una desde un libro de Excel para empezar.'
+        ? `${who} todavía no tiene ninguna dieta. Impórtale una desde un libro de Excel, o copia la de otro paciente.`
         : `No se pudo cargar la dieta${cause instanceof Error ? `: ${cause.message}` : ''}`
     status.value = 'error'
   }
@@ -449,6 +475,11 @@ function mealsRequest(plan: Diet, day: DayOfWeek): RequestMeal[] {
 
 function weekRequest(plan: Diet): DietRequest {
   return {
+    // The patient the diet already belongs to. A diet does not change hands
+    // through an edit — the backend refuses it — because moving one would take
+    // the patient's journal with it. `copyTo` is how a week reaches somebody
+    // else, and it leaves this one where it is.
+    patientId: plan.patientId,
     name: plan.name,
     startedOn: plan.startedOn,
     days: days.value
@@ -474,10 +505,51 @@ async function publish(): Promise<void> {
     diet.value = await dietsApi.update(plan.id, weekRequest(plan))
     weekVersion.value++
     discardAll()
+    // The selector names each patient's diet, and this publish may have renamed
+    // one of them.
+    void usePatients().refreshCurrent()
   } catch (cause) {
     error.value = `No se pudieron publicar los cambios${
       cause instanceof Error ? `: ${cause.message}` : ''
     }`
+  } finally {
+    publishing.value = false
+  }
+}
+
+/**
+ * Writes this week again for another patient.
+ *
+ * Unpublished edits are deliberately not part of it. The backend copies what is
+ * *stored*, and a copy that quietly included changes nobody had published would
+ * put a week into somebody else's record that the nutritionist has not agreed
+ * to yet — so the caller is told to publish first rather than being surprised
+ * afterwards.
+ *
+ * The copy takes the target's active slot: whatever they were on is archived,
+ * exactly as it is when a diet is imported for them.
+ */
+async function copyTo(patientId: number, name?: string): Promise<boolean> {
+  const plan = diet.value
+  if (!plan || publishing.value) {
+    return false
+  }
+  if (dirtyCount.value > 0) {
+    error.value =
+      'Publica o descarta los cambios antes de copiar la semana: se copia lo que está guardado.'
+    return false
+  }
+  publishing.value = true
+  error.value = null
+  try {
+    await dietsApi.copy(plan.id, { patientId, name: name ?? null })
+    await usePatients().refreshCurrent()
+    return true
+  } catch (cause) {
+    error.value = `No se pudo copiar la dieta${
+      cause instanceof Error ? `: ${cause.message}` : ''
+    }`
+    return false
   } finally {
     publishing.value = false
   }
@@ -518,6 +590,7 @@ export function useDietDraft() {
     revert,
     discardAll,
     publish,
+    copyTo,
     applyIngredient,
   }
 }

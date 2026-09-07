@@ -3,6 +3,7 @@ package com.fdiet.diet.service;
 import com.fdiet.common.dto.PageDto;
 import com.fdiet.common.helper.Texts;
 import com.fdiet.diet.domain.Diet;
+import com.fdiet.diet.dto.CopyDietRequestDto;
 import com.fdiet.diet.dto.DietDay;
 import com.fdiet.diet.dto.DietDto;
 import com.fdiet.diet.dto.DietRequestDto;
@@ -29,6 +30,8 @@ import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.model.FoodItem;
 import com.fdiet.food.service.IBedcaFoodService;
 import com.fdiet.food.service.IFoodItemService;
+import com.fdiet.patient.model.Patient;
+import com.fdiet.patient.service.IPatientService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -58,6 +61,7 @@ public class DietService implements IDietService {
     private final IFoodResolverService foodResolverService;
     private final IFoodItemService foodItemService;
     private final IBedcaFoodService bedcaFoodService;
+    private final IPatientService patientService;
     private final int suggestionLimit;
 
     public DietService(DietRepository dietRepository,
@@ -68,6 +72,7 @@ public class DietService implements IDietService {
                        IFoodResolverService foodResolverService,
                        IFoodItemService foodItemService,
                        IBedcaFoodService bedcaFoodService,
+                       IPatientService patientService,
                        @Value("${fdiet.diet.suggestion-limit:5}") int suggestionLimit) {
         this.dietRepository = dietRepository;
         this.ingredientRepository = ingredientRepository;
@@ -77,6 +82,7 @@ public class DietService implements IDietService {
         this.foodResolverService = foodResolverService;
         this.foodItemService = foodItemService;
         this.bedcaFoodService = bedcaFoodService;
+        this.patientService = patientService;
         this.suggestionLimit = suggestionLimit;
     }
 
@@ -86,9 +92,13 @@ public class DietService implements IDietService {
         List<DietDay> week = validated(request);
         Foods foods = foodsOf(week);
 
-        archiveActive();
+        // Through the owning service, so a patient id nothing carries comes back
+        // as that module's 404 rather than as a foreign key violation.
+        Patient patient = patientService.entityById(request.patientId());
+        archiveActive(patient.getId());
 
         DietPlan plan = new DietPlan();
+        plan.setPatient(patient);
         plan.setName(request.name());
         plan.setStatus(DietStatus.ACTIVE);
         plan.setStartedOn(request.startedOn());
@@ -111,6 +121,7 @@ public class DietService implements IDietService {
 
         DietPlan plan = dietRepository.findWithMealsById(id)
                 .orElseThrow(() -> DietNotFoundException.diet(id));
+        requireSamePatient(plan, request.patientId());
         plan.setName(request.name());
         plan.setStartedOn(request.startedOn());
 
@@ -121,12 +132,71 @@ public class DietService implements IDietService {
         return dietMapper.toDto(dietRepository.save(plan));
     }
 
+    /**
+     * The same week, written a second time for somebody else.
+     *
+     * <p>The rows are built afresh rather than shared: the two diets are edited
+     * and republished independently from here on, and a shared meal would make
+     * one nutritionist's edit land in another patient's week. What does carry
+     * over is every food match already made — that is most of the work in an
+     * imported diet, and re-matching by name would throw away the ones a person
+     * decided by hand.
+     *
+     * <p>The journal does not come with it. What one patient thought of a plate,
+     * and what they ate beside it, is their own record and hangs off their own
+     * diet id.
+     */
+    @Override
+    @Transactional
+    public DietDto copy(Long id, CopyDietRequestDto request) {
+        DietPlan source = dietRepository.findWithMealsById(id)
+                .orElseThrow(() -> DietNotFoundException.diet(id));
+        Patient target = patientService.entityById(request.patientId());
+
+        // Frees the target's active slot — which may be the source's own, when a
+        // week is being copied forward for the same patient.
+        archiveActive(target.getId());
+
+        DietPlan copy = new DietPlan();
+        copy.setPatient(target);
+        copy.setName(request.name() == null ? source.getName() : request.name());
+        copy.setStatus(DietStatus.ACTIVE);
+        copy.setStartedOn(request.startedOn() == null ? LocalDate.now() : request.startedOn());
+        for (PlannedMeal meal : source.getMeals()) {
+            PlannedMeal copiedMeal =
+                    new PlannedMeal(meal.getDayOfWeek(), meal.getType(), meal.getName());
+            copy.addMeal(copiedMeal);
+            for (PlannedDish dish : meal.getDishes()) {
+                PlannedDish copiedDish = new PlannedDish(dish.getName(), dish.getRawText());
+                copiedMeal.addDish(copiedDish);
+                for (PlannedIngredient ingredient : dish.getIngredients()) {
+                    copiedDish.addIngredient(new PlannedIngredient(
+                            ingredient.getRawName(),
+                            ingredient.getFoodItem(),
+                            ingredient.getBedcaFood(),
+                            ingredient.getQuantity(),
+                            ingredient.getUnit()));
+                }
+            }
+        }
+        return dietMapper.toDto(dietRepository.save(copy));
+    }
+
     @Override
     @Transactional(readOnly = true)
-    public DietDto findActive() {
-        return dietRepository.findFirstByStatus(DietStatus.ACTIVE)
+    public DietDto findActive(Long patientId) {
+        requirePatient(patientId);
+        return dietRepository.findFirstByPatientIdAndStatus(patientId, DietStatus.ACTIVE)
                 .map(dietMapper::toDto)
-                .orElseThrow(DietNotFoundException::noActiveDiet);
+                .orElseThrow(() -> DietNotFoundException.noActiveDiet(patientId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DietSummaryDto> current() {
+        return dietRepository.findByStatusOrderByPatientNameAsc(DietStatus.ACTIVE).stream()
+                .map(dietMapper::toSummary)
+                .toList();
     }
 
     @Override
@@ -139,10 +209,11 @@ public class DietService implements IDietService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageDto<DietSummaryDto> history(int page, int size) {
+    public PageDto<DietSummaryDto> history(Long patientId, int page, int size) {
+        requirePatient(patientId);
         Pageable pageable = PageRequest.of(page, size);
-        Page<DietPlan> archived =
-                dietRepository.findByStatusNotOrderByStartedOnDesc(DietStatus.ACTIVE, pageable);
+        Page<DietPlan> archived = dietRepository.findByPatientIdAndStatusNotOrderByStartedOnDesc(
+                patientId, DietStatus.ACTIVE, pageable);
         return PageDto.of(archived, dietMapper::toSummary);
     }
 
@@ -260,13 +331,34 @@ public class DietService implements IDietService {
         }
     }
 
+    /** An unknown patient is that module's 404, not an empty listing. */
+    private void requirePatient(Long patientId) {
+        patientService.entityById(patientId);
+    }
+
     /**
-     * Frees the single active slot, which {@code uk_diets_active} allows only
-     * one row to hold. Flushed on its own so the UPDATE reaches the database
-     * before the INSERT of the diet replacing it.
+     * A diet does not change hands through an edit. Moving one would take the
+     * patient's journal with it — the scores and the off-plan entries hang off
+     * the diet id — so the week would arrive under a new name carrying somebody
+     * else's opinion of it. {@code copy} is the answer, and it leaves both.
      */
-    private void archiveActive() {
-        Optional<DietPlan> active = dietRepository.findFirstByStatus(DietStatus.ACTIVE);
+    private static void requireSamePatient(DietPlan plan, Long patientId) {
+        if (!plan.getPatient().getId().equals(patientId)) {
+            throw new InvalidDietException("Diet " + plan.getId() + " belongs to patient "
+                    + plan.getPatient().getId() + " and cannot be moved to patient " + patientId
+                    + " by replacing its week. Copy it instead: POST /api/diets/"
+                    + plan.getId() + "/copy");
+        }
+    }
+
+    /**
+     * Frees the patient's active slot, which {@code uk_diets_active} allows only
+     * one of their rows to hold. Flushed on its own so the UPDATE reaches the
+     * database before the INSERT of the diet replacing it.
+     */
+    private void archiveActive(Long patientId) {
+        Optional<DietPlan> active =
+                dietRepository.findFirstByPatientIdAndStatus(patientId, DietStatus.ACTIVE);
         if (active.isEmpty()) {
             return;
         }

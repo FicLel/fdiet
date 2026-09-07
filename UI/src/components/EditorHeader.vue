@@ -2,10 +2,16 @@
 import { computed } from 'vue'
 import AppLogo from './AppLogo.vue'
 import PatientSelect from './PatientSelect.vue'
+import CopyDietMenu from './CopyDietMenu.vue'
 import { weekLabel } from '@/domain/week'
 
+/**
+ * The selector on the left says whose week is being written; the copy menu on
+ * the right sends it to somebody else. Neither is a permission — there is no
+ * security layer — so both are plain controls over which data is on screen.
+ */
+
 const props = defineProps<{
-  dietName: string
   monday: Date
   dirtyCount: number
   publishing: boolean
@@ -31,11 +37,13 @@ const dirtyLabel = computed(() => {
     <AppLogo />
     <span class="divider" />
 
-    <PatientSelect :diet-name="dietName" />
+    <PatientSelect />
 
     <span class="num week">{{ label }}</span>
 
     <span class="spacer" />
+
+    <CopyDietMenu />
 
     <!-- The other side of the same week, read-only and with the patient's own
          rows on it. Nothing enforces the split — there is no security layer —

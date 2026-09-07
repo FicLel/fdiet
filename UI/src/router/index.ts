@@ -11,10 +11,12 @@ import PatientView from '@/views/PatientView.vue'
  * beside it.
  *
  * The app opens on the patient's view because that is the one read daily; the
- * builder is a link away in the header. There is nothing enforcing the split —
- * the backend has no security layer and no users context — so this is a
- * division of screens, not of permissions, and it will need real ones when
- * users come back.
+ * builder is a link away in the header. There is nothing enforcing the split:
+ * the backend now records *whose* a diet is, but it still has no security
+ * layer, so both screens carry the same patient selector and either can be
+ * pointed at anybody. This is a division of screens, not of permissions, and
+ * `/mi-dieta` will need its patient fixed to the person logged in once there is
+ * somebody logged in.
  */
 const routes: RouteRecordRaw[] = [
   { path: '/', redirect: '/mi-dieta' },

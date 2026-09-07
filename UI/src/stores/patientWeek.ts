@@ -2,6 +2,7 @@ import { computed, ref, shallowRef } from 'vue'
 import { ApiError } from '@/api/http'
 import { dietsApi } from '@/api/diets'
 import { journalApi, type LogExtraFoodRequest } from '@/api/journal'
+import { usePatients } from '@/stores/patients'
 import type {
   DayOfWeek,
   Diet,
@@ -30,12 +31,18 @@ import { addDays, dayName, dayNumber, longDate, mondayOf, shortDayName, WEEK } f
  * draws them as two segments of one bar for exactly that reason — a day 300
  * kcal over because the plan is heavy and a day 300 kcal over because of an
  * ice cream are different days.
+ *
+ * **Whose week it is comes from `stores/patients`**, the same selection the
+ * builder reads, so the two screens are never showing two different people.
+ * Nothing here is private: there is no security layer, so this screen shows
+ * whichever patient is selected and any of them can be.
  */
 
 /**
- * Placeholders, browser-held, until the backend carries a goal and a patient.
- * The same two the builder holds: there is no `users` context and no goal
- * field, so these are the only numbers on the screen nothing stands behind.
+ * Placeholders, browser-held, until the backend carries a goal. A patient row
+ * is a name and a note — nothing about what they should be eating — so these
+ * are the only numbers on the screen nothing stands behind, and they are the
+ * same for every patient, which is the honest consequence of not storing them.
  */
 const PLACEHOLDER_TARGET_KCAL = 1900
 const PLACEHOLDER_PROTEIN_G = 120
@@ -263,11 +270,21 @@ async function loadJournal(dietId: number): Promise<void> {
   journal.value = await journalApi.find(dietId)
 }
 
+/** Loads the selected patient's week and the journal they wrote beside it. */
 async function load(): Promise<void> {
+  const patients = usePatients()
+  const patientId = patients.selectedId.value
+  if (patientId === null) {
+    diet.value = null
+    journal.value = null
+    error.value = 'Todavía no hay ningún paciente. Añade uno desde la vista del nutricionista.'
+    status.value = 'error'
+    return
+  }
   status.value = 'loading'
   error.value = null
   try {
-    const active = await dietsApi.active()
+    const active = await dietsApi.active(patientId)
     diet.value = active
     await loadJournal(active.id)
     selectedDay.value = todayOrFirst.value?.day ?? null

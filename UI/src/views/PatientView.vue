@@ -10,6 +10,7 @@ import DaySummary from '@/components/DaySummary.vue'
 import DayTotalCard from '@/components/DayTotalCard.vue'
 import ExtraFoodPanel from '@/components/ExtraFoodPanel.vue'
 import { usePatientWeek } from '@/stores/patientWeek'
+import { usePatients } from '@/stores/patients'
 import { useViewport } from '@/composables/useViewport'
 import { integer } from '@/domain/format'
 
@@ -29,15 +30,24 @@ import { integer } from '@/domain/format'
  */
 
 const week = usePatientWeek()
+const patients = usePatients()
 const { mobile, tablet, desktop } = useViewport()
 
 /** Whether the "add an extra" panel is open, and never on both sides at once. */
 const adding = ref(false)
 
-onMounted(() => {
+onMounted(async () => {
+  if (patients.status.value === 'idle') {
+    await patients.load()
+  }
   if (week.status.value === 'idle') {
     void week.load()
   }
+})
+
+/** Which patient is being read is the selection's answer, shared with the builder. */
+watch(patients.selectedId, () => {
+  void week.load()
 })
 
 /** A phone has no week grid, so it can never be left showing one. */

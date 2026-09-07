@@ -43,6 +43,9 @@ class DietImportServiceTest {
             List.of("Cena", "Cena", "Cena"),
             List.of("Primer plato", "Crema de calabacín (300 mL)", ""));
 
+    /** Whose diet the import becomes; the reader knows nothing about it. */
+    private static final Long PATIENT_ID = 7L;
+
     private final IDietWorkbookReader reader = mock(IDietWorkbookReader.class);
     private final IDietService dietService = mock(IDietService.class);
     private final DietImportService importService =
@@ -111,11 +114,17 @@ class DietImportServiceTest {
     }
 
     @Test
+    void storesTheWeekAgainstThePatientItWasImportedFor() {
+        // The sheet says nothing about who the diet is for; the caller does.
+        assertThat(importAndCapture().patientId()).isEqualTo(PATIENT_ID);
+    }
+
+    @Test
     void countsWhatWasStoredAndWhatIsStillUnmatched() {
         when(reader.read(any(), any())).thenReturn(new SheetGridDto("Dieta 1", GRID));
         when(dietService.create(any())).thenAnswer(call -> asStored(call.getArgument(0)));
 
-        DietImportSummaryDto summary = importService.importWorkbook(workbook(), null, null, null);
+        DietImportSummaryDto summary = importService.importWorkbook(workbook(), PATIENT_ID, null, null, null);
 
         assertThat(summary.sheet()).isEqualTo("Dieta 1");
         assertThat(summary.days()).isEqualTo(2);
@@ -132,7 +141,7 @@ class DietImportServiceTest {
         when(reader.read(any(), any())).thenReturn(new SheetGridDto("Hoja1",
                 List.of(List.of("", "Semana 1"), List.of("Desayuno", "Tostada (60 gr)"))));
 
-        assertThatThrownBy(() -> importService.importWorkbook(workbook(), null, null, null))
+        assertThatThrownBy(() -> importService.importWorkbook(workbook(), PATIENT_ID, null, null, null))
                 .isInstanceOf(InvalidDietException.class)
                 .hasMessageContaining("no day names");
     }
@@ -142,7 +151,7 @@ class DietImportServiceTest {
         when(reader.read(any(), any())).thenReturn(new SheetGridDto("Dieta 1", GRID));
         when(dietService.create(any())).thenAnswer(call -> asStored(call.getArgument(0)));
 
-        importService.importWorkbook(workbook(), null, null, null);
+        importService.importWorkbook(workbook(), PATIENT_ID, null, null, null);
 
         ArgumentCaptor<DietRequestDto> captor = ArgumentCaptor.forClass(DietRequestDto.class);
         verify(dietService).create(captor.capture());
@@ -150,8 +159,8 @@ class DietImportServiceTest {
     }
 
     private static DietDto asStored(DietRequestDto request) {
-        return new DietDto(1L, request.name(), DietStatus.ACTIVE, request.startedOn(), null,
-                request.days(), null);
+        return new DietDto(1L, request.patientId(), "Victor", request.name(), DietStatus.ACTIVE,
+                request.startedOn(), null, request.days(), null);
     }
 
     private static MealDto mealOf(DietRequestDto diet, DayOfWeek day, MealType type) {

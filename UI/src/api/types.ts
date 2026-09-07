@@ -22,6 +22,21 @@ export type DayOfWeek =
   | 'SATURDAY'
   | 'SUNDAY'
 
+/**
+ * Somebody a diet is written for.
+ *
+ * **Not an account.** The backend has no security layer, so this authenticates
+ * nothing and hides nothing: switching patient changes whose week is on screen,
+ * and every patient's week is reachable from every screen. It is a division of
+ * data, not of access.
+ */
+export interface Patient {
+  id: number
+  name: string
+  notes: string | null
+  createdAt: string
+}
+
 export interface Nutrition {
   energyKcal: number | null
   proteinG: number | null
@@ -135,6 +150,10 @@ export interface DietDay {
 
 export interface Diet {
   id: number
+  /** Whose week this is. Every diet belongs to exactly one patient. */
+  patientId: number
+  /** Their name, so a heading never has to fetch a patient to write itself. */
+  patientName: string
   name: string
   status: DietStatus
   startedOn: string
@@ -145,6 +164,8 @@ export interface Diet {
 
 export interface DietSummary {
   id: number
+  patientId: number
+  patientName: string
   name: string
   status: DietStatus
   startedOn: string

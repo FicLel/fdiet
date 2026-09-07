@@ -89,15 +89,16 @@ public class DietImportService implements IDietImportService {
     }
 
     @Override
-    public DietImportSummaryDto importWorkbook(InputStream workbook, String sheet, String name,
-                                               LocalDate startedOn) {
+    public DietImportSummaryDto importWorkbook(InputStream workbook, Long patientId, String sheet,
+                                               String name, LocalDate startedOn) {
         SheetGridDto grid = workbookReader.read(workbook, sheet);
         List<DietDay> week = toWeek(grid);
-        log.info("Parsed {} days from sheet '{}'", week.size(), grid.name());
+        log.info("Parsed {} days from sheet '{}' for patient {}", week.size(), grid.name(),
+                patientId);
 
         String dietName = Texts.clean(name == null ? grid.name() : name, NAME_MAX);
         DietDto stored = dietService.create(new DietRequestDto(
-                dietName, startedOn == null ? LocalDate.now() : startedOn, week));
+                patientId, dietName, startedOn == null ? LocalDate.now() : startedOn, week));
 
         return summaryOf(stored, grid.name());
     }

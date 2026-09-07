@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import AppLogo from './AppLogo.vue'
+import PatientSelect from './PatientSelect.vue'
 import type { PatientView } from '@/stores/patientWeek'
 import { weekLabel } from '@/domain/week'
 
 /**
- * The patient's chrome: which diet, which week, and which of the two views.
+ * The patient's chrome: whose diet, which diet, which week, and which of the
+ * two views.
  *
  * The Semana/Día switch is absent on a phone rather than disabled — there is no
  * week grid to switch to at that width, so offering the choice would be
  * offering nothing.
  *
- * The avatar is a placeholder, like the builder's patient selector: the backend
- * carries no users, so it names nobody and the bracketed label says so.
+ * The selector is the same one the builder carries, and it is not a login: with
+ * no security layer anywhere, this screen shows whichever patient is picked and
+ * every patient can be picked. A real patient-facing deployment would fix the
+ * selection to the person logged in, and there is nobody logged in yet.
  */
 
 const props = defineProps<{
@@ -69,11 +73,7 @@ const days = computed(() => (props.dayCount === 1 ? '1 día' : `${props.dayCount
       </button>
     </div>
 
-    <!-- Placeholder: there is no users context, so this names nobody. -->
-    <span class="who placeholder-data" title="Los pacientes llegarán con el contexto de usuarios">
-      <span class="avatar">P</span>
-      <span v-if="!compact" class="who-name">[Paciente]</span>
-    </span>
+    <PatientSelect :compact="compact" />
 
     <RouterLink v-if="!compact" class="to-builder" to="/dieta" title="Vista del nutricionista">
       Editar la dieta
@@ -161,36 +161,6 @@ const days = computed(() => (props.dayCount === 1 ? '1 día' : `${props.dayCount
   background: var(--surface);
   color: var(--ink-strong);
   box-shadow: 0 1px 2px rgba(22, 28, 24, 0.1);
-}
-
-.who {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-}
-
-.avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--sage-100);
-  color: var(--sage-700);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.compact .avatar {
-  width: 32px;
-  height: 32px;
-  font-size: 12px;
-}
-
-.who-name {
-  color: var(--ink-muted);
 }
 
 .to-builder {

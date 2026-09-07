@@ -1,6 +1,7 @@
 package com.fdiet.diet.service;
 
 import com.fdiet.common.dto.PageDto;
+import com.fdiet.diet.dto.CopyDietRequestDto;
 import com.fdiet.diet.dto.DietDto;
 import com.fdiet.diet.dto.DietRequestDto;
 import com.fdiet.diet.dto.DietSummaryDto;
@@ -11,31 +12,56 @@ import com.fdiet.diet.dto.ParseDishRequestDto;
 import com.fdiet.diet.dto.ResolveIngredientDto;
 
 import java.time.DayOfWeek;
+import java.util.List;
 
 /**
  * Owns the stored diet: the {@code diets} row and the meals, dishes and
  * ingredients that hang off it. They are one aggregate — a dish exists only
  * inside its meal — so one service owns all four tables, and food is still
- * reached through the food module's own services.
+ * reached through the food module's own services, as the patient is through
+ * {@code IPatientService}.
+ *
+ * <p>A diet belongs to one patient and each patient has one active diet, so the
+ * calls split in two: the ones that ask about a person take a {@code patientId},
+ * and the ones that address a diet by its own id do not, because an id is
+ * already somebody's. Nothing here hides one patient's week from another — there
+ * is no security layer, and this is a division of data, not of access.
  */
 public interface IDietService {
 
     /**
-     * Stores the submitted week as the diet in force, archiving the one it
-     * replaces. Ingredients no food matches exactly are stored unmatched.
+     * Stores the submitted week as the patient's diet in force, archiving the
+     * one it replaces. Ingredients no food matches exactly are stored unmatched.
      */
     DietDto create(DietRequestDto request);
 
-    /** Replaces the whole week of a stored diet. What is not sent is deleted. */
+    /**
+     * Replaces the whole week of a stored diet. What is not sent is deleted.
+     * The request's patient must be the one the diet already belongs to.
+     */
     DietDto update(Long id, DietRequestDto request);
 
-    /** The diet in force now. */
-    DietDto findActive();
+    /**
+     * Writes a second diet holding the same week for another patient — its
+     * days, its dishes, the sentences they were typed as and every food match
+     * already made. The source is left exactly as it was, and the journal is
+     * not copied: what one patient thought of a plate is their own record.
+     */
+    DietDto copy(Long id, CopyDietRequestDto request);
+
+    /** The diet in force now for one patient. */
+    DietDto findActive(Long patientId);
+
+    /**
+     * Every patient's diet in force, without their weeks — who is on a diet
+     * right now, in one query. The patient selector is drawn from this.
+     */
+    List<DietSummaryDto> current();
 
     DietDto findById(Long id);
 
-    /** The archived diets, most recently started first. */
-    PageDto<DietSummaryDto> history(int page, int size);
+    /** One patient's archived diets, most recently started first. */
+    PageDto<DietSummaryDto> history(Long patientId, int page, int size);
 
     /** Whether the diet is stored at all, without loading its week. */
     boolean exists(Long dietId);

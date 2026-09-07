@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import EditorHeader from '@/components/EditorHeader.vue'
 import GoalStrip from '@/components/GoalStrip.vue'
 import WeekGrid from '@/components/WeekGrid.vue'
@@ -7,21 +7,37 @@ import DishEditPanel from '@/components/DishEditPanel.vue'
 import FoodLinkPanel from '@/components/FoodLinkPanel.vue'
 import { useDietDraft } from '@/stores/dietDraft'
 import { useFoodLink } from '@/stores/foodLink'
+import { usePatients } from '@/stores/patients'
 import type { DishTotals } from '@/domain/nutrition'
 
 /**
- * Where a diet is written. One week, one cell per dish slot per day; a cell is
- * selected in the grid and edited in the panel, and nothing reaches the patient
- * until it is published.
+ * Where a diet is written. One week for one patient, one cell per dish slot per
+ * day; a cell is selected in the grid and edited in the panel, and nothing
+ * reaches the patient until it is published.
+ *
+ * The caseload is loaded before the week, because which week to load is the
+ * patient selection's answer.
  */
 
 const draft = useDietDraft()
 const link = useFoodLink()
+const patients = usePatients()
 
-onMounted(() => {
+onMounted(async () => {
+  if (patients.status.value === 'idle') {
+    await patients.load()
+  }
   if (draft.status.value === 'idle') {
     void draft.load()
   }
+})
+
+/**
+ * Switching patient loads their week and throws away the draft, which `load`
+ * does. Two people's unpublished cells must never be in the editor at once.
+ */
+watch(patients.selectedId, () => {
+  void draft.load()
 })
 
 /** Every ingredient of the week, so the goal strip can show what it counted. */
@@ -54,7 +70,6 @@ const week = computed<DishTotals>(() =>
 <template>
   <div class="screen">
     <EditorHeader
-      :diet-name="draft.diet.value?.name ?? ''"
       :monday="draft.monday.value"
       :dirty-count="draft.dirtyCount.value"
       :publishing="draft.publishing.value"

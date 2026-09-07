@@ -1,6 +1,7 @@
 package com.fdiet.diet.controller;
 
 import com.fdiet.common.dto.PageDto;
+import com.fdiet.diet.dto.CopyDietRequestDto;
 import com.fdiet.diet.dto.DietDto;
 import com.fdiet.diet.dto.DietImportSummaryDto;
 import com.fdiet.diet.dto.DietRequestDto;
@@ -37,6 +38,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Web layer. It forwards to the services and returns what they hand back.
@@ -57,36 +59,58 @@ public class DietController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Store a week as the diet in force, archiving the one it replaces. "
-            + "An ingredient the food catalogue does not carry is stored unmatched, never dropped")
+    @Operation(summary = "Store a week as the patient's diet in force, archiving the one it "
+            + "replaces. An ingredient the food catalogue does not carry is stored unmatched, "
+            + "never dropped")
     public DietDto create(@RequestBody @Valid DietRequestDto diet) {
         return dietService.create(diet);
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Replace the whole week of a stored diet")
+    @Operation(summary = "Replace the whole week of a stored diet. The body's patientId must be "
+            + "the patient the diet already belongs to — a diet changes hands by being copied, "
+            + "not by being edited")
     public DietDto update(@PathVariable Long id, @RequestBody @Valid DietRequestDto diet) {
         return dietService.update(id, diet);
     }
 
+    @PostMapping("/{id}/copy")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Write the same week again for another patient — its days, its dishes, "
+            + "the sentences they were typed as and every food match already made. It becomes "
+            + "that patient's diet in force; the original is left exactly as it was, and the "
+            + "journal is not copied")
+    public DietDto copy(@PathVariable Long id, @RequestBody @Valid CopyDietRequestDto request) {
+        return dietService.copy(id, request);
+    }
+
     @GetMapping("/active")
-    @Operation(summary = "The diet in force now, ordered by day and meal slot")
-    public DietDto active() {
-        return dietService.findActive();
+    @Operation(summary = "One patient's diet in force now, ordered by day and meal slot")
+    public DietDto active(@RequestParam Long patientId) {
+        return dietService.findActive(patientId);
+    }
+
+    @GetMapping("/current")
+    @Operation(summary = "Every patient's diet in force, without their weeks — who is on a diet "
+            + "right now, in one request")
+    public List<DietSummaryDto> current() {
+        return dietService.current();
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "One diet with its whole week")
+    @Operation(summary = "One diet with its whole week. Any patient's, from anywhere: there is "
+            + "no security layer and none is implied here")
     public DietDto byId(@PathVariable Long id) {
         return dietService.findById(id);
     }
 
     @GetMapping
-    @Operation(summary = "The archived diets, most recently started first")
+    @Operation(summary = "One patient's archived diets, most recently started first")
     public PageDto<DietSummaryDto> history(
+            @RequestParam Long patientId,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(200) int size) {
-        return dietService.history(page, size);
+        return dietService.history(patientId, page, size);
     }
 
     @GetMapping("/{id}/ingredients")
@@ -123,9 +147,11 @@ public class DietController {
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Import a diet from one sheet of an .xlsx laid out like example-ui.xlsx")
+    @Operation(summary = "Import a diet from one sheet of an .xlsx laid out like example-ui.xlsx, "
+            + "as the given patient's diet in force")
     public DietImportSummaryDto importWorkbook(
             @RequestParam MultipartFile file,
+            @RequestParam Long patientId,
             @RequestParam(required = false) String sheet,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
@@ -134,7 +160,7 @@ public class DietController {
             throw new InvalidDietException("The uploaded workbook is empty");
         }
         try (InputStream workbook = file.getInputStream()) {
-            return dietImportService.importWorkbook(workbook, sheet, name, startedOn);
+            return dietImportService.importWorkbook(workbook, patientId, sheet, name, startedOn);
         } catch (IOException e) {
             throw new UncheckedIOException("Could not read the uploaded workbook", e);
         }

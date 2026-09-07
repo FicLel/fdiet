@@ -15,8 +15,8 @@ public class DietNotFoundException extends RuntimeException {
         return new DietNotFoundException("Diet ingredient not found: " + id);
     }
 
-    /** There is no active diet until the first one has been set up. */
-    public static DietNotFoundException noActiveDiet() {
-        return new DietNotFoundException("There is no active diet");
+    /** A patient has no active diet until one has been written for them. */
+    public static DietNotFoundException noActiveDiet(Long patientId) {
+        return new DietNotFoundException("Patient " + patientId + " has no active diet");
     }
 }

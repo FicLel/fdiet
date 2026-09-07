@@ -1,40 +1,109 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { usePatients } from '@/stores/patients'
 
 /**
- * Placeholder. The backend carries no patients — the `users` bounded context
- * was removed — so this names nobody and changes nothing. It is here because
- * the screen it belongs to is designed around one diet per patient, and the
- * shape of the header should not have to be rediscovered when that context
- * comes back. The names are bracketed to say so on sight.
+ * Who the screen is about, and how to add somebody it could be about.
+ *
+ * **It is not a login.** The backend has no security layer, so picking a name
+ * here changes whose week is drawn and nothing else — nothing is unlocked and
+ * nothing is hidden. The menu says so at the bottom rather than letting the
+ * shape of the control imply otherwise.
+ *
+ * Each row carries the diet that patient is on, because that is the question
+ * asked while picking one: who has a week written and who is still waiting.
  */
 
-defineProps<{ dietName: string }>()
+defineProps<{
+  /** The phone header has room for the name and nothing else. */
+  compact?: boolean
+}>()
 
-const PATIENTS = [
-  { name: '[Paciente 1]', meta: 'Dieta en curso' },
-  { name: '[Paciente 2]', meta: 'Dieta en curso' },
-  { name: '[Paciente 3]', meta: 'Sin dieta asignada' },
-]
+const patients = usePatients()
 
 const open = ref(false)
-const current = ref(PATIENTS[0].name)
-const root = ref<HTMLElement | null>(null)
+const adding = ref(false)
+const newName = ref('')
+/** Which row is one click from being removed; only ever one at a time. */
+const confirming = ref<number | null>(null)
 
-function pick(name: string): void {
-  current.value = name
+const root = ref<HTMLElement | null>(null)
+const nameField = ref<HTMLInputElement | null>(null)
+
+const label = computed(() => patients.selected.value?.name ?? 'Sin pacientes')
+
+const meta = computed(() => {
+  if (patients.status.value === 'loading') {
+    return 'Cargando…'
+  }
+  return patients.selectedDiet.value?.name ?? 'Sin dieta asignada'
+})
+
+const initial = computed(() => label.value.trim().charAt(0).toUpperCase() || '·')
+
+function close(): void {
   open.value = false
+  adding.value = false
+  confirming.value = null
+  newName.value = ''
+  patients.clearError()
+}
+
+function toggle(): void {
+  if (open.value) {
+    close()
+  } else {
+    open.value = true
+  }
+}
+
+function pick(id: number): void {
+  patients.select(id)
+  close()
+}
+
+async function startAdding(): Promise<void> {
+  adding.value = true
+  confirming.value = null
+  patients.clearError()
+  await nextTick()
+  nameField.value?.focus()
+}
+
+async function add(): Promise<void> {
+  const name = newName.value.trim()
+  if (name === '') {
+    return
+  }
+  // `create` switches to whoever was just added, which is what somebody who
+  // has just typed a name wants next.
+  if (await patients.create(name)) {
+    close()
+  }
+}
+
+async function remove(id: number): Promise<void> {
+  if (confirming.value !== id) {
+    // A patient is removed in two clicks, never one: the first says which row,
+    // the second means it.
+    confirming.value = id
+    patients.clearError()
+    return
+  }
+  if (await patients.remove(id)) {
+    confirming.value = null
+  }
 }
 
 function onOutside(event: MouseEvent): void {
   if (open.value && root.value && !root.value.contains(event.target as Node)) {
-    open.value = false
+    close()
   }
 }
 
 function onEscape(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
-    open.value = false
+    close()
   }
 }
 
@@ -53,13 +122,15 @@ onBeforeUnmount(() => {
   <div ref="root" class="select">
     <button
       class="trigger"
+      :class="{ compact }"
       type="button"
       :aria-expanded="open"
       aria-haspopup="listbox"
-      @click="open = !open"
+      @click="toggle()"
     >
-      <span class="name">{{ current }}</span>
-      <span class="meta">{{ dietName }}</span>
+      <span class="initial">{{ initial }}</span>
+      <span class="name">{{ label }}</span>
+      <span v-if="!compact" class="meta">{{ meta }}</span>
       <svg
         width="14"
         height="14"
@@ -75,27 +146,94 @@ onBeforeUnmount(() => {
       </svg>
     </button>
 
-    <div v-if="open" class="menu" role="listbox">
-      <button
-        v-for="(patient, index) in PATIENTS"
-        :key="patient.name"
-        class="option"
-        :class="{ current: patient.name === current }"
-        type="button"
-        role="option"
-        :aria-selected="patient.name === current"
-        @click="pick(patient.name)"
-      >
-        <span class="initial">{{ index + 1 }}</span>
-        <span class="who">
-          <span class="who-name">{{ patient.name }}</span>
-          <span class="who-meta">{{ patient.meta }}</span>
-        </span>
-      </button>
-      <p class="note">
-        Los pacientes llegarán cuando el backend vuelva a tener usuarios. De momento sólo hay una
-        dieta activa.
+    <!-- The trigger sits on the right of the patient header, so on a phone the
+         menu hangs from that edge instead of running off it. -->
+    <div v-if="open" class="menu" :class="{ compact }" role="listbox">
+      <p v-if="patients.listing.value.length === 0" class="empty">
+        Todavía no hay ningún paciente.
       </p>
+
+      <div
+        v-for="row in patients.listing.value"
+        :key="row.patient.id"
+        class="row"
+        :class="{ current: row.patient.id === patients.selectedId.value }"
+      >
+        <button
+          class="option"
+          type="button"
+          role="option"
+          :aria-selected="row.patient.id === patients.selectedId.value"
+          @click="pick(row.patient.id)"
+        >
+          <span class="avatar">{{ row.patient.name.charAt(0).toUpperCase() }}</span>
+          <span class="who">
+            <span class="who-name">{{ row.patient.name }}</span>
+            <span class="who-meta" :class="{ none: !row.hasDiet }">{{ row.meta }}</span>
+          </span>
+        </button>
+
+        <button
+          class="remove"
+          :class="{ armed: confirming === row.patient.id }"
+          type="button"
+          :disabled="patients.saving.value"
+          :title="
+            confirming === row.patient.id
+              ? 'Pulsa otra vez para quitarlo'
+              : `Quitar a ${row.patient.name}`
+          "
+          @click="remove(row.patient.id)"
+        >
+          {{ confirming === row.patient.id ? '¿Seguro?' : '×' }}
+        </button>
+      </div>
+
+      <p v-if="patients.error.value" class="error">{{ patients.error.value }}</p>
+
+      <div class="foot">
+        <form v-if="adding" class="add-form" @submit.prevent="add()">
+          <input
+            ref="nameField"
+            v-model="newName"
+            class="add-field"
+            type="text"
+            maxlength="255"
+            placeholder="Nombre del paciente"
+            :disabled="patients.saving.value"
+          />
+          <button
+            class="add-save"
+            type="submit"
+            :disabled="newName.trim() === '' || patients.saving.value"
+          >
+            Guardar
+          </button>
+        </form>
+
+        <button v-else class="add" type="button" @click="startAdding()">
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 14 14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <path d="M7 3v8M3 7h8" />
+          </svg>
+          Añadir paciente
+        </button>
+
+        <!-- The shape of this control suggests a login. It is not one, and the
+             note is here so nobody has to find that out by trying. -->
+        <p class="note">
+          Cambiar de paciente cambia la semana que se ve. No hay cuentas ni contraseñas: cualquiera
+          puede ver la dieta de cualquiera.
+        </p>
+      </div>
     </div>
   </div>
 </template>
@@ -110,16 +248,39 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   height: 34px;
-  padding: 0 10px 0 12px;
+  padding: 0 10px 0 6px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--ink-muted);
 }
 
+.trigger.compact {
+  height: 32px;
+  padding: 0 6px 0 4px;
+}
+
+.initial {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--sage-100);
+  color: var(--sage-700);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .name {
   font-weight: 500;
   color: var(--ink-strong);
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .meta {
@@ -136,7 +297,9 @@ onBeforeUnmount(() => {
   top: 40px;
   left: 0;
   z-index: 90;
-  width: 300px;
+  width: 320px;
+  max-height: 70vh;
+  overflow-y: auto;
   padding: 5px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -144,9 +307,34 @@ onBeforeUnmount(() => {
   box-shadow: var(--shadow-menu);
 }
 
+.menu.compact {
+  left: auto;
+  right: 0;
+  width: min(320px, calc(100vw - 24px));
+}
+
+.empty {
+  margin: 6px 10px 10px;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.row {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  border-radius: var(--radius);
+}
+
+.row:hover,
+.row.current {
+  background: var(--sage-50);
+}
+
 .option {
   display: flex;
-  width: 100%;
+  flex: 1 1 0;
+  min-width: 0;
   align-items: center;
   gap: 10px;
   padding: 9px 10px;
@@ -154,15 +342,7 @@ onBeforeUnmount(() => {
   text-align: left;
 }
 
-.option:hover {
-  background: var(--sage-50);
-}
-
-.option.current {
-  background: var(--sage-50);
-}
-
-.initial {
+.avatar {
   flex: none;
   display: flex;
   align-items: center;
@@ -185,12 +365,109 @@ onBeforeUnmount(() => {
   display: block;
   font-weight: 500;
   color: var(--ink-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .who-meta {
   display: block;
   font-size: 11.5px;
   color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.who-meta.none {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.remove {
+  flex: none;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  line-height: 1;
+  color: var(--ink-faint);
+}
+
+.remove:hover {
+  color: var(--amber-700);
+}
+
+.remove.armed {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--amber-700);
+}
+
+.remove:disabled {
+  color: var(--ink-disabled);
+}
+
+.error {
+  margin: 6px 4px 2px;
+  padding: 7px 8px;
+  border-radius: var(--radius);
+  background: var(--amber-50);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--amber-700);
+}
+
+.foot {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.add {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: var(--radius);
+  font-weight: 500;
+  color: var(--sage-700);
+  text-align: left;
+}
+
+.add:hover {
+  background: var(--sage-50);
+}
+
+.add-form {
+  display: flex;
+  gap: 6px;
+  padding: 5px 4px;
+}
+
+.add-field {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--line-input);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.add-save {
+  flex: none;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius);
+  font-weight: 500;
+  color: var(--surface);
+  background: var(--sage-700);
+}
+
+.add-save:disabled {
+  background: #c2ccc6;
 }
 
 .note {

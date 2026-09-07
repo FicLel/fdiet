@@ -42,6 +42,8 @@ public class DietMapper implements IDietMapper {
     public DietDto toDto(DietPlan plan) {
         return new DietDto(
                 plan.getId(),
+                plan.getPatient().getId(),
+                plan.getPatient().getName(),
                 plan.getName(),
                 plan.getStatus(),
                 plan.getStartedOn(),
@@ -54,6 +56,8 @@ public class DietMapper implements IDietMapper {
     public DietSummaryDto toSummary(DietPlan plan) {
         return new DietSummaryDto(
                 plan.getId(),
+                plan.getPatient().getId(),
+                plan.getPatient().getName(),
                 plan.getName(),
                 plan.getStatus(),
                 plan.getStartedOn(),
