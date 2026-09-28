@@ -9,6 +9,8 @@ import com.fdiet.journal.exception.InvalidJournalEntryException;
 import com.fdiet.journal.exception.JournalEntryNotFoundException;
 import com.fdiet.patient.exception.InvalidPatientException;
 import com.fdiet.patient.exception.PatientNotFoundException;
+import com.fdiet.reference.exception.InvalidReferenceException;
+import com.fdiet.reference.exception.ReferenceNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.HttpStatus;
@@ -26,7 +28,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({FoodItemNotFoundException.class, BedcaFoodNotFoundException.class,
             DietNotFoundException.class, JournalEntryNotFoundException.class,
-            PatientNotFoundException.class})
+            PatientNotFoundException.class, ReferenceNotFoundException.class})
     public ResponseEntity<ApiErrorDto> handleNotFound(RuntimeException e) {
         return build(HttpStatus.NOT_FOUND, e.getMessage());
     }
@@ -65,6 +67,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InvalidPatientException.class)
     public ResponseEntity<ApiErrorDto> handleInvalidPatient(InvalidPatientException e) {
+        return build(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
+    @ExceptionHandler(InvalidReferenceException.class)
+    public ResponseEntity<ApiErrorDto> handleInvalidReference(InvalidReferenceException e) {
         return build(HttpStatus.BAD_REQUEST, e.getMessage());
     }
 

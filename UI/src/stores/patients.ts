@@ -1,5 +1,5 @@
 import { computed, ref, shallowRef } from 'vue'
-import { patientsApi } from '@/api/patients'
+import { patientsApi, type PatientRequest } from '@/api/patients'
 import { dietsApi } from '@/api/diets'
 import type { DietSummary, Patient } from '@/api/types'
 
@@ -141,14 +141,14 @@ function select(id: number | null): void {
  * Adds a patient and switches to them, which is what somebody who just typed a
  * name wants next. Returns whether it worked, so the form knows to close.
  */
-async function create(name: string, notes?: string): Promise<boolean> {
+async function create(request: PatientRequest): Promise<boolean> {
   if (saving.value) {
     return false
   }
   saving.value = true
   error.value = null
   try {
-    const added = await patientsApi.create({ name, notes: notes ?? null })
+    const added = await patientsApi.create(request)
     patients.value = [...patients.value, added].sort((a, b) => a.name.localeCompare(b.name))
     select(added.id)
     return true
@@ -158,6 +158,42 @@ async function create(name: string, notes?: string): Promise<boolean> {
   } finally {
     saving.value = false
   }
+}
+
+/** Rewrites a patient's name, note, birth date or sex. Every field is sent: what is left out is cleared. */
+async function update(id: number, request: PatientRequest): Promise<boolean> {
+  if (saving.value) {
+    return false
+  }
+  saving.value = true
+  error.value = null
+  try {
+    const changed = await patientsApi.update(id, request)
+    patients.value = patients.value
+      .map((patient) => (patient.id === id ? changed : patient))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    // A rename shows in the board of diets in force, which carries the name.
+    void refreshCurrent()
+    return true
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : 'No se pudo guardar el paciente'
+    return false
+  } finally {
+    saving.value = false
+  }
+}
+
+/** Whole months since a birth date, or null without one. */
+function ageInMonths(patient: Patient | null, on: Date = new Date()): number | null {
+  if (!patient?.birthDate) {
+    return null
+  }
+  const [year, month, day] = patient.birthDate.split('-').map(Number)
+  let months = (on.getFullYear() - year!) * 12 + (on.getMonth() + 1 - month!)
+  if (on.getDate() < day!) {
+    months--
+  }
+  return Math.max(0, months)
 }
 
 /**
@@ -207,7 +243,9 @@ export function usePatients() {
     refreshCurrent,
     select,
     create,
+    update,
     remove,
     clearError,
+    ageInMonths,
   }
 }

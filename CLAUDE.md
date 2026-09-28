@@ -26,8 +26,9 @@ tasks. A real exported environment variable always wins over the `.env` entry.
 fdiet is a Spring Boot backend organized per bounded context under `src/main/java/com/fdiet/<feature>/`.
 The feature modules are `patient` (who a diet is written for), `food` (the product catalogue),
 `diet` (the plan built on it), `alternative` (what one food may be swapped for) and `journal`
-(what the patient thought of the plan and what they ate beside it); `common` holds the shared
-transport types.
+(what the patient thought of the plan and what they ate beside it) and `reference` (rations, household
+measures and recommendations from published guidelines, each row with its source); `common` holds
+the shared transport types.
 
 **No security layer.** No Spring Security, no JWT, no authentication anywhere — every route is
 open. This is intentional for the current stage.
@@ -135,8 +136,9 @@ dataset and stay null after an import.
 
 ### `patient`
 
-Who a diet is written for. It owns `patients` — an id, a name, a free note, a creation stamp — and
-that is the whole of it.
+Who a diet is written for. It owns `patients` — an id, a name, a free note, a creation stamp, and
+an optional birth date and sex (`V9`) — and that is the whole of it. The birth date only *suggests*
+which reference profile a new diet is read against (`Patient.ageInMonths`); nothing is decided by it.
 
 - `model/Patient`, `repository/PatientRepository`, `service/PatientService` (+ `IPatientService`),
   `mapper/PatientMapper`, `controller/PatientController` at `/api/patients`, and the two
@@ -237,16 +239,25 @@ extra query.
 `unmatched` and `unmeasured`, which sum to `ingredients`. Most of a freshly imported week is
 unmatched, and a total over a third of the ingredients looks exactly like a total over all of
 them unless something says otherwise. `unmeasured` is an ingredient that *is* matched but is
-written in a unit nothing can weigh (`1 unidad`, `1 cdta`) — `PortionScaler` refuses to guess
-what a spoonful weighs. Its one assumption is that a millilitre is a gram, which a diet's
-liquids (water, broth, milk, juice) are within a few percent of.
+written in a unit nothing can weigh — `PortionScaler` refuses to guess what a spoonful weighs.
+Its one assumption is that a millilitre is a gram, which a diet's liquids (water, broth, milk,
+juice) are within a few percent of; for olive oil it overstates by about 9 %, and that is kept so
+`10 ml` and `1 cucharada sopera` of oil never disagree.
+
+**A household measure weighs only through a row that says so.** `diet_ingredients.food_measure_id`
+(`V10`) points at a `ref_food_measures` row — published (`1 cucharada sopera` of olive oil, 10 ml,
+AESAN 2022) or the diet's own criterion — and `PortionScaler.weigh` uses it: the row's point weight
+divided by its count (`3 Uds. medianas = 180 g` is 60 g each), cut to the edible part by the food's
+`edible_portion` when the row is a gross weight (and refused when that fraction is unpublished). A
+range (`53–63 g`) weighs nothing, and a measure weighs only the unit it measures. `countedByMeasure`
+says how much of `counted` rests on one.
 
 ### Interfaces and injection
 
 Every class in `diet/`, `alternative/` and `patient/` is injected through an interface
 (`IDietService`, `IDietMapper`, `IMealTextParser`, `IPortionScaler`, `IDietNutritionService`,
 `IAlternativeService`, `IFoodCategoriser`, `INutritionSimilarity`, `IPatientService`,
-`IPatientMapper`, …), as are the food services
+`IPatientMapper`, `IReferenceService`, `IReferenceMapper`, `IDietRationService`, …), as are the food services
 they depend on: `IFoodItemService`, `IBedcaFoodService`, `INutritionService`, `INameMatcher`,
 `IBedcaImportService`, `IBedcaFoodMapper`. The older `food/` classes
 (`FoodItemService`'s siblings, `FoodImportService`) still use their concrete types. The
@@ -258,8 +269,9 @@ repositories are Spring Data interfaces already.
 paged:
 
 - `GET /api/patients`, `GET /api/patients/{id}` — everybody, by name; or one of them.
-- `POST /api/patients` (201) — `{name, notes?}`; the name must not be one somebody already holds.
-- `PUT /api/patients/{id}` — rename, or rewrite the note.
+- `POST /api/patients` (201) — `{name, notes?, birthDate?, sex?}`; the name must not be one somebody
+  already holds. `sex` is `FEMALE` or `MALE`.
+- `PUT /api/patients/{id}` — rewrite every field; one left out is cleared.
 - `DELETE /api/patients/{id}` (204) — a patient with no diets. One who still has diets is a 400.
 
 `DietController` at `/api/diets` — plain REST, no HATEOAS envelope, pagination as query
@@ -288,7 +300,21 @@ diet is addressed by its own id:
   parser of its own: a second implementation would drift from the importer, and the two would then
   disagree about what the same line of text means.
 - `POST /api/diets/import` — multipart `file`, required `patientId`, optional `sheet`, `name`,
-  `startedOn`.
+  `startedOn`, `referenceProfile`, `clinical`.
+- `PATCH /api/diets/{id}` — `{name?, referenceProfileCode?, clinical?}` without sending the week.
+  A blank `referenceProfileCode` takes the profile off.
+- `POST /api/diets/compose` — `{bedcaFoodId, grams | foodMeasureId + count, state?, dietId?}` →
+  the text fragment to append to a cell (`Lenteja, seca, cruda (60 g en crudo)`) and what the parser
+  reads back from it. The editor's "añadir por raciones" goes through this, so it still has no parser.
+- `GET /api/diets/{id}/rations?profile=` — the week counted in rations (see `reference`).
+- `GET /api/diets/{id}/measures`, `PUT /api/diets/{id}/measures`, `DELETE /api/diets/{id}/measures/{measureId}`
+  — the diet's own measure criteria (`{measure, size?, bedcaFoodId, grams | ml, note?}`). A PUT
+  attaches the criterion wherever it is now the chosen measure and answers how many.
+
+`POST /api/diets` takes `referenceProfileCode` and `clinical` too. Left out on a new diet, the
+profile the patient's age suggests is used (the adult one when the age is unknown); a blank is
+"none"; left out on `PUT`, the diet keeps the one it has. `parse` takes an optional `dietId` so that
+diet's own measure criteria apply.
 
 Creating, importing or copying a diet archives the one it replaces — that patient's, and only
 theirs (`ARCHIVED`, `ended_on = today`) — in the same transaction, flushed before the insert so
@@ -302,7 +328,10 @@ cover. `DietImportService` owns no repository: it reads the header row for the d
 column for the meals, and passes each cell to `helpers/MealTextParser`, which splits
 `Ensalada: lechuga (80 gr) + tomate (100 gr)` into a dish and its ingredients — outside brackets
 only, so `(20 g: nueces + almendras)` stays one ingredient. A fragment with no readable quantity
-still becomes an ingredient of one `unidad`; nothing is ever discarded. A row merged across the
+still becomes an ingredient of one `unidad`; nothing is ever discarded. Writing without brackets
+is read measure-first: `1 cdta AOVE` is `AOVE`, 1, `cdta`, and `1 kiwi` is `kiwi`, 1, `unidad`
+(multi-word measures such as `cucharada sopera` are read whole). State words (`cocidas`, `en crudo`)
+and size words (`mediano`) stay in the name and are also read into `state` and `size`. A row merged across the
 day columns (`Comida`, `Cena`) names a meal whose dishes are the rows below it.
 
 `service/FoodResolverService` matches the whole week against both catalogues in four batched calls
@@ -313,14 +342,15 @@ logic. **The caches hold names against ids, never entities**: an entity cached a
 transaction is detached.
 
 **Matching is exact and never guesses.** The `utf8mb4_unicode_ci` collation is case- and
-accent-insensitive, so `lechuga` finds `Lechuga`. Anything less than exact is left unmatched and
+accent-insensitive, so `lechuga` finds `Lechuga`. A name that is not found is tried once more without
+its size words (`kiwi mediano` → `Kiwi`): a size says how big the piece is, never which food it is. Anything less than exact is left unmatched and
 offered as a *suggestion* instead — `IBedcaFoodService.suggest` ranks all 957 names in memory
 through `food/helpers/NameMatcher` and hands back the best few, and a person picks one with a
 PATCH. Similarity alone puts `1 pan integral` on `Pan rallado` and `2 lonchas de jamón serrano`
 on `Jamón asado`: close enough to score 100, wrong enough to put a false figure in someone's
 diet. A blank is better than a wrong number, so the machine offers and the nutritionist decides.
 
-Importing example-ui.xlsx matches 32 of its 210 ingredients outright; the other 178 come back
+Importing example-ui.xlsx matches 41 of its 210 ingredients outright; the other 169 come back
 from the fix-up endpoint each with its candidates.
 
 ### `alternative`
@@ -381,6 +411,51 @@ where the same word is the whole family.
 different meanings: `category` null (no rule recognised the name, so nothing was ever eligible),
 `inCategory` zero (the shelf is empty), or `ranked` short of `inCategory` (foods were eligible but
 published too few figures to compare).
+
+### `reference`
+
+**What a published guideline says a ration, a household measure or a week should be — each figure
+with the document and page it was read from.** It owns the seven `ref_*` tables (`V8`) and is loaded
+from `reference-data/` (one folder per source, so a licence stays with its figures; see its
+`README.md`) by `ReferenceStartupSync` at startup (`fdiet.reference.sync-on-startup`) and by
+`POST /api/reference/sync`. Codes are stable keys, so a re-sync updates in place and a diet pointing
+at a measure keeps pointing at it. A row naming a BEDCA food that is not loaded is skipped with a
+reason, not failed.
+
+Only openly reusable sources are seeded: **AESAN 2022** (the default adult profile,
+`fdiet.reference.default-adult-profile`), the **AESAN/MEC 2010** school consensus (four age bands, and
+the only Spanish meal energy split, which the adult profile *borrows with a label*), **5 al día 2019**
+per-fruit and per-vegetable portions (CC BY-SA 4.0), and the **definition** of the diabetes 10 g
+carbohydrate ration. SENC, DIAL, FINUT and the Russolillo exchange lists need permission and are not
+loaded; `plan.md` has the research and the licence classes.
+
+- `domain/` — `FoodState` (read off BEDCA names, since LanguaL codes proved inconsistent),
+  `PortionSize`, `HouseholdMeasure` (the kitchen words and every spelling of them, in code; an alias
+  claimed twice is a startup failure), `WeightBasis`, `FoodKeywords`.
+- `helpers/ReferenceMatcher` — pure. Which measure weighs an ingredient: the one a person picked;
+  else the diet's own criterion if exactly one weighs; else the only weighing row from the profile's
+  source; else published rows that agree to the gram. **A range, a raw-state row for a cooked food and
+  a size the text did not name never attach on their own** — they are offered as candidates. Which
+  ration counts a food: a BEDCA id, or a `FoodCategory` narrowed by `;`-separated keywords (plurals
+  allowed, longest phrase wins, `!` excludes).
+- `service/ReferenceService` — owns every `ref_*` table; an in-memory snapshot of DTOs, reset on
+  sync. `ReferenceImportService` owns no repository and reads the CSVs by header.
+- `diet/service/DietRationService` — the week in rations, derived on read and stored nowhere. A
+  range ration divides into a range count; a gross ration is cut to its edible part; cooked lentils
+  against a dry ration are not counted but named with the reason. Every day carries `coverage`
+  (`counted + unmatched + unweighed + noRation + stateMismatch = ingredients`). Recommendations come
+  back `WITHIN`/`BELOW`/`ABOVE`/`UNCERTAIN`; while anything that could belong to a group was left
+  uncounted, a `BELOW` (and a `WITHIN` against a ceiling) is `UNCERTAIN`, because the count is only a
+  floor. Carbohydrate rations are counted only on a diet marked `clinical`.
+
+`ReferenceController` at `/api/reference`: `GET sources`, `GET profiles?ageMonths=` (the suggested one
+is marked, never applied), `GET profiles/{code}`, `GET rations?profile=&bedcaFoodId=`,
+`GET measures?bedcaFoodId=&unit=&dietId=&profile=`, `GET vocabulary`,
+`GET exchange-systems?clinical=`, `POST sync` (answers with every source's attribution).
+
+**The machine offers, the nutritionist decides**, here as in food matching: a nutritionist may give a
+measure their own weight for one diet (`ref_food_measures.diet_id`, deleted with the diet and copied
+with it), and that criterion is labelled as theirs, never as published data.
 
 ### `journal`
 
@@ -444,6 +519,9 @@ changing an entity, add a migration to match or startup fails.
 | `V5__diet_dish_raw_text.sql` | `diet_dishes.raw_text` — the cell as the nutritionist wrote it |
 | `V6__create_journal_schema.sql` | `dish_scores` and `extra_foods` — the two tables the patient writes |
 | `V7__create_patient_schema.sql` | `patients`, seeded with `Victor`; `diets.patient_id`; `uk_diets_active` becomes per patient |
+| `V8__create_reference_schema.sql` | the seven `ref_*` tables: sources, populations, rations, food measures, recommendations, meal shares, exchange systems |
+| `V9__patient_profile_and_diet_reference.sql` | `patients.birth_date` / `sex`; `diets.reference_profile_code` / `clinical` |
+| `V10__ingredient_measure_state.sql` | `diet_ingredients.state`, `portion_size`, `food_measure_id` |
 
 ## Data files and licensing
 
@@ -458,6 +536,10 @@ application credits included; the values may not be modified or normalised; and 
 personal, educational or **non-commercial** purposes without AESAN's express authorisation. The
 full terms and the attribution string are in `BEDCA-ATTRIBUTION.txt`, and `POST /api/bedca/sync`
 returns the attribution in its response so no caller can store the data without being handed it.
+
+`reference-data/` holds the reference CSVs, each folder under its own source's terms; the 5 al día
+figures are **CC BY-SA 4.0**, so a derived file stays ShareAlike. The UI's builder shows BEDCA's line
+and every reference source a count used in its footer.
 
 ## Dependencies
 

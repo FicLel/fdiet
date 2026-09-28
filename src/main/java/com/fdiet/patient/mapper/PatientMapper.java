@@ -13,6 +13,8 @@ public class PatientMapper implements IPatientMapper {
                 patient.getId(),
                 patient.getName(),
                 patient.getNotes(),
+                patient.getBirthDate(),
+                patient.getSex(),
                 patient.getCreatedAt());
     }
 }

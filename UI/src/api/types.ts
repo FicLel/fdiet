@@ -34,8 +34,16 @@ export interface Patient {
   id: number
   name: string
   notes: string | null
+  /**
+   * Optional, and only ever used to *suggest* which reference profile a new
+   * diet is read against. Null is a patient nobody gave one, not an error.
+   */
+  birthDate: string | null
+  sex: Sex | null
   createdAt: string
 }
+
+export type Sex = 'FEMALE' | 'MALE'
 
 export interface Nutrition {
   energyKcal: number | null
@@ -55,6 +63,8 @@ export interface NutritionSummary {
   counted: number
   unmatched: number
   unmeasured: number
+  /** Of `counted`, how many were weighed through a household measure rather than written in grams. */
+  countedByMeasure: number
 }
 
 export interface FoodSuggestion {
@@ -114,10 +124,19 @@ export interface DishIngredient {
   name: string
   quantity: number
   unit: string
+  /** The state the text says the food is weighed in — `lentejas cocidas` — or null when it says none. */
+  state: FoodState | null
+  /** The size the text names — `1 kiwi mediano` — or null. */
+  size: PortionSize | null
   foodItemId: number | null
   bedcaFoodId: number | null
+  /** The household measure that weighs `1 cdta`, when one is attached. */
+  foodMeasureId: number | null
   /** The catalogue's own name for the food, once matched. */
   matchedName: string | null
+  measure: FoodMeasure | null
+  /** Written raw and matched to a cooked food, or the other way round. */
+  stateMismatch: boolean
   nutrition: Nutrition | null
   suggestions: FoodSuggestion[] | null
 }
@@ -158,6 +177,10 @@ export interface Diet {
   status: DietStatus
   startedOn: string
   endedOn: string | null
+  /** The population the week is read against, or null for none. It never rewrites a gram. */
+  referenceProfileCode: string | null
+  /** Clinical diets also count carbohydrate rations (10 g). */
+  clinical: boolean
   days: DietDay[]
   nutrition: NutritionSummary | null
 }
@@ -170,6 +193,280 @@ export interface DietSummary {
   status: DietStatus
   startedOn: string
   endedOn: string | null
+  referenceProfileCode: string | null
+  clinical: boolean
+}
+
+/** What an import read out of a workbook, and how much of it matched a food. */
+export interface DietImportSummary {
+  dietId: number
+  sheet: string
+  name: string
+  days: number
+  meals: number
+  dishes: number
+  ingredients: number
+  resolved: number
+  unresolved: number
+}
+
+/* ---------------------------------------------------------------------------
+ * Reference data — rations, household measures and recommendations, each row
+ * with the source and page it was taken from.
+ *
+ * Everything here is orientative and derived on read. The UI formats what the
+ * backend sends and never computes a ration count of its own.
+ * ------------------------------------------------------------------------- */
+
+export type FoodState = 'RAW' | 'DRY' | 'COOKED' | 'CANNED' | 'DRAINED' | 'UNSPECIFIED'
+
+export type PortionSize = 'SMALL' | 'MEDIUM' | 'LARGE'
+
+export type WeightBasis = 'NET_EDIBLE' | 'GROSS' | 'UNSPECIFIED'
+
+export type HouseholdMeasure =
+  | 'UNIDAD'
+  | 'CUCHARADA_SOPERA'
+  | 'CUCHARADA_POSTRE'
+  | 'CUCHARADITA'
+  | 'VASO'
+  | 'TAZA'
+  | 'TAZON'
+  | 'PLATO'
+  | 'CAZO'
+  | 'LONCHA'
+  | 'REBANADA'
+  | 'RODAJA'
+  | 'FILETE'
+  | 'PUNADO'
+  | 'DIENTE'
+  | 'PORCION'
+  | 'LATA'
+  | 'RACION'
+
+export type RecommendationPeriod = 'PER_DAY' | 'PER_WEEK'
+
+export type RecommendationStatus = 'WITHIN' | 'BELOW' | 'ABOVE' | 'UNCERTAIN'
+
+export interface ReferenceSource {
+  code: string
+  shortName: string
+  title: string
+  institution: string | null
+  country: string | null
+  tier: number
+  year: number | null
+  url: string | null
+  licenceClass: 'A' | 'B' | 'C' | 'D' | 'E'
+  licence: string | null
+  /** The line a figure from this source may not be shown without. */
+  attribution: string | null
+  clinical: boolean
+  retrievedOn: string | null
+  notes: string | null
+}
+
+export interface ReferenceProfile {
+  code: string
+  label: string
+  sourceCode: string
+  sourceShortName: string
+  ageMinMonths: number | null
+  ageMaxMonths: number | null
+  context: string | null
+  selectable: boolean
+  /** The one that fits the age asked about. An offer, never applied on its own. */
+  suggested: boolean
+}
+
+/**
+ * A household measure and what it weighs: `1 cucharada sopera · 10 ml · AESAN 2022`.
+ * A range (`53–63 g`) weighs nothing and is never attached on its own.
+ */
+export interface FoodMeasure {
+  id: number
+  code: string | null
+  measure: HouseholdMeasure
+  measureLabel: string
+  size: PortionSize | null
+  count: number
+  foodLabel: string | null
+  bedcaFoodId: number | null
+  foodCategory: string | null
+  keywords: string | null
+  gramsMin: number | null
+  gramsMax: number | null
+  mlMin: number | null
+  mlMax: number | null
+  /** Null for a range: nothing picks a midpoint. */
+  gramsPerMeasure: number | null
+  state: FoodState
+  weightBasis: WeightBasis
+  grossGrams: number | null
+  householdText: string | null
+  pageRef: string | null
+  note: string | null
+  sourceCode: string | null
+  sourceShortName: string | null
+  sourceTier: number | null
+  dietId: number | null
+  /** The nutritionist's own criterion for this diet, not a published row. */
+  dietOwn: boolean
+}
+
+export interface Ration {
+  id: number
+  code: string
+  profileCode: string
+  profileLabel: string
+  sourceCode: string
+  sourceShortName: string
+  groupCode: string
+  groupLabel: string
+  foodCategory: string | null
+  keywords: string | null
+  foodLabel: string | null
+  bedcaFoodId: number | null
+  role: string | null
+  gramsMin: number | null
+  gramsMax: number | null
+  mlMin: number | null
+  mlMax: number | null
+  unitsMin: number | null
+  unitsMax: number | null
+  state: FoodState
+  weightBasis: WeightBasis
+  householdText: string | null
+  grossGrams: number | null
+  pageRef: string | null
+  note: string | null
+}
+
+export interface MealShare {
+  mealType: MealType
+  pctMin: number
+  pctMax: number
+  note: string | null
+}
+
+/** A profile's energy split between meals, and where it was taken from when borrowed. */
+export interface MealShares {
+  fromProfileCode: string
+  fromProfileLabel: string
+  sourceCode: string
+  sourceShortName: string
+  /** Taken from another population's document, and labelled as such. */
+  borrowed: boolean
+  note: string | null
+  pageRef: string | null
+  shares: MealShare[]
+}
+
+export interface ExchangeSystem {
+  code: string
+  name: string
+  nutrient: 'CARBOHYDRATE' | 'PROTEIN' | 'FAT'
+  gramsPerUnit: number
+  clinical: boolean
+  sourceCode: string
+  sourceShortName: string
+  note: string | null
+}
+
+export interface GroupCount {
+  groupCode: string
+  groupLabel: string
+  grams: number
+  rationsMin: number
+  rationsMax: number
+  ingredients: number
+}
+
+export interface RecommendationCheck {
+  code: string
+  label: string
+  groupCodes: string[]
+  rationsMin: number | null
+  rationsMax: number | null
+  period: RecommendationPeriod
+  actualMin: number
+  actualMax: number
+  status: RecommendationStatus
+  note: string | null
+  pageRef: string | null
+}
+
+export interface MealEnergy {
+  mealType: MealType
+  name: string
+  kcal: number | null
+  pct: number | null
+  targetPctMin: number | null
+  targetPctMax: number | null
+  carbohydratesG: number | null
+}
+
+export interface ExchangeCount {
+  code: string
+  name: string
+  gramsPerUnit: number
+  dayUnits: number | null
+  meals: { mealType: MealType; units: number | null }[]
+}
+
+/** `counted + unmatched + unweighed + noRation + stateMismatch === ingredients`. */
+export interface RationCoverage {
+  ingredients: number
+  counted: number
+  unmatched: number
+  unweighed: number
+  noRation: number
+  stateMismatch: number
+}
+
+export interface DayRations {
+  day: DayOfWeek
+  groups: GroupCount[]
+  daily: RecommendationCheck[]
+  meals: MealEnergy[]
+  exchanges: ExchangeCount[]
+  coverage: RationCoverage
+  uncounted: { name: string; reason: string }[]
+}
+
+export interface DietRations {
+  dietId: number
+  profile: {
+    code: string
+    label: string
+    sourceCode: string
+    sourceShortName: string
+    context: string | null
+  } | null
+  mealShares: MealShares | null
+  exchangeSystems: ExchangeSystem[]
+  days: DayRations[]
+  weekly: RecommendationCheck[]
+  daysInWeek: number
+  sources: ReferenceSource[]
+}
+
+/** A food written as text the parser reads back, and what it read. */
+export interface ComposedFragment {
+  fragment: string
+  ingredient: DishIngredient
+}
+
+export interface DietMeasureSaved {
+  measure: FoodMeasure
+  /** How many of the diet's ingredients now weigh through it. */
+  attached: number
+}
+
+export interface HouseholdMeasureWord {
+  code: HouseholdMeasure
+  label: string
+  aliases: string[]
 }
 
 export interface Page<T> {

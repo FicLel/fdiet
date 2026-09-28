@@ -1,0 +1,6 @@
+code,source_code,label,age_min_months,age_max_months,context,meal_shares_from,meal_shares_note,selectable
+AESAN-MEC-2010:ESCOLAR,AESAN-MEC-2010,Alumnado en edad escolar,,,Reparto de la energía a lo largo del día,,,false
+AESAN-MEC-2010:3-6,AESAN-MEC-2010,3-6 años,36,83,Comedor escolar: raciones de la comida del mediodía,AESAN-MEC-2010:ESCOLAR,,true
+AESAN-MEC-2010:7-12,AESAN-MEC-2010,7-12 años,84,155,Comedor escolar: raciones de la comida del mediodía,AESAN-MEC-2010:ESCOLAR,,true
+AESAN-MEC-2010:13-15,AESAN-MEC-2010,13-15 años,156,191,Comedor escolar: raciones de la comida del mediodía,AESAN-MEC-2010:ESCOLAR,,true
+AESAN-MEC-2010:16-18,AESAN-MEC-2010,16-18 años,192,227,Comedor escolar: raciones de la comida del mediodía,AESAN-MEC-2010:ESCOLAR,,true

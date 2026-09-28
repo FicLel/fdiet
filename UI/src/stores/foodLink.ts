@@ -1,8 +1,17 @@
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, shallowRef } from 'vue'
 import { catalogueApi } from '@/api/catalogue'
 import { dietsApi } from '@/api/diets'
-import type { BedcaFood, DishIngredient, FoodItem, FoodSuggestion } from '@/api/types'
-import { useDietDraft, type IngredientAt } from './dietDraft'
+import { referenceApi } from '@/api/reference'
+import type {
+  BedcaFood,
+  DishIngredient,
+  FoodItem,
+  FoodMeasure,
+  FoodSuggestion,
+  HouseholdMeasure,
+} from '@/api/types'
+import { isUnweighed, locate, useDietDraft, type IngredientAt } from './dietDraft'
+import { useReference } from './reference'
 
 /**
  * Matching an ingredient to a food.
@@ -53,8 +62,18 @@ export interface CatalogueResult {
 }
 
 const draft = useDietDraft()
+const reference = useReference()
 
 const target = ref<IngredientAt | null>(null)
+
+/**
+ * The household measures that could weigh the open ingredient's unit — `1 cdta`
+ * of this oil — published or the diet's own, best first. Offered, never
+ * attached from here without a click.
+ */
+const measures = shallowRef<FoodMeasure[]>([])
+const loadingMeasures = ref(false)
+const savingMeasure = ref(false)
 const half = ref<CatalogueHalf>('bedca')
 const term = ref('')
 const results = ref<CatalogueResult[]>([])
@@ -230,6 +249,48 @@ async function loadSuggestions(): Promise<void> {
   }
 }
 
+/** The household measure the open ingredient is written in, or null for a weight, a volume or an unknown word. */
+const measureWord = computed<HouseholdMeasure | null>(() =>
+  reference.measureOfUnit(target.value?.unit),
+)
+
+/** A generic food written in a household measure: the only kind a measure can weigh. */
+const measurable = computed(
+  () => target.value !== null && target.value.bedcaFoodId !== null && measureWord.value !== null,
+)
+
+let measureToken = 0
+
+async function loadMeasures(): Promise<void> {
+  const at = target.value
+  const mine = ++measureToken
+  measures.value = []
+  if (!at || at.bedcaFoodId === null) {
+    return
+  }
+  await reference.ensure().catch(() => undefined)
+  if (reference.measureOfUnit(at.unit) === null) {
+    return
+  }
+  loadingMeasures.value = true
+  try {
+    const rows = await referenceApi.measures(at.bedcaFoodId, {
+      unit: at.unit,
+      dietId: draft.diet.value?.id,
+      profile: draft.diet.value?.referenceProfileCode,
+    })
+    if (mine === measureToken) {
+      measures.value = rows
+    }
+  } catch {
+    // No candidates is a shorter drawer: the diet's own criterion below still works.
+  } finally {
+    if (mine === measureToken) {
+      loadingMeasures.value = false
+    }
+  }
+}
+
 /** Opens the drawer on one ingredient, moving the grid to the cell it sits in. */
 function focus(ingredient: IngredientAt): void {
   target.value = ingredient
@@ -241,6 +302,66 @@ function focus(ingredient: IngredientAt): void {
   searching.value = false
   error.value = null
   void loadSuggestions()
+  void loadMeasures()
+}
+
+/** Weighs the open ingredient through one measure. Saved at once, like a match. */
+async function pickMeasure(measure: FoodMeasure): Promise<void> {
+  const at = target.value
+  const plan = draft.diet.value
+  if (!at || !plan || savingMeasure.value || measure.gramsPerMeasure === null) {
+    return
+  }
+  savingMeasure.value = true
+  error.value = null
+  try {
+    const updated = await dietsApi.resolveIngredient(plan.id, at.id, { foodMeasureId: measure.id })
+    draft.applyIngredient(updated)
+    target.value = locate(at.row, at.day, updated)
+  } catch (cause) {
+    error.value = `No se pudo usar esa medida${cause instanceof Error ? `: ${cause.message}` : ''}`
+  } finally {
+    savingMeasure.value = false
+  }
+}
+
+/**
+ * The nutritionist's own weight for this measure of this food, for this diet
+ * only. It is attached to every ingredient of the week it now weighs, so the
+ * week is read again rather than patched one row at a time.
+ */
+async function saveOwnMeasure(value: number, unit: 'g' | 'ml', note: string): Promise<number | null> {
+  const at = target.value
+  const plan = draft.diet.value
+  const word = measureWord.value
+  if (!at || !plan || !word || at.bedcaFoodId === null || savingMeasure.value || !(value > 0)) {
+    return null
+  }
+  savingMeasure.value = true
+  error.value = null
+  try {
+    const saved = await dietsApi.saveMeasure(plan.id, {
+      measure: word,
+      size: at.size,
+      bedcaFoodId: at.bedcaFoodId,
+      grams: unit === 'g' ? value : null,
+      ml: unit === 'ml' ? value : null,
+      note: note.trim() || null,
+    })
+    const id = at.id
+    await draft.refresh()
+    const fresh = draft.findIngredient(id)
+    if (fresh) {
+      target.value = fresh
+    }
+    await loadMeasures()
+    return saved.attached
+  } catch (cause) {
+    error.value = `No se pudo guardar el criterio${cause instanceof Error ? `: ${cause.message}` : ''}`
+    return null
+  } finally {
+    savingMeasure.value = false
+  }
 }
 
 /** Starts the review at the first ingredient of the week still waiting. */
@@ -256,6 +377,8 @@ function review(): boolean {
 function close(): void {
   clearSearchTimer()
   searchToken++
+  measureToken++
+  measures.value = []
   target.value = null
   term.value = ''
   results.value = []
@@ -311,6 +434,16 @@ async function link(result: CatalogueResult): Promise<void> {
     )
     draft.applyIngredient(updated)
     delete suggestions[at.id]
+    // Matched but still weighing nothing — `1 cdta` of an oil no source
+    // measures — so the drawer stays on it for its measure rather than moving on.
+    if (isUnweighed(updated) && updated.bedcaFoodId !== null && reference.measureOfUnit(updated.unit)) {
+      const matched = locate(at.row, at.day, updated)
+      if (matched) {
+        target.value = matched
+        void loadMeasures()
+        return
+      }
+    }
     if (from === 0) {
       close()
     } else {
@@ -336,13 +469,20 @@ export function useFoodLink() {
     linking,
     error,
     loadingSuggestions,
+    measures,
+    loadingMeasures,
+    savingMeasure,
     // derived
     open,
     ranked,
     remaining,
     position,
+    measureWord,
+    measurable,
     // writes
     focus,
+    pickMeasure,
+    saveOwnMeasure,
     review,
     close,
     skip,

@@ -68,6 +68,20 @@ public class DietPlan {
     @Column(name = "name", length = 255, nullable = false)
     private String name;
 
+    /**
+     * The reference profile the week is written against — a source's population
+     * band, {@code AESAN-2022:ADULTOS}. A choice the nutritionist makes, stored
+     * like a food match and never changed on its own. Null is a week read against
+     * no profile: no ration counts, and household measures only attach when the
+     * sources agree.
+     */
+    @Column(name = "reference_profile_code", length = 64)
+    private String referenceProfileCode;
+
+    /** A diet written for a clinical situation; clinical exchange systems are offered only here. */
+    @Column(name = "clinical", nullable = false)
+    private boolean clinical;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 16, nullable = false)
     private DietStatus status;

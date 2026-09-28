@@ -1,15 +1,22 @@
 package com.fdiet.diet.service;
 
 import com.fdiet.common.dto.PageDto;
+import com.fdiet.diet.dto.ComposeRequestDto;
+import com.fdiet.diet.dto.ComposedFragmentDto;
 import com.fdiet.diet.dto.CopyDietRequestDto;
 import com.fdiet.diet.dto.DietDto;
+import com.fdiet.diet.dto.DietMeasureSavedDto;
+import com.fdiet.diet.dto.DietRationsDto;
 import com.fdiet.diet.dto.DietRequestDto;
+import com.fdiet.diet.dto.DietSettingsDto;
 import com.fdiet.diet.dto.DietSummaryDto;
 import com.fdiet.diet.dto.Dish;
 import com.fdiet.diet.dto.DishIngredient;
 import com.fdiet.diet.dto.MealType;
 import com.fdiet.diet.dto.ParseDishRequestDto;
 import com.fdiet.diet.dto.ResolveIngredientDto;
+import com.fdiet.reference.dto.DietMeasureRequestDto;
+import com.fdiet.reference.dto.FoodMeasureDto;
 
 import java.time.DayOfWeek;
 import java.util.List;
@@ -100,4 +107,25 @@ public interface IDietService {
      * disagree about what the same line of text means.
      */
     Dish parse(ParseDishRequestDto request);
+
+    /** Changes a diet's name, profile or clinical mark without sending its week. */
+    DietDto updateSettings(Long id, DietSettingsDto settings);
+
+    /**
+     * The text a food added by ration or household measure is written as, and
+     * that text read back through the parser. Stores nothing.
+     */
+    ComposedFragmentDto compose(ComposeRequestDto request);
+
+    /** The week counted in rations against its profile, or against {@code profileCode}. */
+    DietRationsDto rations(Long dietId, String profileCode);
+
+    /** The diet's own household-measure weights. */
+    List<FoodMeasureDto> measures(Long dietId);
+
+    /** Writes the diet's own weight for a measure and attaches it where it now weighs. */
+    DietMeasureSavedDto saveMeasure(Long dietId, DietMeasureRequestDto request);
+
+    /** Removes one of the diet's own measures; the ingredients it weighed are left unmeasured. */
+    void deleteMeasure(Long dietId, Long measureId);
 }

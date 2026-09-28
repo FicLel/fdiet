@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { locate, useDietDraft } from '@/stores/dietDraft'
+import RationComposer from './RationComposer.vue'
+import { isUnweighed, locate, useDietDraft } from '@/stores/dietDraft'
 import { useFoodLink } from '@/stores/foodLink'
 import type { DishIngredient } from '@/api/types'
 import { grams, integer, NO_VALUE, quantity } from '@/domain/format'
 import { complete } from '@/domain/nutrition'
+import { measureSource, perMeasure, stateWord } from '@/domain/rations'
 import { cellKey } from '@/domain/slots'
 
 const draft = useDietDraft()
@@ -109,6 +111,26 @@ function revert(): void {
     draft.revert(row.value, day.value.day)
   }
 }
+
+function append(fragment: string): void {
+  if (row.value && day.value) {
+    draft.appendFragment(row.value, day.value.day, fragment)
+  }
+}
+
+/** `1 cdta → 5 g · Criterio de esta dieta`, when a measure weighs the ingredient. */
+function measureLine(ingredient: DishIngredient): string | null {
+  if (!ingredient.measure) {
+    return null
+  }
+  const weight = perMeasure(ingredient.measure)
+  return weight ? `${weight} · ${measureSource(ingredient.measure)}` : null
+}
+
+function mismatchTitle(ingredient: DishIngredient): string {
+  const written = stateWord(ingredient.state) || 'sin estado'
+  return `Escrito ${written}, vinculado a «${ingredient.matchedName}». El peso de uno no es el del otro: revisa el vínculo.`
+}
 </script>
 
 <template>
@@ -164,17 +186,35 @@ function revert(): void {
               "
               @click="openLink(ingredient)"
             >
-              <span class="ingredient-name">{{ ingredient.name }}</span>
-              <span class="num ingredient-qty">
-                {{ quantity(ingredient.quantity, ingredient.unit) }}
+              <span class="ingredient-line">
+                <span class="ingredient-name">{{ ingredient.name }}</span>
+                <span class="num ingredient-qty">
+                  {{ quantity(ingredient.quantity, ingredient.unit) }}
+                </span>
+                <span
+                  class="chip"
+                  :class="{
+                    linked: ingredient.foodItemId !== null || ingredient.bedcaFoodId !== null,
+                  }"
+                >
+                  {{ ingredient.matchedName ?? 'Sin vincular' }}
+                </span>
               </span>
               <span
-                class="chip"
-                :class="{
-                  linked: ingredient.foodItemId !== null || ingredient.bedcaFoodId !== null,
-                }"
+                v-if="measureLine(ingredient) || isUnweighed(ingredient) || ingredient.stateMismatch"
+                class="ingredient-sub"
               >
-                {{ ingredient.matchedName ?? 'Sin vincular' }}
+                <span v-if="measureLine(ingredient)" class="num measure">{{ measureLine(ingredient) }}</span>
+                <span
+                  v-else-if="isUnweighed(ingredient)"
+                  class="chip warn"
+                  title="Nada pesa esta medida para este alimento. Pulsa para elegir una o fijar la de esta dieta."
+                >
+                  Sin peso
+                </span>
+                <span v-if="ingredient.stateMismatch" class="chip warn" :title="mismatchTitle(ingredient)">
+                  Crudo/cocinado no coincide
+                </span>
               </span>
             </button>
           </li>
@@ -195,6 +235,11 @@ function revert(): void {
           </svg>
           Buscar alimento en el catálogo
         </button>
+        <RationComposer
+          :diet-id="draft.diet.value?.id ?? null"
+          :profile-code="draft.diet.value?.referenceProfileCode ?? null"
+          @append="append"
+        />
         <p class="hint">
           <template v-if="!linkable">
             Esta celda tiene cambios sin publicar. Publícalos y sus ingredientes podrán vincularse.
@@ -371,9 +416,9 @@ function revert(): void {
 
 .ingredient {
   display: flex;
+  flex-direction: column;
   width: 100%;
-  align-items: center;
-  gap: 9px;
+  gap: 4px;
   padding: 8px 10px;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius);
@@ -393,6 +438,29 @@ function revert(): void {
 .ingredient.empty-row {
   color: var(--ink-faint);
   font-size: 11.5px;
+}
+
+.ingredient-line,
+.ingredient-sub {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+}
+
+.ingredient-sub {
+  gap: 6px;
+}
+
+.measure {
+  font-size: 10.5px;
+  color: var(--ink-muted);
+}
+
+.chip.warn {
+  max-width: none;
+  height: 18px;
+  line-height: 18px;
 }
 
 .ingredient-name {

@@ -11,6 +11,7 @@ import com.fdiet.diet.model.PlannedDish;
 import com.fdiet.diet.model.PlannedIngredient;
 import com.fdiet.diet.model.PlannedMeal;
 import com.fdiet.diet.service.FoodMatch;
+import com.fdiet.reference.model.ReferenceFoodMeasure;
 
 import java.time.DayOfWeek;
 import java.util.List;
@@ -39,6 +40,11 @@ public interface IDietMapper {
     /** A dish with no ingredients yet. */
     PlannedDish toEntity(Dish dish);
 
-    /** {@code match} may be null: an unmatched ingredient is still stored. */
-    PlannedIngredient toEntity(DishIngredient ingredient, FoodMatch match);
+    /**
+     * {@code match} may be null: an unmatched ingredient is still stored. So may
+     * {@code measure}: an ingredient written in grams needs none, and one written
+     * in a measure nothing weighs yet is stored unmeasured.
+     */
+    PlannedIngredient toEntity(DishIngredient ingredient, FoodMatch match,
+                               ReferenceFoodMeasure measure);
 }

@@ -4,6 +4,7 @@ import com.fdiet.diet.dto.NutritionSummaryDto;
 import com.fdiet.diet.model.PlannedIngredient;
 import com.fdiet.food.dto.NutritionDto;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 
 /**
@@ -20,6 +21,13 @@ public interface IDietNutritionService {
      * not been matched to a food, or when its unit cannot be weighed.
      */
     NutritionDto of(PlannedIngredient ingredient);
+
+    /**
+     * The grams of edible food the ingredient comes to — the weight its figures
+     * are scaled from — or null when it cannot be weighed. What a ration count
+     * divides.
+     */
+    BigDecimal edibleGrams(PlannedIngredient ingredient);
 
     /** The total, with the count of what did and did not contribute to it. */
     NutritionSummaryDto summarise(Collection<PlannedIngredient> ingredients);

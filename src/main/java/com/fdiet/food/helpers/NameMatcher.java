@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -44,7 +45,17 @@ public class NameMatcher implements INameMatcher {
             "palito", "palitos", "baston", "bastones", "pizca", "dado", "dados",
             "lamina", "laminas", "trozo", "trozos", "puñado", "punado",
             "cdta", "cda", "cucharada", "cucharadita", "taza", "unidad", "unidades",
-            "gramo", "gramos", "kilo", "kilos", "litro", "litros", "mililitro", "mililitros");
+            "gramo", "gramos", "kilo", "kilos", "litro", "litros", "mililitro", "mililitros",
+            "cdas", "cdtas", "cucharadas", "cucharaditas", "sopera", "soperas");
+
+    /**
+     * The abbreviations a diet is written in that stand for several words of a
+     * catalogue name. {@code 1 cdta AOVE} is the most repeated ingredient of
+     * example-ui.xlsx and shares no word with {@code Aceite de oliva virgen
+     * extra} until it is spelled out.
+     */
+    private static final Map<String, List<String>> ABBREVIATIONS = Map.of(
+            "aove", List.of("aceite", "oliva", "virgen", "extra"));
 
     @Override
     public Set<String> tokens(String text) {
@@ -56,6 +67,11 @@ public class NameMatcher implements INameMatcher {
         String stripped = key.replaceAll("\\([^)]*\\)", " ").toLowerCase();
         Set<String> tokens = new LinkedHashSet<>();
         for (String word : stripped.split("[^a-z0-9ñ]+")) {
+            List<String> spelled = ABBREVIATIONS.get(word);
+            if (spelled != null) {
+                tokens.addAll(spelled);
+                continue;
+            }
             String singular = singular(word);
             if (singular.length() >= SHORTEST_TOKEN && !FILLER.contains(singular)
                     && !singular.chars().allMatch(Character::isDigit)) {

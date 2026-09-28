@@ -16,18 +16,30 @@ import com.fdiet.food.dto.NutritionDto;
  *       so it is in {@code totals};
  *   <li>{@code unmatched} — no food yet, waiting on the fix-up screen;
  *   <li>{@code unmeasured} — matched, but written in a unit nothing can weigh
- *       ("1 unidad", "1 cdta"), so its figures are unknown.
+ *       ("1 unidad" with no measure attached), so its figures are unknown.
  * </ul>
  *
  * <p>{@code counted + unmatched + unmeasured == ingredients}, always. A total
  * is complete only when {@code counted == ingredients}.
+ *
+ * <p>{@code countedByMeasure} is the part of {@code counted} that was weighed
+ * through a household measure rather than written in grams — "1 cdta" read as
+ * 5 ml, "1 kiwi" as 80 g — so a total says how much of it rests on a
+ * conversion.
  */
 public record NutritionSummaryDto(
         NutritionDto totals,
         int ingredients,
         int counted,
         int unmatched,
-        int unmeasured) {
+        int unmeasured,
+        int countedByMeasure) {
+
+    /** A summary with nothing weighed through a household measure. */
+    public NutritionSummaryDto(NutritionDto totals, int ingredients, int counted, int unmatched,
+                               int unmeasured) {
+        this(totals, ingredients, counted, unmatched, unmeasured, 0);
+    }
 
     /** True when every ingredient contributed, so the totals stand on their own. */
     public boolean complete() {

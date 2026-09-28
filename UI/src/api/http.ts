@@ -33,8 +33,10 @@ async function messageOf(response: Response): Promise<string> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // A multipart body sets its own Content-Type, boundary included.
+  const json = init?.body && !(init.body instanceof FormData)
   const response = await fetch(BASE + path, {
-    headers: { Accept: 'application/json', ...(init?.body ? { 'Content-Type': 'application/json' } : {}) },
+    headers: { Accept: 'application/json', ...(json ? { 'Content-Type': 'application/json' } : {}) },
     ...init,
   })
   if (!response.ok) {
@@ -59,6 +61,8 @@ export const http = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) }),
+  /** A file upload: the form is sent as it is, never as JSON. */
+  postForm: <T>(path: string, form: FormData) => request<T>(path, { method: 'POST', body: form }),
   put: <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   patch: <T>(path: string, body: unknown) =>

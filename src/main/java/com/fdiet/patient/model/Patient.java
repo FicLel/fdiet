@@ -2,6 +2,8 @@ package com.fdiet.patient.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -10,7 +12,9 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 
 /**
  * Somebody a diet is written for.
@@ -46,6 +50,19 @@ public class Patient {
     @Column(name = "notes", length = 1000)
     private String notes;
 
+    /**
+     * Optional. It is what lets the editor suggest the ration profile for the
+     * patient's age; a patient without one is suggested the adult profile, and
+     * the nutritionist can always choose another.
+     */
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
+
+    /** Optional, and never inferred. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sex", length = 8)
+    private Sex sex;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -55,6 +72,14 @@ public class Patient {
     public Patient(String name, String notes) {
         this.name = name;
         this.notes = notes;
+    }
+
+    /** Whole months of age on that day, or null without a birth date. */
+    public Integer ageInMonths(LocalDate on) {
+        if (birthDate == null || on.isBefore(birthDate)) {
+            return null;
+        }
+        return (int) ChronoUnit.MONTHS.between(birthDate, on);
     }
 
     /** Stamps the creation time when the caller did not set one. */

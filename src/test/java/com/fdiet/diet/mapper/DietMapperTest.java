@@ -4,6 +4,7 @@ import com.fdiet.diet.dto.Dish;
 import com.fdiet.diet.dto.DishIngredient;
 import com.fdiet.diet.model.PlannedDish;
 import com.fdiet.diet.service.IDietNutritionService;
+import com.fdiet.reference.service.IReferenceService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -24,7 +25,7 @@ class DietMapperTest {
     private static final String CELL =
             "Tostada de pan integral (60 gr) con tomate rallado (80 gr)";
 
-    private final DietMapper mapper = new DietMapper(mock(IDietNutritionService.class));
+    private final DietMapper mapper = new DietMapper(mock(IDietNutritionService.class), mock(IReferenceService.class));
 
     @Test
     void carriesTheWrittenCellIntoTheEntityAndBackOut() {

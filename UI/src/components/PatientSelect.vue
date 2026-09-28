@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { usePatients } from '@/stores/patients'
+import type { Patient, Sex } from '@/api/types'
 
 /**
  * Who the screen is about, and how to add somebody it could be about.
@@ -22,10 +23,18 @@ defineProps<{
 const patients = usePatients()
 
 const open = ref(false)
+/** The add/edit form is showing. */
 const adding = ref(false)
+/** Which patient the form rewrites; null while it adds somebody new. */
+const editingId = ref<number | null>(null)
 const newName = ref('')
+/** Optional. They only suggest the reference profile a new diet is read against. */
+const birthDate = ref('')
+const sex = ref<Sex | ''>('')
 /** Which row is one click from being removed; only ever one at a time. */
 const confirming = ref<number | null>(null)
+
+const today = new Date().toISOString().slice(0, 10)
 
 const root = ref<HTMLElement | null>(null)
 const nameField = ref<HTMLInputElement | null>(null)
@@ -41,11 +50,18 @@ const meta = computed(() => {
 
 const initial = computed(() => label.value.trim().charAt(0).toUpperCase() || '·')
 
+function resetForm(): void {
+  adding.value = false
+  editingId.value = null
+  newName.value = ''
+  birthDate.value = ''
+  sex.value = ''
+}
+
 function close(): void {
   open.value = false
-  adding.value = false
   confirming.value = null
-  newName.value = ''
+  resetForm()
   patients.clearError()
 }
 
@@ -62,9 +78,16 @@ function pick(id: number): void {
   close()
 }
 
-async function startAdding(): Promise<void> {
+async function startAdding(patient?: Patient): Promise<void> {
+  resetForm()
   adding.value = true
   confirming.value = null
+  if (patient) {
+    editingId.value = patient.id
+    newName.value = patient.name
+    birthDate.value = patient.birthDate ?? ''
+    sex.value = patient.sex ?? ''
+  }
   patients.clearError()
   await nextTick()
   nameField.value?.focus()
@@ -75,9 +98,22 @@ async function add(): Promise<void> {
   if (name === '') {
     return
   }
+  const request = {
+    name,
+    birthDate: birthDate.value || null,
+    sex: sex.value || null,
+  }
+  if (editingId.value !== null) {
+    const patient = patients.patients.value.find((row) => row.id === editingId.value)
+    // The note is not on this form, so it is sent back as it was.
+    if (await patients.update(editingId.value, { ...request, notes: patient?.notes ?? null })) {
+      resetForm()
+    }
+    return
+  }
   // `create` switches to whoever was just added, which is what somebody who
   // has just typed a name wants next.
-  if (await patients.create(name)) {
+  if (await patients.create(request)) {
     close()
   }
 }
@@ -175,6 +211,19 @@ onBeforeUnmount(() => {
 
         <button
           class="remove"
+          type="button"
+          :disabled="patients.saving.value"
+          :title="`Editar a ${row.patient.name}`"
+          :aria-label="`Editar a ${row.patient.name}`"
+          @click="startAdding(row.patient)"
+        >
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9.5 2.5l2 2L5 11H3V9z" />
+          </svg>
+        </button>
+
+        <button
+          class="remove"
           :class="{ armed: confirming === row.patient.id }"
           type="button"
           :disabled="patients.saving.value"
@@ -193,6 +242,7 @@ onBeforeUnmount(() => {
 
       <div class="foot">
         <form v-if="adding" class="add-form" @submit.prevent="add()">
+          <span class="form-title">{{ editingId === null ? 'Nuevo paciente' : 'Editar paciente' }}</span>
           <input
             ref="nameField"
             v-model="newName"
@@ -200,15 +250,42 @@ onBeforeUnmount(() => {
             type="text"
             maxlength="255"
             placeholder="Nombre del paciente"
+            aria-label="Nombre"
             :disabled="patients.saving.value"
           />
-          <button
-            class="add-save"
-            type="submit"
-            :disabled="newName.trim() === '' || patients.saving.value"
-          >
-            Guardar
-          </button>
+          <div class="form-line">
+            <label class="mini">
+              <span>Nacimiento</span>
+              <input
+                v-model="birthDate"
+                class="add-field"
+                type="date"
+                :max="today"
+                :disabled="patients.saving.value"
+              />
+            </label>
+            <label class="mini">
+              <span>Sexo</span>
+              <select v-model="sex" class="add-field" :disabled="patients.saving.value">
+                <option value="">Sin indicar</option>
+                <option value="FEMALE">Mujer</option>
+                <option value="MALE">Hombre</option>
+              </select>
+            </label>
+          </div>
+          <p class="form-hint">
+            Opcionales. Sólo sirven para proponer la población de referencia de una dieta nueva.
+          </p>
+          <div class="form-line">
+            <button class="add-cancel" type="button" @click="resetForm()">Cancelar</button>
+            <button
+              class="add-save"
+              type="submit"
+              :disabled="newName.trim() === '' || patients.saving.value"
+            >
+              Guardar
+            </button>
+          </div>
         </form>
 
         <button v-else class="add" type="button" @click="startAdding()">
@@ -441,13 +518,54 @@ onBeforeUnmount(() => {
 
 .add-form {
   display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 7px 4px 5px;
+}
+
+.form-title {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sage-700);
+}
+
+.form-line {
+  display: flex;
   gap: 6px;
-  padding: 5px 4px;
+}
+
+.mini {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10.5px;
+  color: var(--ink-muted);
+}
+
+.form-hint {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--ink-faint);
+}
+
+.add-cancel {
+  flex: 1 1 0;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-weight: 500;
+  color: var(--ink);
 }
 
 .add-field {
   flex: 1 1 0;
   min-width: 0;
+  width: 100%;
   height: 32px;
   padding: 0 9px;
   border: 1px solid var(--line-input);
@@ -457,7 +575,7 @@ onBeforeUnmount(() => {
 }
 
 .add-save {
-  flex: none;
+  flex: 1 1 0;
   height: 32px;
   padding: 0 12px;
   border-radius: var(--radius);

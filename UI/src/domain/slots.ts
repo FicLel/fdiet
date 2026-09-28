@@ -50,7 +50,29 @@ export interface MealRow {
 
 export type GridRow = BandRow | MealRow
 
-/** The label the diet gave a meal, or the enum name if it never named it. */
+/** What a meal is called when the diet has not named it yet. */
+export const DEFAULT_MEAL_NAMES: Record<MealType, string> = {
+  BREAKFAST: 'Desayuno',
+  MORNING_SNACK: 'Media mañana',
+  LUNCH: 'Comida',
+  AFTERNOON_SNACK: 'Merienda',
+  DINNER: 'Cena',
+}
+
+/**
+ * The rows the editor offers whatever the diet already holds, so a new week has
+ * somewhere to be written and a written one has room for one more dish. Only
+ * the editor uses it: the patient reads the rows the week actually fills.
+ */
+const TEMPLATE_DISHES: Record<MealType, number> = {
+  BREAKFAST: 1,
+  MORNING_SNACK: 1,
+  LUNCH: 3,
+  AFTERNOON_SNACK: 1,
+  DINNER: 2,
+}
+
+/** The label the diet gave a meal, or the usual one if it never named it. */
 function mealName(diet: Diet, type: MealType): string {
   for (const day of diet.days) {
     const meal = day.meals.find((candidate) => candidate.type === type)
@@ -58,7 +80,7 @@ function mealName(diet: Diet, type: MealType): string {
       return meal.name
     }
   }
-  return type
+  return DEFAULT_MEAL_NAMES[type]
 }
 
 /** The most dishes any day puts in this meal — the number of rows it needs. */
@@ -71,10 +93,14 @@ function dishCount(diet: Diet, type: MealType): number {
   return most
 }
 
-export function buildRows(diet: Diet): GridRow[] {
+/**
+ * @param options.template also offer the editor's usual slots — five meals, three
+ *   dishes at lunch and two at dinner — where the diet has fewer.
+ */
+export function buildRows(diet: Diet, options: { template?: boolean } = {}): GridRow[] {
   const rows: GridRow[] = []
   for (const type of MEAL_ORDER) {
-    const dishes = dishCount(diet, type)
+    const dishes = Math.max(dishCount(diet, type), options.template ? TEMPLATE_DISHES[type] : 0)
     if (dishes === 0) {
       continue
     }

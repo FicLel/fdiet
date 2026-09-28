@@ -17,6 +17,10 @@ import java.util.List;
  * <p>{@code nutrition} is the whole week's total, and it carries the count of
  * ingredients nobody has matched yet: right after an import that count is most
  * of them, and the totals have to be read in its light.
+ *
+ * <p>{@code referenceProfileCode} is the ration profile the week is written
+ * against, null for none; {@code clinical} marks a diet written for a clinical
+ * situation.
  */
 public record DietDto(
         Long id,
@@ -26,6 +30,8 @@ public record DietDto(
         DietStatus status,
         LocalDate startedOn,
         LocalDate endedOn,
+        String referenceProfileCode,
+        boolean clinical,
         List<DietDay> days,
         NutritionSummaryDto nutrition) {
 }

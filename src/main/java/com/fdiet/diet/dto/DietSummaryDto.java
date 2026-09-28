@@ -16,5 +16,7 @@ public record DietSummaryDto(
         String name,
         DietStatus status,
         LocalDate startedOn,
-        LocalDate endedOn) {
+        LocalDate endedOn,
+        String referenceProfileCode,
+        boolean clinical) {
 }

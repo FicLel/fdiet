@@ -90,7 +90,8 @@ public class DietImportService implements IDietImportService {
 
     @Override
     public DietImportSummaryDto importWorkbook(InputStream workbook, Long patientId, String sheet,
-                                               String name, LocalDate startedOn) {
+                                               String name, LocalDate startedOn,
+                                               String referenceProfile, Boolean clinical) {
         SheetGridDto grid = workbookReader.read(workbook, sheet);
         List<DietDay> week = toWeek(grid);
         log.info("Parsed {} days from sheet '{}' for patient {}", week.size(), grid.name(),
@@ -98,7 +99,9 @@ public class DietImportService implements IDietImportService {
 
         String dietName = Texts.clean(name == null ? grid.name() : name, NAME_MAX);
         DietDto stored = dietService.create(new DietRequestDto(
-                patientId, dietName, startedOn == null ? LocalDate.now() : startedOn, week));
+                patientId, dietName, startedOn == null ? LocalDate.now() : startedOn, week,
+                // Blank passes through: it is somebody choosing no profile.
+                referenceProfile == null ? null : referenceProfile.trim(), clinical));
 
         return summaryOf(stored, grid.name());
     }

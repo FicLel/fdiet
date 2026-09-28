@@ -4,6 +4,7 @@ import com.fdiet.diet.dto.CopyDietRequestDto;
 import com.fdiet.diet.dto.MealType;
 import com.fdiet.diet.exception.DietNotFoundException;
 import com.fdiet.diet.helpers.IMealTextParser;
+import com.fdiet.diet.helpers.PortionScaler;
 import com.fdiet.diet.mapper.IDietMapper;
 import com.fdiet.diet.model.DietPlan;
 import com.fdiet.diet.model.DietStatus;
@@ -18,6 +19,7 @@ import com.fdiet.food.service.IBedcaFoodService;
 import com.fdiet.food.service.IFoodItemService;
 import com.fdiet.patient.model.Patient;
 import com.fdiet.patient.service.IPatientService;
+import com.fdiet.reference.service.IReferenceService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -61,6 +63,9 @@ class DietServiceCopyTest {
             mock(IFoodItemService.class),
             mock(IBedcaFoodService.class),
             patientService,
+            mock(IReferenceService.class),
+            new PortionScaler(),
+            mock(IDietRationService.class),
             5);
 
     @Test

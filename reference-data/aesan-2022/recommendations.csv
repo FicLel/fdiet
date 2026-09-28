@@ -1,0 +1,11 @@
+code,population_code,label,group_codes,rations_min,rations_max,period,page_ref,note
+AESAN-2022:R-HORTALIZAS-FRUTAS,AESAN-2022:ADULTOS,Hortalizas y frutas,HORTALIZAS;FRUTAS,5,,PER_DAY,"Revista del Comité Científico nº 36, p. 50",Una ingesta mínima de 5 raciones diarias.
+AESAN-2022:R-HORTALIZAS,AESAN-2022:ADULTOS,Hortalizas,HORTALIZAS,3,,PER_DAY,"Revista del Comité Científico nº 36, p. 50","Al menos 3 raciones de hortalizas al día."
+AESAN-2022:R-FRUTAS,AESAN-2022:ADULTOS,Frutas,FRUTAS,2,3,PER_DAY,"Revista del Comité Científico nº 36, p. 50",2-3 raciones de frutas al día. El zumo no sustituye a la fruta entera.
+AESAN-2022:R-CEREALES,AESAN-2022:ADULTOS,Cereales,CEREALES,3,6,PER_DAY,"Revista del Comité Científico nº 36, pp. 50-51","Según las necesidades energéticas; no más de 4 si hay que restringir la ingesta calórica. Priorizar grano entero."
+AESAN-2022:R-LEGUMBRES,AESAN-2022:ADULTOS,Legumbres,LEGUMBRES,4,,PER_WEEK,"Revista del Comité Científico nº 36, p. 51","Al menos 4 raciones a la semana, hasta llegar a un consumo diario."
+AESAN-2022:R-FRUTOS-SECOS,AESAN-2022:ADULTOS,Frutos secos,FRUTOS_SECOS,3,7,PER_WEEK,"Revista del Comité Científico nº 36, p. 51","3 o más raciones a la semana, hasta 1 ración diaria. Sin sal, grasas ni azúcares añadidos."
+AESAN-2022:R-PESCADO,AESAN-2022:ADULTOS,Pescado,PESCADO,3,,PER_WEEK,"Revista del Comité Científico nº 36, p. 51","3 o más raciones a la semana, priorizando el pescado azul."
+AESAN-2022:R-HUEVOS,AESAN-2022:ADULTOS,Huevos,HUEVOS,,4,PER_WEEK,"Revista del Comité Científico nº 36, p. 51",Hasta 4 huevos a la semana; la ración es 1 huevo mediano.
+AESAN-2022:R-LACTEOS,AESAN-2022:ADULTOS,Leche y productos lácteos,LACTEOS,,3,PER_DAY,"Revista del Comité Científico nº 36, p. 51","Un máximo de 3 raciones al día; menos si se consumen otros alimentos de origen animal."
+AESAN-2022:R-CARNE,AESAN-2022:ADULTOS,Carne,CARNE,,3,PER_WEEK,"Revista del Comité Científico nº 36, p. 51","Un máximo de 3 raciones a la semana, priorizando aves y conejo y minimizando la carne procesada."

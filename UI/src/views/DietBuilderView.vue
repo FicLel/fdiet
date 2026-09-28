@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import EditorHeader from '@/components/EditorHeader.vue'
 import GoalStrip from '@/components/GoalStrip.vue'
+import RationsStrip from '@/components/RationsStrip.vue'
 import WeekGrid from '@/components/WeekGrid.vue'
 import DishEditPanel from '@/components/DishEditPanel.vue'
 import FoodLinkPanel from '@/components/FoodLinkPanel.vue'
+import NewDietDialog from '@/components/NewDietDialog.vue'
+import AttributionFooter from '@/components/AttributionFooter.vue'
 import { useDietDraft } from '@/stores/dietDraft'
 import { useFoodLink } from '@/stores/foodLink'
 import { usePatients } from '@/stores/patients'
+import { useRations } from '@/stores/rations'
+import { useReference } from '@/stores/reference'
 import type { DishTotals } from '@/domain/nutrition'
 
 /**
@@ -22,13 +27,21 @@ import type { DishTotals } from '@/domain/nutrition'
 const draft = useDietDraft()
 const link = useFoodLink()
 const patients = usePatients()
+const rations = useRations()
+const reference = useReference()
+
+/** Which way the new-diet dialog opens, or null while it is closed. */
+const dialog = ref<'blank' | 'import' | null>(null)
 
 onMounted(async () => {
+  void reference.ensure().catch(() => undefined)
   if (patients.status.value === 'idle') {
     await patients.load()
   }
   if (draft.status.value === 'idle') {
     void draft.load()
+  } else {
+    void rations.load(draft.diet.value?.id ?? null)
   }
 })
 
@@ -39,6 +52,20 @@ onMounted(async () => {
 watch(patients.selectedId, () => {
   void draft.load()
 })
+
+/**
+ * The ration count is of the stored week, so it is read again whenever the
+ * stored week changes: a load, a publish, a match, a new profile.
+ */
+watch(draft.diet, (plan) => {
+  void rations.load(plan?.id ?? null)
+})
+
+/** The day the rail is on, so the strip counts the day being written. */
+const rationDay = computed(() => draft.selectedDay.value?.day ?? draft.days.value[0]?.day ?? null)
+
+/** BEDCA always; every reference source the count used, once there is a count. */
+const sources = computed(() => rations.rations.value?.sources ?? [])
 
 /** Every ingredient of the week, so the goal strip can show what it counted. */
 const week = computed<DishTotals>(() =>
@@ -75,6 +102,7 @@ const week = computed<DishTotals>(() =>
       :publishing="draft.publishing.value"
       @discard="draft.discardAll()"
       @publish="draft.publish()"
+      @new-diet="dialog = 'blank'"
     />
 
     <GoalStrip
@@ -85,6 +113,16 @@ const week = computed<DishTotals>(() =>
       @review="link.review()"
     />
 
+    <RationsStrip
+      v-if="draft.status.value === 'ready'"
+      :rations="rations.rations.value"
+      :loading="rations.status.value === 'loading'"
+      :error="rations.error.value"
+      :day="rationDay"
+      :dirty-count="draft.dirtyCount.value"
+      :profile-label="reference.profileLabel(draft.diet.value?.referenceProfileCode)"
+    />
+
     <p v-if="draft.error.value && draft.status.value === 'ready'" class="banner">
       {{ draft.error.value }}
     </p>
@@ -93,7 +131,13 @@ const week = computed<DishTotals>(() =>
 
     <div v-else-if="draft.status.value === 'error'" class="state">
       <p>{{ draft.error.value }}</p>
-      <button class="retry" type="button" @click="draft.load()">Reintentar</button>
+      <div v-if="draft.missing.value" class="actions">
+        <button class="retry" type="button" @click="dialog = 'blank'">Semana en blanco</button>
+        <button class="secondary" type="button" @click="dialog = 'import'">Importar Excel</button>
+      </div>
+      <button v-else-if="patients.any.value" class="retry" type="button" @click="draft.load()">
+        Reintentar
+      </button>
     </div>
 
     <div v-else class="body">
@@ -112,6 +156,10 @@ const week = computed<DishTotals>(() =>
       <FoodLinkPanel v-if="link.open.value" />
       <DishEditPanel v-else />
     </div>
+
+    <AttributionFooter :sources="sources" />
+
+    <NewDietDialog v-if="dialog" :mode="dialog" @close="dialog = null" />
   </div>
 </template>
 
@@ -157,6 +205,28 @@ const week = computed<DishTotals>(() =>
   font-weight: 500;
   color: var(--surface);
   background: var(--sage-700);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.secondary {
+  height: 34px;
+  padding: 0 15px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.state p {
+  max-width: 520px;
+  margin: 0;
+  text-align: center;
+  line-height: 1.5;
 }
 
 .banner {

@@ -16,6 +16,9 @@ import com.fdiet.diet.service.FoodMatch;
 import com.fdiet.diet.service.IDietNutritionService;
 import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.model.FoodItem;
+import com.fdiet.reference.domain.FoodState;
+import com.fdiet.reference.model.ReferenceFoodMeasure;
+import com.fdiet.reference.service.IReferenceService;
 import org.springframework.stereotype.Component;
 
 import java.time.DayOfWeek;
@@ -28,14 +31,17 @@ import java.util.Map;
 public class DietMapper implements IDietMapper {
 
     private final IDietNutritionService dietNutritionService;
+    private final IReferenceService referenceService;
 
     /**
      * The totals are worked out here because this is where the shape that
-     * crosses the boundary is assembled, and the service handing them over sits
+     * crosses the boundary is assembled, and the services handing them over sit
      * in the same layer — one level talking to itself, not a layer crossing.
      */
-    public DietMapper(IDietNutritionService dietNutritionService) {
+    public DietMapper(IDietNutritionService dietNutritionService,
+                      IReferenceService referenceService) {
         this.dietNutritionService = dietNutritionService;
+        this.referenceService = referenceService;
     }
 
     @Override
@@ -48,6 +54,8 @@ public class DietMapper implements IDietMapper {
                 plan.getStatus(),
                 plan.getStartedOn(),
                 plan.getEndedOn(),
+                plan.getReferenceProfileCode(),
+                plan.isClinical(),
                 toDays(plan),
                 dietNutritionService.summarise(ingredientsOf(plan.getMeals())));
     }
@@ -61,7 +69,9 @@ public class DietMapper implements IDietMapper {
                 plan.getName(),
                 plan.getStatus(),
                 plan.getStartedOn(),
-                plan.getEndedOn());
+                plan.getEndedOn(),
+                plan.getReferenceProfileCode(),
+                plan.isClinical());
     }
 
     /**
@@ -107,18 +117,31 @@ public class DietMapper implements IDietMapper {
                 dish.getIngredients().stream().map(this::toDto).toList());
     }
 
+    /**
+     * A state disagreement is read against what the matched food's own name says
+     * — {@code Lenteja, hervida} is cooked — and is shown, never converted: how
+     * much 70 g of raw rice weighs once boiled is a yield factor somebody has to
+     * choose.
+     */
     @Override
     public DishIngredient toDto(PlannedIngredient ingredient) {
         FoodItem foodItem = ingredient.getFoodItem();
         BedcaFood bedcaFood = ingredient.getBedcaFood();
+        ReferenceFoodMeasure measure = ingredient.getFoodMeasure();
         return new DishIngredient(
                 ingredient.getId(),
                 ingredient.getRawName(),
                 ingredient.getQuantity(),
                 ingredient.getUnit(),
+                ingredient.getState(),
+                ingredient.getSize(),
                 foodItem == null ? null : foodItem.getId(),
                 bedcaFood == null ? null : bedcaFood.getId(),
+                measure == null ? null : measure.getId(),
                 matchedNameOf(foodItem, bedcaFood),
+                referenceService.describe(measure),
+                bedcaFood != null && FoodState.disagree(
+                        ingredient.getState(), FoodState.ofFoodName(bedcaFood.getName())),
                 dietNutritionService.of(ingredient),
                 null);
     }
@@ -134,13 +157,18 @@ public class DietMapper implements IDietMapper {
     }
 
     @Override
-    public PlannedIngredient toEntity(DishIngredient ingredient, FoodMatch match) {
-        return new PlannedIngredient(
+    public PlannedIngredient toEntity(DishIngredient ingredient, FoodMatch match,
+                                      ReferenceFoodMeasure measure) {
+        PlannedIngredient entity = new PlannedIngredient(
                 ingredient.name(),
                 match == null ? null : match.foodItem(),
                 match == null ? null : match.bedcaFood(),
                 ingredient.quantity(),
                 ingredient.unit());
+        entity.setState(ingredient.state());
+        entity.setSize(ingredient.size());
+        entity.setFoodMeasure(measure);
+        return entity;
     }
 
     /** What the catalogue calls the food, so a matched row reads as matched. */

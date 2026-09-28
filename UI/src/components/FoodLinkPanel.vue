@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useFoodLink } from '@/stores/foodLink'
 import { integer, NO_VALUE, quantity } from '@/domain/format'
+import { measureSource, measureText, perMeasure } from '@/domain/rations'
 import { dayName } from '@/domain/week'
 
 /**
@@ -49,6 +50,45 @@ const listNote = computed(() => {
     : 'Ordenados por parecido; ninguno está elegido.'
 })
 
+/** The nutritionist's own weight for this measure, for this diet. */
+const ownValue = ref<number | null>(null)
+const ownUnit = ref<'g' | 'ml'>('g')
+const ownNote = ref('')
+const ownSaved = ref<string | null>(null)
+
+const currentMeasure = computed(() => {
+  const measure = at.value?.measure
+  if (!measure) {
+    return null
+  }
+  return `${perMeasure(measure) ?? measureText(measure)} · ${measureSource(measure)}`
+})
+
+async function saveOwn(): Promise<void> {
+  ownSaved.value = null
+  if (ownValue.value === null) {
+    return
+  }
+  const attached = await link.saveOwnMeasure(ownValue.value, ownUnit.value, ownNote.value)
+  if (attached !== null) {
+    ownSaved.value =
+      attached === 1
+        ? 'Guardado para esta dieta y aplicado a 1 ingrediente.'
+        : `Guardado para esta dieta y aplicado a ${attached} ingredientes.`
+    ownValue.value = null
+    ownNote.value = ''
+  }
+}
+
+watch(
+  () => at.value?.id,
+  () => {
+    ownSaved.value = null
+    ownValue.value = null
+    ownNote.value = ''
+  },
+)
+
 /** The keyboard lands in the search box, which is what the drawer is for. */
 watch(
   () => at.value?.id,
@@ -81,6 +121,76 @@ watch(
         <div v-if="at.matchedName" class="current">
           Ahora vinculado a <strong>{{ at.matchedName }}</strong>
         </div>
+        <div v-if="at.stateMismatch" class="current warn">
+          Escrito en otro estado que el alimento vinculado (crudo frente a cocinado). Sus pesos no
+          son intercambiables: busca la versión que corresponde.
+        </div>
+      </div>
+
+      <!-- A matched generic food written in a household measure: what one of
+           those weighs is the question, not which food it is. -->
+      <div v-if="link.measurable.value" class="measures scroll">
+        <div class="measures-head">
+          <span class="title">Peso de «{{ at.unit }}»</span>
+          <span v-if="link.loadingMeasures.value" class="note inline">Buscando medidas…</span>
+        </div>
+        <p class="note">
+          <template v-if="currentMeasure">Pesa con <strong>{{ currentMeasure }}</strong>.</template>
+          <template v-else>Sin peso: no cuenta en las cifras hasta que algo lo pese.</template>
+        </p>
+
+        <button
+          v-for="measure in link.measures.value"
+          :key="measure.id"
+          class="measure"
+          :class="{ on: at.measure?.id === measure.id }"
+          type="button"
+          :disabled="measure.gramsPerMeasure === null || link.savingMeasure.value"
+          :title="[measure.note, measure.pageRef].filter(Boolean).join(' · ')"
+          @click="link.pickMeasure(measure)"
+        >
+          <span class="measure-main">{{ measureText(measure) }}</span>
+          <span class="measure-meta">
+            {{ measureSource(measure) }}
+            <template v-if="measure.gramsPerMeasure === null"> · rango, no pesa</template>
+            <template v-else> · {{ perMeasure(measure) }}</template>
+          </span>
+        </button>
+        <p v-if="!link.loadingMeasures.value && link.measures.value.length === 0" class="note">
+          Ninguna fuente cargada publica esta medida para este alimento.
+        </p>
+
+        <form class="own" @submit.prevent="saveOwn()">
+          <span class="own-title">Criterio para esta dieta</span>
+          <div class="own-line">
+            <span class="own-lead">1 {{ at.unit }} =</span>
+            <input
+              v-model.number="ownValue"
+              class="own-input num"
+              type="number"
+              min="0.1"
+              step="0.1"
+              aria-label="Peso de una medida"
+            />
+            <select v-model="ownUnit" class="own-input unit" aria-label="Unidad">
+              <option value="g">g</option>
+              <option value="ml">ml</option>
+            </select>
+            <button
+              class="own-save"
+              type="submit"
+              :disabled="ownValue === null || ownValue <= 0 || link.savingMeasure.value"
+            >
+              Guardar
+            </button>
+          </div>
+          <input v-model="ownNote" class="own-input" type="text" maxlength="500" placeholder="Nota (opcional)" />
+          <p class="note">
+            Sólo para esta dieta, y para todos sus «{{ at.unit }}» de este alimento. Queda anotado como
+            criterio tuyo, no como dato publicado.
+          </p>
+          <p v-if="ownSaved" class="note ok">{{ ownSaved }}</p>
+        </form>
       </div>
 
       <div class="queue">
@@ -284,6 +394,142 @@ watch(
 .current strong {
   font-weight: 500;
   color: var(--ink-strong);
+}
+
+.current.warn {
+  background: var(--amber-50);
+  color: var(--amber-700);
+}
+
+.measures {
+  flex: none;
+  max-height: 46%;
+  overflow-y: auto;
+  padding: 10px 15px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.measures-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.measures .note {
+  margin: 0;
+}
+
+.note.inline {
+  margin-left: auto;
+}
+
+.note strong {
+  font-weight: 500;
+  color: var(--ink-strong);
+}
+
+.note.ok {
+  color: var(--sage-700);
+}
+
+.measure {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  text-align: left;
+  background: var(--surface);
+}
+
+.measure:hover:not(:disabled) {
+  border-color: var(--sage-200);
+  background: var(--sage-50);
+}
+
+.measure.on {
+  border-color: var(--sage-600);
+  background: var(--sage-50);
+}
+
+.measure:disabled:not(.on) {
+  opacity: 0.6;
+}
+
+.measure-main {
+  font-size: 11.5px;
+  color: var(--ink-strong);
+}
+
+.measure-meta {
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}
+
+.own {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.own-title {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.own-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.own-lead {
+  font-size: 11.5px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.own-input {
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--line-input);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.own-line .own-input {
+  width: 70px;
+}
+
+.own-line .own-input.unit {
+  width: 56px;
+}
+
+.own-save {
+  margin-left: auto;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--surface);
+  background: var(--sage-700);
+}
+
+.own-save:disabled {
+  background: #c2ccc6;
 }
 
 .queue {

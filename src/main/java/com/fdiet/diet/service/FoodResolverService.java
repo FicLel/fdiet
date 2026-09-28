@@ -5,6 +5,7 @@ import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.model.FoodItem;
 import com.fdiet.food.service.IBedcaFoodService;
 import com.fdiet.food.service.IFoodItemService;
+import com.fdiet.reference.domain.PortionSize;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -17,7 +18,7 @@ import java.util.Objects;
 import java.util.function.Function;
 
 /**
- * Resolves ingredient names against both halves of the catalogue, in four
+ * Resolves ingredient names against both halves of the catalogue, in six
  * batched queries at most, whatever the size of the week.
  *
  * <p>The composition database is asked first: it holds the generic foods a diet
@@ -62,6 +63,25 @@ public class FoodResolverService implements IFoodResolverService {
 
         Map<String, FoodMatch> resolved = new LinkedHashMap<>();
         generic.resolve(wanted).forEach((name, food) -> resolved.put(name, FoodMatch.of(food)));
+
+        // "kiwi mediano" is a kiwi: a size says how big the piece is, not which
+        // food it is. Still an exact match, on the name without that one word.
+        Map<String, String> sizeless = new LinkedHashMap<>();
+        wanted.stream().filter(name -> !resolved.containsKey(name)).forEach(name -> {
+            String stripped = Texts.normaliseName(PortionSize.withoutSize(name));
+            if (stripped != null) {
+                sizeless.put(name, stripped);
+            }
+        });
+        if (!sizeless.isEmpty()) {
+            Map<String, BedcaFood> found = generic.resolve(sizeless.values().stream().distinct().toList());
+            sizeless.forEach((name, stripped) -> {
+                BedcaFood food = found.get(stripped);
+                if (food != null) {
+                    resolved.put(name, FoodMatch.of(food));
+                }
+            });
+        }
 
         List<String> rest = wanted.stream().filter(name -> !resolved.containsKey(name)).toList();
         if (!rest.isEmpty()) {

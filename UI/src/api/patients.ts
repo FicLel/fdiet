@@ -1,10 +1,16 @@
 import { http } from './http'
-import type { Patient } from './types'
+import type { Patient, Sex } from './types'
 
-/** A patient as they are written down. The name is required and must be free. */
+/**
+ * A patient as they are written down. The name is required and must be free;
+ * birth date and sex are optional and only suggest a reference profile.
+ */
 export interface PatientRequest {
   name: string
   notes?: string | null
+  /** `yyyy-mm-dd`, not in the future. */
+  birthDate?: string | null
+  sex?: Sex | null
 }
 
 /**

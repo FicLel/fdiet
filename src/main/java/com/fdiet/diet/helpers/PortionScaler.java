@@ -61,4 +61,43 @@ public class PortionScaler implements IPortionScaler {
         }
         return quantity.multiply(gramsPerUnit).divide(PER, SCALE, RoundingMode.HALF_UP);
     }
+
+    /**
+     * A household measure is only used for a unit this table cannot weigh: "80 g"
+     * is 80 g whatever measure was once attached to the ingredient. The measure
+     * weighs one unit of it; a gross weight is cut to the edible part by the
+     * food's published edible fraction, and left unweighed when that fraction is
+     * unknown — composition figures are per 100 g of what is eaten.
+     */
+    @Override
+    public Weighed weigh(BigDecimal quantity, String unit, MeasureWeight measure) {
+        BigDecimal direct = factorOf(quantity, unit);
+        if (direct != null) {
+            return new Weighed(direct, false);
+        }
+        if (quantity == null || quantity.signum() <= 0 || measure == null
+                || measure.gramsPerMeasure() == null) {
+            return null;
+        }
+        BigDecimal grams = quantity.multiply(measure.gramsPerMeasure());
+        if (measure.gross()) {
+            BigDecimal edible = measure.ediblePortion();
+            if (edible == null || edible.signum() <= 0 || edible.compareTo(BigDecimal.ONE) > 0) {
+                return null;
+            }
+            grams = grams.multiply(edible);
+        }
+        return new Weighed(grams.divide(PER, SCALE, RoundingMode.HALF_UP), true);
+    }
+
+    @Override
+    public boolean weighsDirectly(String unit) {
+        return isWeightOrVolume(unit);
+    }
+
+    /** Whether the unit is one of the weights or volumes this table knows. */
+    public static boolean isWeightOrVolume(String unit) {
+        String key = Texts.key(unit);
+        return key != null && GRAMS_PER_UNIT.containsKey(key);
+    }
 }

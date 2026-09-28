@@ -1,0 +1,2 @@
+code,source_code,label,age_min_months,age_max_months,context,meal_shares_from,meal_shares_note,selectable
+AESAN-2022:ADULTOS,AESAN-2022-007,Población española adulta,216,,"Recomendaciones dietéticas sostenibles para la población general; las raciones del informe son para adultos",AESAN-MEC-2010:ESCOLAR,"Reparto tomado del Documento de consenso escolar AESAN/MEC 2010: ninguna fuente española de nivel 1 publica un reparto de la energía por comidas para adultos.",true

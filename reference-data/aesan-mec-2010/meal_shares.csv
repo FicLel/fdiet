@@ -1,0 +1,6 @@
+code,population_code,meal_type,pct_min,pct_max,page_ref,note
+AESAN-MEC-2010:S-DESAYUNO,AESAN-MEC-2010:ESCOLAR,BREAKFAST,15,25,"Anexo III, p. 15","25 % en el desayuno, o 15 % si el desayuno es ligero y 10 % a media mañana."
+AESAN-MEC-2010:S-MEDIA-MANANA,AESAN-MEC-2010:ESCOLAR,MORNING_SNACK,0,10,"Anexo III, p. 15","10 % sólo cuando el desayuno es ligero (15 %)."
+AESAN-MEC-2010:S-COMIDA,AESAN-MEC-2010:ESCOLAR,LUNCH,35,35,"Anexo III, p. 15",
+AESAN-MEC-2010:S-MERIENDA,AESAN-MEC-2010:ESCOLAR,AFTERNOON_SNACK,10,10,"Anexo III, p. 15",
+AESAN-MEC-2010:S-CENA,AESAN-MEC-2010:ESCOLAR,DINNER,30,30,"Anexo III, p. 15",

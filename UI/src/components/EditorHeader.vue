@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import AppLogo from './AppLogo.vue'
 import PatientSelect from './PatientSelect.vue'
 import CopyDietMenu from './CopyDietMenu.vue'
+import DietSettingsMenu from './DietSettingsMenu.vue'
 import { weekLabel } from '@/domain/week'
 
 /**
@@ -17,7 +18,7 @@ const props = defineProps<{
   publishing: boolean
 }>()
 
-defineEmits<{ discard: []; publish: [] }>()
+defineEmits<{ discard: []; publish: []; newDiet: [] }>()
 
 const label = computed(() => `Semana del ${weekLabel(props.monday)}`)
 
@@ -41,7 +42,13 @@ const dirtyLabel = computed(() => {
 
     <span class="num week">{{ label }}</span>
 
+    <DietSettingsMenu />
+
     <span class="spacer" />
+
+    <button class="to-patient" type="button" title="Empezar o importar otra semana" @click="$emit('newDiet')">
+      Nueva dieta
+    </button>
 
     <CopyDietMenu />
 

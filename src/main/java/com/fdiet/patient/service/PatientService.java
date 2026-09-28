@@ -48,8 +48,10 @@ public class PatientService implements IPatientService {
     public PatientDto create(PatientRequestDto request) {
         String name = nameOf(request);
         requireNameFree(name, null);
-        return patientMapper.toDto(
-                patientRepository.save(new Patient(name, notesOf(request))));
+        Patient patient = new Patient(name, notesOf(request));
+        patient.setBirthDate(request.birthDate());
+        patient.setSex(request.sex());
+        return patientMapper.toDto(patientRepository.save(patient));
     }
 
     @Override
@@ -60,6 +62,8 @@ public class PatientService implements IPatientService {
         requireNameFree(name, id);
         patient.setName(name);
         patient.setNotes(notesOf(request));
+        patient.setBirthDate(request.birthDate());
+        patient.setSex(request.sex());
         return patientMapper.toDto(patientRepository.save(patient));
     }
 

@@ -2,8 +2,13 @@ package com.fdiet.diet.model;
 
 import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.model.FoodItem;
+import com.fdiet.reference.domain.FoodState;
+import com.fdiet.reference.domain.PortionSize;
+import com.fdiet.reference.model.ReferenceFoodMeasure;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -27,8 +32,9 @@ import java.math.BigDecimal;
  * and matched later rather than dropped, which would silently lose part of the
  * week.
  *
- * <p>The quantity keeps its own unit (g, ml, unidad) rather than being forced
- * into grams.
+ * <p>The quantity keeps its own unit (g, ml, unidad, cdta) rather than being
+ * forced into grams. A unit that is a household measure is weighed through
+ * {@link #foodMeasure} when one is attached, and not at all when none is.
  */
 @Entity
 @Table(name = "diet_ingredients")
@@ -58,6 +64,15 @@ public class PlannedIngredient {
     @JoinColumn(name = "bedca_food_id")
     private BedcaFood bedcaFood;
 
+    /**
+     * The household measure that weighs a quantity written in one ("1 cdta",
+     * "1 kiwi"), and who says what it weighs. Attached like a food match:
+     * automatically only when the choice is not a judgement.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "food_measure_id")
+    private ReferenceFoodMeasure foodMeasure;
+
     /** What the diet called this food. Never null, matched or not. */
     @Column(name = "raw_name", length = 255, nullable = false)
     private String rawName;
@@ -67,6 +82,16 @@ public class PlannedIngredient {
 
     @Column(name = "unit", length = 32, nullable = false)
     private String unit;
+
+    /** The raw/cooked word the text carried, or null when it carried none. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "state", length = 16)
+    private FoodState state;
+
+    /** "Pequeña", "mediana", "grande", when the text said so. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "portion_size", length = 8)
+    private PortionSize size;
 
     /** Its place in the dish, from 0. Unique within the dish. */
     @Column(name = "position", nullable = false)

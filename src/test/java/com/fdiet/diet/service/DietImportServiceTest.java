@@ -124,7 +124,7 @@ class DietImportServiceTest {
         when(reader.read(any(), any())).thenReturn(new SheetGridDto("Dieta 1", GRID));
         when(dietService.create(any())).thenAnswer(call -> asStored(call.getArgument(0)));
 
-        DietImportSummaryDto summary = importService.importWorkbook(workbook(), PATIENT_ID, null, null, null);
+        DietImportSummaryDto summary = importService.importWorkbook(workbook(), PATIENT_ID, null, null, null, null, null);
 
         assertThat(summary.sheet()).isEqualTo("Dieta 1");
         assertThat(summary.days()).isEqualTo(2);
@@ -141,7 +141,7 @@ class DietImportServiceTest {
         when(reader.read(any(), any())).thenReturn(new SheetGridDto("Hoja1",
                 List.of(List.of("", "Semana 1"), List.of("Desayuno", "Tostada (60 gr)"))));
 
-        assertThatThrownBy(() -> importService.importWorkbook(workbook(), PATIENT_ID, null, null, null))
+        assertThatThrownBy(() -> importService.importWorkbook(workbook(), PATIENT_ID, null, null, null, null, null))
                 .isInstanceOf(InvalidDietException.class)
                 .hasMessageContaining("no day names");
     }
@@ -151,7 +151,7 @@ class DietImportServiceTest {
         when(reader.read(any(), any())).thenReturn(new SheetGridDto("Dieta 1", GRID));
         when(dietService.create(any())).thenAnswer(call -> asStored(call.getArgument(0)));
 
-        importService.importWorkbook(workbook(), PATIENT_ID, null, null, null);
+        importService.importWorkbook(workbook(), PATIENT_ID, null, null, null, null, null);
 
         ArgumentCaptor<DietRequestDto> captor = ArgumentCaptor.forClass(DietRequestDto.class);
         verify(dietService).create(captor.capture());
@@ -160,7 +160,7 @@ class DietImportServiceTest {
 
     private static DietDto asStored(DietRequestDto request) {
         return new DietDto(1L, request.patientId(), "Victor", request.name(), DietStatus.ACTIVE,
-                request.startedOn(), null, request.days(), null);
+                request.startedOn(), null, request.referenceProfileCode(), false, request.days(), null);
     }
 
     private static MealDto mealOf(DietRequestDto diet, DayOfWeek day, MealType type) {

@@ -1,8 +1,25 @@
 import { computed, reactive, ref, shallowRef, triggerRef } from 'vue'
 import { ApiError } from '@/api/http'
-import { dietsApi, type DietRequest, type RequestDish, type RequestMeal } from '@/api/diets'
+import {
+  dietsApi,
+  type DietRequest,
+  type DietSettings,
+  type ImportDietRequest,
+  type RequestDish,
+  type RequestMeal,
+} from '@/api/diets'
 import { usePatients } from '@/stores/patients'
-import type { DayOfWeek, Diet, Dish, DishIngredient, MealType } from '@/api/types'
+import type {
+  DayOfWeek,
+  Diet,
+  DietImportSummary,
+  Dish,
+  DishIngredient,
+  FoodMeasure,
+  FoodState,
+  MealType,
+  PortionSize,
+} from '@/api/types'
 import { buildRows, cellKey, dishAt, mealOf, type GridRow, type MealRow } from '@/domain/slots'
 import { renderDish } from '@/domain/dishText'
 import { dishTotals, type DishTotals } from '@/domain/nutrition'
@@ -64,8 +81,25 @@ export interface IngredientAt {
   unit: string
   /** The catalogue's own name for the food, when it is already matched. */
   matchedName: string | null
+  bedcaFoodId: number | null
+  foodItemId: number | null
+  state: FoodState | null
+  size: PortionSize | null
+  measure: FoodMeasure | null
+  /** Matched, but nothing weighs the unit it is written in. */
+  unweighed: boolean
+  stateMismatch: boolean
   row: MealRow
   day: DayOfWeek
+}
+
+/** Matched to a food, and still in no total: nothing weighs the unit it is written in. */
+export function isUnweighed(ingredient: DishIngredient): boolean {
+  return (
+    (ingredient.bedcaFoodId !== null || ingredient.foodItemId !== null) &&
+    (ingredient.nutrition === null ||
+      Object.values(ingredient.nutrition).every((value) => value === null))
+  )
 }
 
 /** Where an ingredient of a stored cell sits, or null if it has no row yet. */
@@ -82,6 +116,13 @@ export function locate(
         quantity: ingredient.quantity,
         unit: ingredient.unit,
         matchedName: ingredient.matchedName,
+        bedcaFoodId: ingredient.bedcaFoodId,
+        foodItemId: ingredient.foodItemId,
+        state: ingredient.state,
+        size: ingredient.size,
+        measure: ingredient.measure,
+        unweighed: isUnweighed(ingredient),
+        stateMismatch: ingredient.stateMismatch,
         row,
         day,
       }
@@ -98,6 +139,8 @@ export interface DayColumn {
 
 const diet = shallowRef<Diet | null>(null)
 const status = ref<'idle' | 'loading' | 'ready' | 'error'>('idle')
+/** The selected patient has no diet in force — not a failure, a week still to be written. */
+const missing = ref(false)
 const publishing = ref(false)
 const error = ref<string | null>(null)
 const edits = reactive<Record<string, CellEdit>>({})
@@ -116,21 +159,26 @@ const targetKcal = ref(PLACEHOLDER_TARGET_KCAL)
 
 const parseTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
-const rows = computed<GridRow[]>(() => (diet.value ? buildRows(diet.value) : []))
+const rows = computed<GridRow[]>(() =>
+  diet.value ? buildRows(diet.value, { template: true }) : [],
+)
 
 const mealRows = computed<MealRow[]>(() =>
   rows.value.filter((row): row is MealRow => row.kind === 'meal'),
 )
 
-/** The days the diet actually has, Monday first, dated off `startedOn`. */
+/**
+ * Every day of the week, Monday first, dated off `startedOn`. The editor offers
+ * all seven whatever the diet fills: a new week starts with none of them, and a
+ * day nobody has written is a column waiting, not one that does not exist.
+ */
 const days = computed<DayColumn[]>(() => {
   const plan = diet.value
   if (!plan) {
     return []
   }
   const first = mondayOf(plan.startedOn)
-  const present = new Set(plan.days.map((day) => day.day))
-  return WEEK.filter((day) => present.has(day)).map((day) => {
+  return WEEK.map((day) => {
     const date = addDays(first, WEEK.indexOf(day))
     return {
       day,
@@ -147,7 +195,9 @@ const monday = computed(() => (diet.value ? mondayOf(diet.value.startedOn) : new
 const dirtyCount = computed(() => Object.keys(edits).length)
 
 const weekAverageKcal = computed(() => {
-  const columns = days.value
+  // Over the days that hold something: an empty column is a day not written
+  // yet, not a day of fasting.
+  const columns = days.value.filter((column) => column.totals.kcal !== null)
   if (columns.length === 0) {
     return null
   }
@@ -276,6 +326,20 @@ function applyIngredient(updated: DishIngredient): boolean {
   return false
 }
 
+/** A stored ingredient by its row id, with the cell it sits in. */
+function findIngredient(id: number): IngredientAt | null {
+  for (const row of mealRows.value) {
+    for (const column of days.value) {
+      const dish = storedDish(column.day, row.mealType, row.dishIndex)
+      const found = dish?.ingredients.find((ingredient) => ingredient.id === id)
+      if (found) {
+        return locate(row, column.day, found)
+      }
+    }
+  }
+  return null
+}
+
 function selectFirstCell(): void {
   const row = mealRows.value[0]
   const day = days.value[0]
@@ -292,6 +356,7 @@ async function load(): Promise<void> {
   const patients = usePatients()
   const patientId = patients.selectedId.value
   discardAll()
+  missing.value = false
   if (patientId === null) {
     // Nobody to write a diet for yet. Not an error — the very first thing the
     // editor does is add somebody.
@@ -310,11 +375,31 @@ async function load(): Promise<void> {
   } catch (cause) {
     diet.value = null
     const who = patients.selected.value?.name ?? 'Este paciente'
-    error.value =
-      cause instanceof ApiError && cause.status === 404
-        ? `${who} todavía no tiene ninguna dieta. Impórtale una desde un libro de Excel, o copia la de otro paciente.`
-        : `No se pudo cargar la dieta${cause instanceof Error ? `: ${cause.message}` : ''}`
+    missing.value = cause instanceof ApiError && cause.status === 404
+    error.value = missing.value
+      ? `${who} todavía no tiene ninguna dieta. Empieza una semana en blanco, impórtala desde un libro de Excel o copia la de otro paciente.`
+      : `No se pudo cargar la dieta${cause instanceof Error ? `: ${cause.message}` : ''}`
     status.value = 'error'
+  }
+}
+
+/**
+ * Reads the stored week again without touching what is being typed — for a
+ * change made beside the week, such as a measure criterion attached to several
+ * ingredients at once. The edits still belong to the same cells.
+ */
+async function refresh(): Promise<void> {
+  const plan = diet.value
+  if (!plan) {
+    return
+  }
+  try {
+    diet.value = await dietsApi.byId(plan.id)
+    weekVersion.value++
+  } catch (cause) {
+    error.value = `No se pudo volver a leer la dieta${
+      cause instanceof Error ? `: ${cause.message}` : ''
+    }`
   }
 }
 
@@ -354,7 +439,7 @@ async function reparse(key: string, slotName: string): Promise<void> {
   }
   const text = edit.text
   try {
-    const dish = await dietsApi.parse({ text, slotName })
+    const dish = await dietsApi.parse({ text, slotName, dietId: diet.value?.id })
     // The text may have moved on while the request was in flight.
     if (edits[key]?.text === text) {
       edits[key] = { text, dish, parsing: false, failed: false }
@@ -392,6 +477,24 @@ function setText(row: MealRow, day: DayOfWeek, text: string): void {
       void reparse(key, row.label)
     }, PARSE_DEBOUNCE_MS),
   )
+}
+
+/**
+ * Appends a composed food to a cell. The text is the one the backend wrote for
+ * it, so the sentence stays the only source of truth and is read back by the
+ * same parser as anything typed.
+ */
+function appendFragment(row: MealRow, day: DayOfWeek, fragment: string): void {
+  const current = textFor(row, day).trim()
+  let next: string
+  if (current === '') {
+    next = fragment
+  } else if (current.endsWith(':') || current.endsWith('+')) {
+    next = `${current} ${fragment}`
+  } else {
+    next = `${current} + ${fragment}`
+  }
+  setText(row, day, next)
 }
 
 /** Puts one cell back the way it is stored. */
@@ -452,6 +555,9 @@ function dishesRequest(day: DayOfWeek, mealType: MealType): RequestDish[] {
         unit: ingredient.unit,
         foodItemId: ingredient.foodItemId,
         bedcaFoodId: ingredient.bedcaFoodId,
+        state: ingredient.state,
+        size: ingredient.size,
+        foodMeasureId: ingredient.foodMeasureId,
       })),
     })
   }
@@ -468,7 +574,7 @@ function mealsRequest(plan: Diet, day: DayOfWeek): RequestMeal[] {
       continue
     }
     const meal = mealOf(stored, row.mealType)
-    meals.push({ type: row.mealType, name: meal?.name ?? row.sub ?? row.label, dishes })
+    meals.push({ type: row.mealType, name: meal?.name || row.sub || row.label, dishes })
   }
   return meals
 }
@@ -482,6 +588,8 @@ function weekRequest(plan: Diet): DietRequest {
     patientId: plan.patientId,
     name: plan.name,
     startedOn: plan.startedOn,
+    referenceProfileCode: plan.referenceProfileCode,
+    clinical: plan.clinical,
     days: days.value
       .map((column) => ({ day: column.day as string, meals: mealsRequest(plan, column.day) }))
       .filter((day) => day.meals.length > 0),
@@ -555,11 +663,93 @@ async function copyTo(patientId: number, name?: string): Promise<boolean> {
   }
 }
 
+function failure(what: string, cause: unknown): string {
+  return `${what}${cause instanceof Error ? `: ${cause.message}` : ''}`
+}
+
+/**
+ * Changes what the week is read against. It never rewrites a gram: the profile
+ * decides what the counts are compared with, not what the diet says.
+ */
+async function updateSettings(settings: DietSettings): Promise<boolean> {
+  const plan = diet.value
+  if (!plan) {
+    return false
+  }
+  error.value = null
+  try {
+    const updated = await dietsApi.updateSettings(plan.id, settings)
+    // Only the settings moved; the week is the same rows it was, and any cell
+    // being edited keeps its draft.
+    diet.value = {
+      ...plan,
+      name: updated.name,
+      referenceProfileCode: updated.referenceProfileCode,
+      clinical: updated.clinical,
+    }
+    void usePatients().refreshCurrent()
+    return true
+  } catch (cause) {
+    error.value = failure('No se pudo cambiar la dieta', cause)
+    return false
+  }
+}
+
+/**
+ * A new, empty week for the selected patient. It becomes their diet in force and
+ * archives the one they were on, exactly as an import does. Answers null when it
+ * worked, and what went wrong otherwise.
+ */
+async function createEmpty(request: {
+  name: string
+  startedOn: string
+  referenceProfileCode: string | null
+  clinical: boolean
+}): Promise<string | null> {
+  const patientId = usePatients().selectedId.value
+  if (patientId === null) {
+    return 'Elige antes un paciente.'
+  }
+  if (dirtyCount.value > 0) {
+    return 'Publica o descarta antes los cambios: la semana nueva sustituye a la que está en pantalla.'
+  }
+  try {
+    await dietsApi.create({ patientId, days: [], ...request })
+    await usePatients().refreshCurrent()
+    await load()
+    return null
+  } catch (cause) {
+    return failure('No se pudo crear la dieta', cause)
+  }
+}
+
+/** Reads a workbook into the selected patient's diet in force. */
+async function importWorkbook(
+  request: Omit<ImportDietRequest, 'patientId'>,
+): Promise<DietImportSummary | string> {
+  const patientId = usePatients().selectedId.value
+  if (patientId === null) {
+    return 'Elige antes un paciente.'
+  }
+  if (dirtyCount.value > 0) {
+    return 'Publica o descarta antes los cambios: la semana importada sustituye a la que está en pantalla.'
+  }
+  try {
+    const summary = await dietsApi.importWorkbook({ ...request, patientId })
+    await usePatients().refreshCurrent()
+    await load()
+    return summary
+  } catch (cause) {
+    return failure('No se pudo importar el libro', cause)
+  }
+}
+
 export function useDietDraft() {
   return {
     // state
     diet,
     status,
+    missing,
     error,
     publishing,
     edits,
@@ -580,11 +770,13 @@ export function useDietDraft() {
     // reads
     dishFor,
     storedDish,
+    findIngredient,
     textFor,
     totalsFor,
     isEdited,
     // writes
     load,
+    refresh,
     select,
     setText,
     revert,
@@ -592,5 +784,9 @@ export function useDietDraft() {
     publish,
     copyTo,
     applyIngredient,
+    appendFragment,
+    updateSettings,
+    createEmpty,
+    importWorkbook,
   }
 }
