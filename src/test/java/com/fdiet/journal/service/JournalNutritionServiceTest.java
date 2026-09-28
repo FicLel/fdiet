@@ -8,6 +8,9 @@ import com.fdiet.food.model.FoodItem;
 import com.fdiet.food.model.NutrientValue;
 import com.fdiet.food.service.NutritionService;
 import com.fdiet.journal.model.ExtraFood;
+import com.fdiet.reference.domain.HouseholdMeasure;
+import com.fdiet.reference.domain.WeightBasis;
+import com.fdiet.reference.model.ReferenceFoodMeasure;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -54,6 +57,26 @@ class JournalNutritionServiceTest {
     @Test
     void refusesToGuessWhatAUnitWeighs() {
         assertThat(nutrition.of(branded(magnum(), "1", "unidad"))).isNull();
+    }
+
+    @Test
+    void weighsAHouseholdMeasureTheWayThePlanDoes() {
+        // Two spoons of 10 ml each, 20 g of lettuce as far as the arithmetic goes.
+        ExtraFood spoons = generic(lechuga(), "2", "cucharada sopera");
+        spoons.setFoodMeasure(spoon());
+
+        assertThat(nutrition.of(spoons).proteinG()).isEqualByComparingTo("0.23");
+        NutritionSummaryDto summary = nutrition.summarise(List.of(spoons));
+        assertThat(summary.counted()).isEqualTo(1);
+        assertThat(summary.countedByMeasure()).isEqualTo(1);
+    }
+
+    @Test
+    void aMeasureForAnotherUnitWeighsNothing() {
+        ExtraFood slices = generic(lechuga(), "2", "loncha");
+        slices.setFoodMeasure(spoon());
+
+        assertThat(nutrition.of(slices)).isNull();
     }
 
     @Test
@@ -108,6 +131,16 @@ class JournalNutritionServiceTest {
         item.setBrand("FRIGO");
         item.setEnergyKcal(new BigDecimal("302"));
         return item;
+    }
+
+    private static ReferenceFoodMeasure spoon() {
+        ReferenceFoodMeasure measure = new ReferenceFoodMeasure();
+        measure.setMeasure(HouseholdMeasure.CUCHARADA_SOPERA);
+        measure.setCount(BigDecimal.ONE);
+        measure.setMlMin(BigDecimal.TEN);
+        measure.setMlMax(BigDecimal.TEN);
+        measure.setWeightBasis(WeightBasis.UNSPECIFIED);
+        return measure;
     }
 
     private static ExtraFood generic(BedcaFood food, String quantity, String unit) {

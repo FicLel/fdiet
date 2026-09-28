@@ -3,6 +3,7 @@ package com.fdiet.diet.service;
 import com.fdiet.diet.dto.DietRationsDto;
 import com.fdiet.diet.dto.DietRationsDto.Coverage;
 import com.fdiet.diet.dto.DietRationsDto.DayRations;
+import com.fdiet.diet.dto.DietRationsDto.DishUnits;
 import com.fdiet.diet.dto.DietRationsDto.ExchangeCount;
 import com.fdiet.diet.dto.DietRationsDto.GroupCount;
 import com.fdiet.diet.dto.DietRationsDto.MealEnergy;
@@ -11,6 +12,7 @@ import com.fdiet.diet.dto.DietRationsDto.RecommendationCheck;
 import com.fdiet.diet.dto.DietRationsDto.Status;
 import com.fdiet.diet.dto.DietRationsDto.Uncounted;
 import com.fdiet.diet.dto.MealType;
+import com.fdiet.diet.dto.NutritionSummaryDto;
 import com.fdiet.diet.model.DietPlan;
 import com.fdiet.diet.model.PlannedDish;
 import com.fdiet.diet.model.PlannedIngredient;
@@ -19,7 +21,6 @@ import com.fdiet.food.dto.NutritionDto;
 import com.fdiet.food.model.BedcaFood;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.RecommendationPeriod;
-import com.fdiet.reference.domain.WeightBasis;
 import com.fdiet.reference.dto.ExchangeSystemDto;
 import com.fdiet.reference.dto.MealShareDto;
 import com.fdiet.reference.dto.MealSharesDto;
@@ -162,13 +163,15 @@ public class DietRationService implements IDietRationService {
             BigDecimal grams = nutritionService.edibleGrams(ingredient);
             if (grams == null) {
                 unweighed++;
-                uncounted.add(new Uncounted(ingredient.getRawName(), "Sin peso"));
+                uncounted.add(new Uncounted(ingredient.getRawName(), ingredient.isRange()
+                        ? "Cantidad en intervalo, sin confirmar"
+                        : "Sin peso"));
                 continue;
             }
             BedcaFood food = ingredient.getBedcaFood();
             RationDto ration = food == null ? null
                     : referenceService.countingRation(profileCode, food.getId(), food.getName());
-            BigDecimal[] weight = ration == null ? null : edibleRationWeight(ration, food);
+            BigDecimal[] weight = ration == null ? null : ration.edibleWeight(food.getEdiblePortion());
             if (ration == null || weight == null) {
                 noRation++;
                 uncounted.add(new Uncounted(ingredient.getRawName(), ration == null
@@ -215,39 +218,30 @@ public class DietRationService implements IDietRationService {
                     totals.carbohydratesG()));
         }
 
+        List<DishTotals> dishTotals = new ArrayList<>();
+        for (PlannedMeal meal : meals) {
+            List<PlannedDish> dishes = meal.getDishes();
+            for (int index = 0; index < dishes.size(); index++) {
+                NutritionSummaryDto summary = nutritionService.summarise(dishes.get(index).getIngredients());
+                dishTotals.add(new DishTotals(meal.getType(), index, dishes.get(index).getName(),
+                        summary.totals(), summary.complete()));
+            }
+        }
         List<ExchangeCount> exchangeCounts = exchanges.stream()
                 .map(system -> new ExchangeCount(system.code(), system.name(), system.gramsPerUnit(),
                         units(dayTotals, system),
                         mealTotals.entrySet().stream()
                                 .map(meal -> new MealUnits(meal.getKey(), units(meal.getValue(), system)))
+                                .toList(),
+                        dishTotals.stream()
+                                .map(dish -> new DishUnits(dish.mealType(), dish.index(), dish.name(),
+                                        units(dish.totals(), system), dish.complete()))
                                 .toList()))
                 .toList();
 
         return new DayRations(day, groupCounts, daily, energy, exchangeCounts,
                 new Coverage(ingredients, counted, unmatched, unweighed, noRation, stateMismatch),
                 uncounted);
-    }
-
-    /**
-     * One ration's weight as edible grams, as a [min, max] pair, or null when it
-     * cannot be compared: a bare count ("1 unidad"), or a gross weight for a food
-     * whose edible fraction is not published.
-     */
-    private static BigDecimal[] edibleRationWeight(RationDto ration, BedcaFood food) {
-        BigDecimal min = ration.weightMin();
-        BigDecimal max = ration.weightMax();
-        if (min == null || max == null || min.signum() <= 0 || max.signum() <= 0) {
-            return null;
-        }
-        if (ration.weightBasis() == WeightBasis.GROSS) {
-            BigDecimal edible = food.getEdiblePortion();
-            if (edible == null || edible.signum() <= 0 || edible.compareTo(BigDecimal.ONE) > 0) {
-                return null;
-            }
-            min = min.multiply(edible);
-            max = max.multiply(edible);
-        }
-        return new BigDecimal[]{min, max};
     }
 
     /**
@@ -310,6 +304,11 @@ public class DietRationService implements IDietRationService {
             return null;
         }
         return part.multiply(HUNDRED).divide(whole, 1, RoundingMode.HALF_UP);
+    }
+
+    /** One dish's figures, read once and counted in every exchange system. */
+    private record DishTotals(MealType mealType, int index, String name, NutritionDto totals,
+                              boolean complete) {
     }
 
     private static BigDecimal units(NutritionDto totals, ExchangeSystemDto system) {

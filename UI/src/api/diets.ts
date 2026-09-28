@@ -43,6 +43,8 @@ export interface ParseDishRequest {
 export interface RequestIngredient {
   name: string
   quantity: number
+  /** The upper end of a range nobody has settled; sent back so a publish keeps it a range. */
+  quantityMax?: number | null
   unit: string
   foodItemId?: number | null
   bedcaFoodId?: number | null

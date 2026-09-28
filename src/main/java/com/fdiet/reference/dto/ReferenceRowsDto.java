@@ -31,7 +31,8 @@ public record ReferenceRowsDto(
         List<FoodMeasure> foodMeasures,
         List<Recommendation> recommendations,
         List<MealShare> mealShares,
-        List<ExchangeSystem> exchangeSystems) {
+        List<ExchangeSystem> exchangeSystems,
+        List<YieldFactor> yieldFactors) {
 
     public record Source(String origin, String code, String shortName, String title,
                          String institution, String country, int tier, Integer year, String url,
@@ -74,5 +75,11 @@ public record ReferenceRowsDto(
     public record ExchangeSystem(String origin, String code, String sourceCode, String name,
                                  ExchangeNutrient nutrient, BigDecimal gramsPerUnit,
                                  boolean clinical, String note) {
+    }
+
+    public record YieldFactor(String origin, String code, String sourceCode,
+                              FoodCategory foodCategory, String keywords, String foodLabel,
+                              String method, String methodKeywords, BigDecimal yieldPct,
+                              Integer samples, String pageRef, String note) {
     }
 }

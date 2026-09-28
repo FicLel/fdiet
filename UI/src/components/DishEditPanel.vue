@@ -3,11 +3,13 @@ import { computed } from 'vue'
 import RationComposer from './RationComposer.vue'
 import { isUnweighed, locate, useDietDraft } from '@/stores/dietDraft'
 import { useFoodLink } from '@/stores/foodLink'
+import { useRations } from '@/stores/rations'
 import type { DishIngredient } from '@/api/types'
 import { grams, integer, NO_VALUE, quantity } from '@/domain/format'
 import { complete } from '@/domain/nutrition'
-import { measureSource, perMeasure, stateWord } from '@/domain/rations'
+import { amount, measureSource, perMeasure, stateWord } from '@/domain/rations'
 import { cellKey } from '@/domain/slots'
+import { quantityText } from '@/domain/dishText'
 
 const draft = useDietDraft()
 const link = useFoodLink()
@@ -129,7 +131,42 @@ function measureLine(ingredient: DishIngredient): string | null {
 
 function mismatchTitle(ingredient: DishIngredient): string {
   const written = stateWord(ingredient.state) || 'sin estado'
-  return `Escrito ${written}, vinculado a «${ingredient.matchedName}». El peso de uno no es el del otro: revisa el vínculo.`
+  const base = `Escrito ${written}, vinculado a «${ingredient.matchedName}». El peso de uno no es el del otro: revisa el vínculo.`
+  const hint = ingredient.yieldHint
+  if (!hint || hint.equivalentGrams === null) {
+    return base
+  }
+  return `${base} Como referencia, ${hint.sourceShortName}: ≈ ${integer(hint.equivalentGrams)} g ${stateWord(hint.foodState)}.`
+}
+
+const rations = useRations()
+
+/**
+ * The dish read as exchanges, when that view is on: the backend's count over
+ * the stored week, addressed by the slot the way the journal addresses a plate.
+ * A cell with unpublished changes has no stored count for what it now says, so
+ * none is shown for it.
+ */
+const dishExchanges = computed(() => {
+  const counted = rations.rations.value
+  if (!rations.showExchanges.value || !counted || !row.value || !day.value || edit.value) {
+    return []
+  }
+  const today = counted.days.find((candidate) => candidate.day === day.value?.day)
+  return (today?.exchanges ?? []).flatMap((system) => {
+    const dish = system.dishes.find(
+      (candidate) =>
+        candidate.mealType === row.value?.mealType && candidate.dishIndex === row.value?.dishIndex,
+    )
+    return dish ? [{ code: system.code, name: system.name, units: dish.units, complete: dish.complete }] : []
+  })
+})
+
+/** A range the text gave, "40-60 g", which counts nowhere until a value in it is chosen. */
+function amountText(ingredient: DishIngredient): string {
+  return ingredient.quantityMax === null
+    ? quantity(ingredient.quantity, ingredient.unit)
+    : `${quantityText(ingredient)} ${ingredient.unit}`
 }
 </script>
 
@@ -189,7 +226,7 @@ function mismatchTitle(ingredient: DishIngredient): string {
               <span class="ingredient-line">
                 <span class="ingredient-name">{{ ingredient.name }}</span>
                 <span class="num ingredient-qty">
-                  {{ quantity(ingredient.quantity, ingredient.unit) }}
+                  {{ amountText(ingredient) }}
                 </span>
                 <span
                   class="chip"
@@ -201,10 +238,22 @@ function mismatchTitle(ingredient: DishIngredient): string {
                 </span>
               </span>
               <span
-                v-if="measureLine(ingredient) || isUnweighed(ingredient) || ingredient.stateMismatch"
+                v-if="
+                  measureLine(ingredient) ||
+                  isUnweighed(ingredient) ||
+                  ingredient.stateMismatch ||
+                  ingredient.quantityMax !== null
+                "
                 class="ingredient-sub"
               >
-                <span v-if="measureLine(ingredient)" class="num measure">{{ measureLine(ingredient) }}</span>
+                <span
+                  v-if="ingredient.quantityMax !== null"
+                  class="chip warn"
+                  title="Escrito como intervalo. No cuenta en las cifras hasta que elijas un valor: pulsa para fijarlo."
+                >
+                  Intervalo sin fijar
+                </span>
+                <span v-else-if="measureLine(ingredient)" class="num measure">{{ measureLine(ingredient) }}</span>
                 <span
                   v-else-if="isUnweighed(ingredient)"
                   class="chip warn"
@@ -264,6 +313,22 @@ function mismatchTitle(ingredient: DishIngredient): string {
           Se calculan a partir de los alimentos vinculados y del peso escrito; no se teclean.
           <template v-if="coverage"> {{ coverage }}</template>
         </p>
+
+        <template v-if="dishExchanges.length > 0">
+          <div class="label section-title">Intercambios del plato</div>
+          <div class="fields">
+            <div v-for="system in dishExchanges" :key="system.code" class="field">
+              <span class="field-label">{{ system.name }}</span>
+              <output class="num field-value">{{ amount(system.units, 1) }}</output>
+            </div>
+          </div>
+          <p class="hint">
+            10 g del nutriente por intercambio, sobre lo publicado.
+            <template v-if="dishExchanges.some((system) => !system.complete)">
+              Parte del plato no cuenta, así que es un mínimo.
+            </template>
+          </p>
+        </template>
 
         <div class="day-total">
           <span>Total del día tras el cambio</span>

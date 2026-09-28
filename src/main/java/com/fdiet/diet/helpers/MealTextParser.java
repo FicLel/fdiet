@@ -69,12 +69,23 @@ public class MealTextParser implements IMealTextParser {
     private static final Pattern NUMBER = Pattern.compile(
             "(\\d+(?:[.,]\\d+)?)\\s*(?:/\\s*(\\d+(?:[.,]\\d+)?))?");
 
+    /** What joins the two ends of a range: {@code 40-60}, {@code 40 – 60}, {@code 2 a 3}. */
+    private static final String RANGE_JOIN = "(?:\\s*[-–—]\\s*|\\s+a\\s+)";
+
+    /** A number as written: {@code 80}, {@code 12,5}, {@code 1/2}. */
+    private static final String WRITTEN_NUMBER = "\\d+(?:[.,]\\d+)?(?:\\s*/\\s*\\d+(?:[.,]\\d+)?)?";
+
+    /** One number, or a range of two: {@code 80}, {@code 1/2}, {@code 40-60}, {@code 2 a 3}. */
+    private static final Pattern AMOUNT = Pattern.compile(
+            "(" + WRITTEN_NUMBER + ")(?:" + RANGE_JOIN + "(" + WRITTEN_NUMBER + "))?");
+
     /** The unit word straight after a number: {@code 80gr}, {@code 250 mL}. */
     private static final Pattern UNIT_WORD = Pattern.compile("^\\s*(\\p{L}+)");
 
-    /** A count at the start of a fragment written without brackets. */
+    /** A count, or a range of counts, at the start of a fragment written without brackets. */
     private static final Pattern LEADING_COUNT = Pattern.compile(
-            "^\\s*(\\d+(?:[.,]\\d+)?(?:\\s*/\\s*\\d+(?:[.,]\\d+)?)?|un|una|uno|medio|media)\\s+(.+)$",
+            "^\\s*(" + WRITTEN_NUMBER + "|un|una|uno|medio|media)"
+                    + "(?:" + RANGE_JOIN + "(" + WRITTEN_NUMBER + "))?\\s+(.+)$",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.DOTALL);
 
     /** The "de" between a measure and its food: {@code 2 lonchas de pavo}. */
@@ -142,7 +153,7 @@ public class MealTextParser implements IMealTextParser {
         }
 
         Quantity quantity = readQuantity(inside);
-        return new DishIngredient(clean(name), quantity.amount(), quantity.unit(),
+        return new DishIngredient(clean(name), quantity.amount(), quantity.max(), quantity.unit(),
                 FoodState.ofWriting(outside, inside), PortionSize.ofWriting(outside + " " + inside));
     }
 
@@ -161,7 +172,8 @@ public class MealTextParser implements IMealTextParser {
             return new DishIngredient(clean(text), DEFAULT_QUANTITY, DEFAULT_UNIT, state, size);
         }
         BigDecimal amount = countOf(leading.group(1));
-        String rest = leading.group(2).trim();
+        BigDecimal max = upperBound(amount, leading.group(2));
+        String rest = leading.group(3).trim();
         if (amount == null || amount.signum() <= 0) {
             return new DishIngredient(clean(text), DEFAULT_QUANTITY, DEFAULT_UNIT, state, size);
         }
@@ -182,9 +194,11 @@ public class MealTextParser implements IMealTextParser {
         food = LINKING_DE.matcher(food.replaceFirst("^[.\\s]+", "")).replaceFirst("").trim();
         if (food.isEmpty()) {
             // "1 unidad" with nothing after it: the text is all there is to call it.
-            return new DishIngredient(clean(text), amount, Texts.truncate(unit, UNIT_MAX), state, size);
+            return new DishIngredient(clean(text), amount, max, Texts.truncate(unit, UNIT_MAX),
+                    state, size);
         }
-        return new DishIngredient(clean(food), amount, Texts.truncate(unit, UNIT_MAX), state, size);
+        return new DishIngredient(clean(food), amount, max, Texts.truncate(unit, UNIT_MAX),
+                state, size);
     }
 
     /**
@@ -203,27 +217,43 @@ public class MealTextParser implements IMealTextParser {
      * written last. A unit that is a household measure of more than one word is
      * read whole — {@code (1 cucharada sopera)} is a cucharada sopera, not a
      * cucharada.
+     *
+     * <p>A range, {@code (40-60 gr)}, is read as both its ends. It used to be
+     * read as its last number, which quietly chose 60 g for the nutritionist.
      */
     private Quantity readQuantity(String inside) {
         String text = fractions(inside);
-        Matcher matcher = NUMBER.matcher(text);
+        Matcher matcher = AMOUNT.matcher(text);
         BigDecimal amount = null;
+        BigDecimal max = null;
         String unit = null;
         while (matcher.find()) {
-            BigDecimal numerator = Numbers.toDecimal(matcher.group(1));
-            if (numerator == null) {
+            BigDecimal low = countOf(matcher.group(1));
+            if (low == null) {
                 continue;
             }
-            BigDecimal denominator = Numbers.toDecimal(matcher.group(2));
-            amount = denominator == null || denominator.signum() == 0
-                    ? numerator
-                    : numerator.divide(denominator, 2, RoundingMode.HALF_UP);
+            amount = low;
+            max = upperBound(low, matcher.group(2));
             unit = unitAfter(text.substring(matcher.end()));
         }
         if (amount == null || amount.signum() <= 0) {
-            return new Quantity(DEFAULT_QUANTITY, DEFAULT_UNIT);
+            return new Quantity(DEFAULT_QUANTITY, null, DEFAULT_UNIT);
         }
-        return new Quantity(amount, Texts.truncate(unit == null ? DEFAULT_UNIT : unit, UNIT_MAX));
+        return new Quantity(amount, max,
+                Texts.truncate(unit == null ? DEFAULT_UNIT : unit, UNIT_MAX));
+    }
+
+    /**
+     * The upper end of a range, or null when there is none — or when it is no
+     * higher than the lower end, which makes {@code 3-3} one value and a
+     * backwards {@code 60-40} the lower number alone, never a silent swap.
+     */
+    private static BigDecimal upperBound(BigDecimal low, String written) {
+        if (low == null || written == null) {
+            return null;
+        }
+        BigDecimal high = countOf(written);
+        return high == null || high.compareTo(low) <= 0 ? null : high;
     }
 
     private static String unitAfter(String rest) {
@@ -312,6 +342,6 @@ public class MealTextParser implements IMealTextParser {
         return parts;
     }
 
-    private record Quantity(BigDecimal amount, String unit) {
+    private record Quantity(BigDecimal amount, BigDecimal max, String unit) {
     }
 }

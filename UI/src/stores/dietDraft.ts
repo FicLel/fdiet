@@ -19,6 +19,7 @@ import type {
   FoodState,
   MealType,
   PortionSize,
+  YieldHint,
 } from '@/api/types'
 import { buildRows, cellKey, dishAt, mealOf, type GridRow, type MealRow } from '@/domain/slots'
 import { renderDish } from '@/domain/dishText'
@@ -78,6 +79,8 @@ export interface IngredientAt {
   id: number
   name: string
   quantity: number
+  /** The upper end of a range still to be settled, or null. */
+  quantityMax: number | null
   unit: string
   /** The catalogue's own name for the food, when it is already matched. */
   matchedName: string | null
@@ -89,6 +92,7 @@ export interface IngredientAt {
   /** Matched, but nothing weighs the unit it is written in. */
   unweighed: boolean
   stateMismatch: boolean
+  yieldHint: YieldHint | null
   row: MealRow
   day: DayOfWeek
 }
@@ -114,6 +118,7 @@ export function locate(
         id: ingredient.id,
         name: ingredient.name,
         quantity: ingredient.quantity,
+        quantityMax: ingredient.quantityMax,
         unit: ingredient.unit,
         matchedName: ingredient.matchedName,
         bedcaFoodId: ingredient.bedcaFoodId,
@@ -123,6 +128,7 @@ export function locate(
         measure: ingredient.measure,
         unweighed: isUnweighed(ingredient),
         stateMismatch: ingredient.stateMismatch,
+        yieldHint: ingredient.yieldHint,
         row,
         day,
       }
@@ -552,6 +558,7 @@ function dishesRequest(day: DayOfWeek, mealType: MealType): RequestDish[] {
       ingredients: dish.ingredients.map((ingredient) => ({
         name: ingredient.name,
         quantity: ingredient.quantity,
+        quantityMax: ingredient.quantityMax,
         unit: ingredient.unit,
         foodItemId: ingredient.foodItemId,
         bedcaFoodId: ingredient.bedcaFoodId,

@@ -8,6 +8,7 @@ import com.fdiet.diet.dto.Dish;
 import com.fdiet.diet.dto.DishIngredient;
 import com.fdiet.diet.dto.MealDto;
 import com.fdiet.diet.dto.NutritionSummaryDto;
+import com.fdiet.diet.dto.YieldHintDto;
 import com.fdiet.diet.model.DietPlan;
 import com.fdiet.diet.model.PlannedDish;
 import com.fdiet.diet.model.PlannedIngredient;
@@ -17,10 +18,14 @@ import com.fdiet.diet.service.IDietNutritionService;
 import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.model.FoodItem;
 import com.fdiet.reference.domain.FoodState;
+import com.fdiet.reference.dto.YieldFactorDto;
+import com.fdiet.reference.helpers.ReferenceMatcher;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
 import com.fdiet.reference.service.IReferenceService;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -29,6 +34,8 @@ import java.util.Map;
 
 @Component
 public class DietMapper implements IDietMapper {
+
+    private static final BigDecimal HUNDRED = new BigDecimal("100");
 
     private final IDietNutritionService dietNutritionService;
     private final IReferenceService referenceService;
@@ -128,10 +135,13 @@ public class DietMapper implements IDietMapper {
         FoodItem foodItem = ingredient.getFoodItem();
         BedcaFood bedcaFood = ingredient.getBedcaFood();
         ReferenceFoodMeasure measure = ingredient.getFoodMeasure();
+        boolean stateMismatch = bedcaFood != null && FoodState.disagree(
+                ingredient.getState(), FoodState.ofFoodName(bedcaFood.getName()));
         return new DishIngredient(
                 ingredient.getId(),
                 ingredient.getRawName(),
                 ingredient.getQuantity(),
+                ingredient.getQuantityMax(),
                 ingredient.getUnit(),
                 ingredient.getState(),
                 ingredient.getSize(),
@@ -140,8 +150,8 @@ public class DietMapper implements IDietMapper {
                 measure == null ? null : measure.getId(),
                 matchedNameOf(foodItem, bedcaFood),
                 referenceService.describe(measure),
-                bedcaFood != null && FoodState.disagree(
-                        ingredient.getState(), FoodState.ofFoodName(bedcaFood.getName())),
+                stateMismatch,
+                stateMismatch ? yieldHint(ingredient, bedcaFood) : null,
                 dietNutritionService.of(ingredient),
                 null);
     }
@@ -165,10 +175,37 @@ public class DietMapper implements IDietMapper {
                 match == null ? null : match.bedcaFood(),
                 ingredient.quantity(),
                 ingredient.unit());
+        entity.setQuantityMax(ingredient.quantityMax());
         entity.setState(ingredient.state());
         entity.setSize(ingredient.size());
         entity.setFoodMeasure(measure);
         return entity;
+    }
+
+    /**
+     * The nearest published cooking yield for an ingredient weighed in one state
+     * and matched to a food published in the other, and what its quantity comes
+     * to in the food's state. The cooking method is read off whichever side is the
+     * cooked one: the food's name ({@code Pollo, pechuga, plancha}) when the text
+     * said raw, the text ({@code pechuga a la plancha (120 g)}) when the food is raw.
+     */
+    private YieldHintDto yieldHint(PlannedIngredient ingredient, BedcaFood food) {
+        FoodState written = ingredient.getState();
+        FoodState published = FoodState.ofFoodName(food.getName());
+        boolean toCooked = written.uncooked() && published.cooked();
+        String methodText = toCooked ? food.getName() : ingredient.getRawName();
+        List<YieldFactorDto> yields = referenceService.yieldFactors(food.getName(), methodText);
+        if (yields.isEmpty()) {
+            return null;
+        }
+        YieldFactorDto best = yields.get(0);
+        BigDecimal grams = dietNutritionService.edibleGrams(ingredient);
+        BigDecimal equivalent = grams == null ? null : toCooked
+                ? grams.multiply(best.yieldPct()).divide(HUNDRED, 0, RoundingMode.HALF_UP)
+                : grams.multiply(HUNDRED).divide(best.yieldPct(), 0, RoundingMode.HALF_UP);
+        return new YieldHintDto(written, published, grams, equivalent, best.yieldPct(),
+                best.foodLabel(), best.method(), ReferenceMatcher.namesMethod(best, methodText),
+                best.sourceShortName(), best.pageRef());
     }
 
     /** What the catalogue calls the food, so a matched row reads as matched. */

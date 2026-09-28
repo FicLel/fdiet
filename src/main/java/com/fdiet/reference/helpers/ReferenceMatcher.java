@@ -10,6 +10,7 @@ import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.MeasureChoiceDto;
 import com.fdiet.reference.dto.MeasureQueryDto;
 import com.fdiet.reference.dto.RationDto;
+import com.fdiet.reference.dto.YieldFactorDto;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -138,6 +139,34 @@ public class ReferenceMatcher {
                 .filter(ration -> ration.role() == RationRole.PLATO_PRINCIPAL)
                 .toList();
         return main.size() == 1 ? main.get(0) : null;
+    }
+
+    /**
+     * The cooking yields that cover a food, most specific first, and among those
+     * the ones whose method the text names ahead of the rest. All of them are
+     * offers: the method a text names is a preference, never a filter, because
+     * the source may simply not publish the method a diet cooks by.
+     *
+     * @param methodText the words the cooked side was written in — the matched
+     *                   food's name when it is the cooked one, the ingredient as
+     *                   written otherwise
+     */
+    public List<YieldFactorDto> yieldsCovering(List<YieldFactorDto> yields, String foodName,
+                                               FoodCategory category, String methodText) {
+        List<YieldFactorDto> covering = narrowest(yields.stream()
+                .filter(row -> covers(null, row.foodCategory(), row.keywords(), null, foodName,
+                        category))
+                .toList(), row -> null, YieldFactorDto::keywords, null, foodName);
+        return covering.stream()
+                .sorted(Comparator.comparing((YieldFactorDto row) -> !namesMethod(row, methodText)))
+                .toList();
+    }
+
+    /** Whether the text names the row's method in one of its Spanish words. */
+    public static boolean namesMethod(YieldFactorDto row, String methodText) {
+        return methodText != null && row.methodKeywords() != null
+                && !FoodKeywords.phrases(row.methodKeywords()).isEmpty()
+                && FoodKeywords.specificity(row.methodKeywords(), methodText) > 0;
     }
 
     private List<FoodMeasureDto> measureCandidates(List<FoodMeasureDto> rows, HouseholdMeasure measure,

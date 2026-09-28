@@ -1,5 +1,6 @@
 package com.fdiet.reference.service;
 
+import com.fdiet.alternative.helpers.FoodCategoriser;
 import com.fdiet.food.helpers.DataReader;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.HouseholdMeasure;
@@ -8,6 +9,8 @@ import com.fdiet.reference.domain.RecommendationPeriod;
 import com.fdiet.reference.domain.WeightBasis;
 import com.fdiet.reference.dto.ReferenceRowsDto;
 import com.fdiet.reference.dto.ReferenceSyncSummaryDto;
+import com.fdiet.reference.dto.YieldFactorDto;
+import com.fdiet.reference.helpers.ReferenceMatcher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -65,12 +68,19 @@ class ReferenceDataFilesTest {
 
     @Test
     void loadsOnlySourcesThatMayBeLoadedAsFigures() {
-        // Classes A and B are loaded as figures; the diabetes table (C) lends
-        // only the definition of its unit, and carries no figures of its own.
-        assertThat(rows.sources()).filteredOn(source -> source.licenceClass().ordinal() > 1)
-                .extracting(ReferenceRowsDto.Source::code)
-                .containsExactly("FUNDACION-DIABETES-HC");
-        assertThat(rows.rations()).noneMatch(row -> row.code().startsWith("FUNDACION"));
+        // Classes A and B are loaded as figures; the diabetes table (C) and the
+        // exchange book (D) lend only the definition of their unit, and carry
+        // no figures of their own.
+        List<String> definitionsOnly = rows.sources().stream()
+                .filter(source -> source.licenceClass().ordinal() > 1)
+                .map(ReferenceRowsDto.Source::code)
+                .toList();
+        assertThat(definitionsOnly)
+                .containsExactly("FUNDACION-DIABETES-HC", "RUSSOLILLO-MARQUES-2011");
+        assertThat(rows.populations()).noneMatch(row -> definitionsOnly.contains(row.sourceCode()));
+        assertThat(rows.foodMeasures()).noneMatch(row -> definitionsOnly.contains(row.sourceCode()));
+        assertThat(rows.exchangeSystems()).filteredOn(row -> definitionsOnly.contains(row.sourceCode()))
+                .allSatisfy(row -> assertThat(row.gramsPerUnit()).isEqualByComparingTo("10"));
     }
 
     @Test
@@ -165,5 +175,61 @@ class ReferenceDataFilesTest {
     private ReferenceRowsDto.Recommendation recommendation(String code) {
         return rows.recommendations().stream().filter(row -> row.code().equals(code)).findFirst()
                 .orElseThrow(() -> new AssertionError("No recommendation " + code));
+    }
+
+    @Test
+    void usdaCookingYieldsAsPublished() {
+        // USDA Table of Cooking Yields for Meat and Poultry, Release 2 (2014), Table 1.
+        assertThat(yieldRow("USDA-Y:POLLO-PECHUGA-ASADA").yieldPct()).isEqualByComparingTo("72");
+        assertThat(yieldRow("USDA-Y:CERDO-LOMO-PLANCHA").yieldPct()).isEqualByComparingTo("80");
+        assertThat(yieldRow("USDA-Y:VACUNO-GUISADO")).satisfies(row -> {
+            assertThat(row.yieldPct()).isEqualByComparingTo("67");
+            assertThat(row.samples()).isEqualTo(361);
+            assertThat(row.foodLabel()).isEqualTo("Beef, retail cuts, all, boneless");
+        });
+        assertThat(yieldRow("USDA-Y:VACUNO-SOLOMILLO-PLANCHA").foodLabel())
+                .isEqualTo("Beef, tenderloin, steak, separable lean and fat, trimmed to 1/8\" fat, all grades");
+        Set<String> sources = rows.sources().stream().map(ReferenceRowsDto.Source::code)
+                .collect(Collectors.toSet());
+        assertThat(rows.yieldFactors()).allSatisfy(row -> {
+            assertThat(sources).contains(row.sourceCode());
+            assertThat(row.yieldPct()).isBetween(BigDecimal.ONE, new BigDecimal("100"));
+        });
+    }
+
+    @Test
+    void offersTheYieldOfTheCutAndTheMethodTheNameSays() {
+        List<YieldFactorDto> yields = rows.yieldFactors().stream()
+                .map(row -> new YieldFactorDto(null, row.code(), row.sourceCode(), "USDA 2014",
+                        row.foodCategory(), row.keywords(), row.foodLabel(), row.method(),
+                        row.methodKeywords(), row.yieldPct(), row.samples(), row.pageRef(), row.note()))
+                .toList();
+        ReferenceMatcher matcher = new ReferenceMatcher();
+        FoodCategoriser categoriser = new FoodCategoriser();
+
+        String thigh = "Pollo, muslo, con piel, asado";
+        assertThat(matcher.yieldsCovering(yields, thigh, categoriser.of(thigh), thigh))
+                .extracting(YieldFactorDto::code).first().isEqualTo("USDA-Y:POLLO-MUSLO-ASADO");
+
+        // No grilled breast is published: the breast rows are offered, the method not named.
+        String breast = "Pollo, pechuga, plancha";
+        List<YieldFactorDto> forBreast = matcher.yieldsCovering(yields, breast, categoriser.of(breast), breast);
+        assertThat(forBreast).extracting(YieldFactorDto::code)
+                .containsExactly("USDA-Y:POLLO-PECHUGA-ASADA", "USDA-Y:POLLO-PECHUGA-HERVIDA");
+        assertThat(ReferenceMatcher.namesMethod(forBreast.get(0), breast)).isFalse();
+
+        // The liver is not the chicken.
+        String liver = "Higado de pollo, crudo";
+        assertThat(matcher.yieldsCovering(yields, liver, categoriser.of(liver), "higado de pollo frito"))
+                .extracting(YieldFactorDto::code).containsExactly("USDA-Y:HIGADO-POLLO-FRITO");
+
+        String veal = "Ternera, solomillo, asado";
+        assertThat(matcher.yieldsCovering(yields, veal, categoriser.of(veal), veal))
+                .extracting(YieldFactorDto::code).first().isEqualTo("USDA-Y:VACUNO-SOLOMILLO-ASADO");
+    }
+
+    private ReferenceRowsDto.YieldFactor yieldRow(String code) {
+        return rows.yieldFactors().stream().filter(row -> row.code().equals(code)).findFirst()
+                .orElseThrow();
     }
 }

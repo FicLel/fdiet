@@ -12,6 +12,32 @@ import type { DietRations } from '@/api/types'
  */
 
 const rations = shallowRef<DietRations | null>(null)
+
+/**
+ * Whether the week is also read as exchanges (10 g of carbohydrate, protein or
+ * fat) — for nutritionists who plan that way. A per-viewer preference, kept in
+ * the browser; the clinical carbohydrate ration shows on a clinical diet
+ * whatever this says.
+ */
+const EXCHANGES_KEY = 'fdiet.showExchanges'
+const showExchanges = ref(readFlag())
+
+function readFlag(): boolean {
+  try {
+    return localStorage.getItem(EXCHANGES_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function toggleExchanges(): void {
+  showExchanges.value = !showExchanges.value
+  try {
+    localStorage.setItem(EXCHANGES_KEY, showExchanges.value ? '1' : '0')
+  } catch {
+    // Not remembered, which only costs a click next time.
+  }
+}
 const status = ref<'idle' | 'loading' | 'ready' | 'error'>('idle')
 const error = ref<string | null>(null)
 let token = 0
@@ -43,5 +69,5 @@ async function load(dietId: number | null): Promise<void> {
 }
 
 export function useRations() {
-  return { rations, status, error, load }
+  return { rations, status, error, load, showExchanges, toggleExchanges }
 }

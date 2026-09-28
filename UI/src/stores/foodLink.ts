@@ -326,6 +326,30 @@ async function pickMeasure(measure: FoodMeasure): Promise<void> {
 }
 
 /**
+ * Settles a quantity written as a range (`40-60 gr`) on one value. Until then
+ * the ingredient counts in no total: either end, or the middle, would be a
+ * choice the text did not make. The cell's sentence is left as written.
+ */
+async function confirmQuantity(value: number): Promise<void> {
+  const at = target.value
+  const plan = draft.diet.value
+  if (!at || !plan || savingMeasure.value || !(value > 0)) {
+    return
+  }
+  savingMeasure.value = true
+  error.value = null
+  try {
+    const updated = await dietsApi.resolveIngredient(plan.id, at.id, { quantity: value })
+    draft.applyIngredient(updated)
+    target.value = locate(at.row, at.day, updated)
+  } catch (cause) {
+    error.value = `No se pudo fijar la cantidad${cause instanceof Error ? `: ${cause.message}` : ''}`
+  } finally {
+    savingMeasure.value = false
+  }
+}
+
+/**
  * The nutritionist's own weight for this measure of this food, for this diet
  * only. It is attached to every ingredient of the week it now weighs, so the
  * week is read again rather than patched one row at a time.
@@ -482,6 +506,7 @@ export function useFoodLink() {
     // writes
     focus,
     pickMeasure,
+    confirmQuantity,
     saveOwnMeasure,
     review,
     close,

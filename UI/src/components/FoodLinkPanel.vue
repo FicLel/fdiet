@@ -2,7 +2,8 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useFoodLink } from '@/stores/foodLink'
 import { integer, NO_VALUE, quantity } from '@/domain/format'
-import { measureSource, measureText, perMeasure } from '@/domain/rations'
+import { measureSource, measureText, perMeasure, stateWord } from '@/domain/rations'
+import { quantityText } from '@/domain/dishText'
 import { dayName } from '@/domain/week'
 
 /**
@@ -50,6 +51,18 @@ const listNote = computed(() => {
     : 'Ordenados por parecido; ninguno está elegido.'
 })
 
+/** The value a range is settled on, the lower end offered first. */
+const settled = ref<number | null>(null)
+
+/** The published yield, read as a sentence: "150 g en crudo ≈ 108 g cocinado". */
+const yieldLine = computed(() => {
+  const hint = at.value?.yieldHint
+  if (!hint || hint.writtenGrams === null || hint.equivalentGrams === null) {
+    return null
+  }
+  return `${integer(hint.writtenGrams)} g ${stateWord(hint.writtenState)} ≈ ${integer(hint.equivalentGrams)} g ${stateWord(hint.foodState)}`
+})
+
 /** The nutritionist's own weight for this measure, for this diet. */
 const ownValue = ref<number | null>(null)
 const ownUnit = ref<'g' | 'ml'>('g')
@@ -86,7 +99,9 @@ watch(
     ownSaved.value = null
     ownValue.value = null
     ownNote.value = ''
+    settled.value = at.value?.quantityMax != null ? at.value.quantity : null
   },
+  { immediate: true },
 )
 
 /** The keyboard lands in the search box, which is what the drawer is for. */
@@ -115,7 +130,9 @@ watch(
         </div>
         <div class="subject">
           <span class="subject-name">{{ at.name }}</span>
-          <span class="num subject-qty">{{ quantity(at.quantity, at.unit) }}</span>
+          <span class="num subject-qty">
+            {{ at.quantityMax === null ? quantity(at.quantity, at.unit) : `${quantityText(at)} ${at.unit}` }}
+          </span>
         </div>
         <div class="where">{{ where }}</div>
         <div v-if="at.matchedName" class="current">
@@ -124,8 +141,50 @@ watch(
         <div v-if="at.stateMismatch" class="current warn">
           Escrito en otro estado que el alimento vinculado (crudo frente a cocinado). Sus pesos no
           son intercambiables: busca la versión que corresponde.
+          <template v-if="at.yieldHint">
+            <span v-if="yieldLine" class="yield">
+              Como referencia: <strong class="num">{{ yieldLine }}</strong>
+              (rendimiento {{ integer(at.yieldHint.yieldPct) }} %).
+            </span>
+            <span class="yield-source" :title="at.yieldHint.pageRef">
+              {{ at.yieldHint.sourceShortName }} · {{ at.yieldHint.foodLabel }}, {{ at.yieldHint.method }}
+              <template v-if="!at.yieldHint.methodNamed">
+                — la fuente no publica el método escrito; es el más cercano que tiene.
+              </template>
+            </span>
+            <span class="yield-source">No se aplica solo: la cantidad sigue siendo la escrita.</span>
+          </template>
         </div>
       </div>
+
+      <!-- A range written in the text ("40-60 gr") counts nowhere until a
+           value inside it is chosen; nothing picks one on its own. -->
+      <form v-if="at.quantityMax !== null" class="range" @submit.prevent="settled !== null && link.confirmQuantity(settled)">
+        <span class="title">Cantidad en intervalo</span>
+        <p class="note">
+          Escrito como {{ quantityText(at) }} {{ at.unit }}. No cuenta en las cifras hasta que
+          elijas un valor.
+        </p>
+        <div class="own-line">
+          <input
+            v-model.number="settled"
+            class="own-input num"
+            type="number"
+            :min="at.quantity"
+            :max="at.quantityMax"
+            step="any"
+            aria-label="Cantidad elegida"
+          />
+          <span class="own-lead">{{ at.unit }}</span>
+          <button
+            class="own-save"
+            type="submit"
+            :disabled="settled === null || settled < at.quantity || settled > at.quantityMax || link.savingMeasure.value"
+          >
+            Fijar
+          </button>
+        </div>
+      </form>
 
       <!-- A matched generic food written in a household measure: what one of
            those weighs is the question, not which food it is. -->
@@ -322,6 +381,27 @@ watch(
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   overflow: hidden;
+}
+
+.range {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 11px 15px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.yield {
+  display: block;
+  margin-top: 6px;
+}
+
+.yield-source {
+  display: block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--ink-muted);
 }
 
 .card-head {

@@ -80,6 +80,14 @@ public class PlannedIngredient {
     @Column(name = "quantity", precision = 10, scale = 2, nullable = false)
     private BigDecimal quantity;
 
+    /**
+     * The upper bound when the text gave a range ("40-60 gr"), with
+     * {@link #quantity} the lower one; null for a single value. A ranged
+     * ingredient is weighed by nothing until a person confirms one value.
+     */
+    @Column(name = "quantity_max", precision = 10, scale = 2)
+    private BigDecimal quantityMax;
+
     @Column(name = "unit", length = 32, nullable = false)
     private String unit;
 
@@ -110,6 +118,11 @@ public class PlannedIngredient {
         this.bedcaFood = bedcaFood;
         this.quantity = quantity;
         this.unit = unit;
+    }
+
+    /** Whether the quantity is still a range nobody has settled. */
+    public boolean isRange() {
+        return quantityMax != null;
     }
 
     /** True once the ingredient points at a food, whichever half it came from. */

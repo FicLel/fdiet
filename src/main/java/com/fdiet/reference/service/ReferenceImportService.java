@@ -42,7 +42,8 @@ import java.util.stream.Stream;
  * <p>The directory holds {@code sources.csv} and {@code exchange_systems.csv}
  * at its root, and one folder per source holding that source's
  * {@code populations.csv}, {@code rations.csv}, {@code food_measures.csv},
- * {@code recommendations.csv} and {@code meal_shares.csv} — whichever it has.
+ * {@code recommendations.csv}, {@code meal_shares.csv} and
+ * {@code yield_factors.csv} — whichever it has.
  * One folder per source keeps each licence with its own figures: the 5 al día
  * folder is CC BY-SA and carries its own licence file.
  *
@@ -63,6 +64,7 @@ public class ReferenceImportService implements IReferenceImportService {
     private static final String FOOD_MEASURES = "food_measures.csv";
     private static final String RECOMMENDATIONS = "recommendations.csv";
     private static final String MEAL_SHARES = "meal_shares.csv";
+    private static final String YIELD_FACTORS = "yield_factors.csv";
 
     private final DataReader dataReader;
     private final IReferenceService referenceService;
@@ -92,7 +94,8 @@ public class ReferenceImportService implements IReferenceImportService {
                 read(each(folders, FOOD_MEASURES), this::foodMeasure),
                 read(each(folders, RECOMMENDATIONS), this::recommendation),
                 read(each(folders, MEAL_SHARES), this::mealShare),
-                read(List.of(root.resolve(EXCHANGE_SYSTEMS)), this::exchangeSystem));
+                read(List.of(root.resolve(EXCHANGE_SYSTEMS)), this::exchangeSystem),
+                read(each(folders, YIELD_FACTORS), this::yieldFactor));
 
         ReferenceSyncSummaryDto summary = referenceService.store(rows);
         log.info("Synced reference data from {}: {}; {} rows skipped", root.toAbsolutePath(),
@@ -227,6 +230,18 @@ public class ReferenceImportService implements IReferenceImportService {
                 row.required("source_code"), row.required("name"),
                 row.enumeration("nutrient", ExchangeNutrient.class, true),
                 row.requiredDecimal("grams_per_unit"), row.bool("clinical"), row.text("note"));
+    }
+
+    private ReferenceRowsDto.YieldFactor yieldFactor(Row row) {
+        BigDecimal yield = row.requiredDecimal("yield_pct");
+        if (yield.signum() <= 0 || yield.compareTo(new BigDecimal("400")) > 0) {
+            throw row.invalid("yield_pct " + yield + " is not a cooking yield");
+        }
+        return new ReferenceRowsDto.YieldFactor(row.origin(), row.required("code"),
+                row.required("source_code"),
+                row.enumeration("food_category", FoodCategory.class, true), row.text("keywords"),
+                row.required("food_label"), row.required("method"), row.text("method_keywords"),
+                yield, row.integer("samples", false), row.required("page_ref"), row.text("note"));
     }
 
     /** One CSV record, read by column name, with the file and line it came from. */

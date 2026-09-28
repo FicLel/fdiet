@@ -16,6 +16,7 @@ sources, and the conflicts between them, is in `plan.md`.
 | `<source>/food_measures.csv` | what a household measure of a food weighs |
 | `<source>/recommendations.csv` | how many rations of which groups, per day or per week |
 | `<source>/meal_shares.csv` | the share of the day's energy per meal slot |
+| `<source>/yield_factors.csv` | cooking yields: cooked grams per 100 g raw, by food and method |
 
 One folder per source, so a licence stays with its own figures.
 
@@ -26,7 +27,8 @@ One folder per source, so a licence stays with its own figures.
 | `aesan-2022/` | AESAN-2022-007, recomendaciones dietéticas sostenibles, pp. 50-53 | AESAN legal notice: reuse with source and date (re-verify, the notice page returned 404) |
 | `aesan-mec-2010/` | AESAN/MEC 2010 school consensus, Anexo II (pp. 13-14) and Anexo III (p. 15) | same AESAN notice |
 | `5aldia-2019/` | Russolillo et al. 2019, Tabla 4 (pp. 214-215) | **CC BY-SA 4.0**; see `5aldia-2019/LICENSE.md` |
-| `exchange_systems.csv` | the diabetes carbohydrate ration definition (10 g) | definition only; the published food table is not copied |
+| `usda-yields-2014/` | USDA Table of Cooking Yields for Meat and Poultry, Release 2 (2014), a selection | US public domain; see `usda-yields-2014/LICENSE.md` |
+| `exchange_systems.csv` | the diabetes carbohydrate ration (10 g) and the general 10 g exchanges (Russolillo & Marques-Lopes 2011) | definitions only; neither food table is copied |
 
 Not loaded, because permission is needed first: SENC 2018 annexes, DIAL's household measures, the
 FINUT photographic guide, the Russolillo & Marques-Lopes exchange lists, the FAO/INFOODS density

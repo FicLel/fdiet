@@ -12,8 +12,9 @@ import java.util.List;
 /**
  * A week read against a reference profile: how many rations of each group it
  * holds, how that compares with how often the profile recommends them, how the
- * day's energy is shared between its meals, and — on a clinical diet — how many
- * carbohydrate rations each meal carries.
+ * day's energy is shared between its meals, and how many exchanges (10 g of
+ * carbohydrate, protein or fat) each day, meal and dish carries — plus, on a
+ * clinical diet only, the diabetes carbohydrate ration.
  *
  * <p><strong>Orientative, and derived on every read.</strong> Nothing here is
  * stored. A ration defined as a range divides into a range ({@code 70 g ÷ 60-80 g
@@ -96,12 +97,26 @@ public record DietRationsDto(
                              BigDecimal carbohydratesG) {
     }
 
-    /** An exchange system's count for the day and for each meal of it. */
+    /**
+     * An exchange system's count for the day, for each meal of it and for each
+     * dish. Only what was counted is in it: an exchange count travels with the
+     * day's {@code coverage}, since an unweighed ingredient carries exchanges
+     * nobody could add.
+     */
     public record ExchangeCount(String code, String name, BigDecimal gramsPerUnit,
-                                BigDecimal dayUnits, List<MealUnits> meals) {
+                                BigDecimal dayUnits, List<MealUnits> meals,
+                                List<DishUnits> dishes) {
     }
 
     public record MealUnits(MealType mealType, BigDecimal units) {
+    }
+
+    /**
+     * One dish's exchanges. {@code dishIndex} is its place in the meal from 0 —
+     * the same address the journal scores a plate by.
+     */
+    public record DishUnits(MealType mealType, int dishIndex, String name, BigDecimal units,
+                            boolean complete) {
     }
 
     /**

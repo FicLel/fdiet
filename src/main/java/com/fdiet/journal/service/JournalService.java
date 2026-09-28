@@ -2,6 +2,7 @@ package com.fdiet.journal.service;
 
 import com.fdiet.diet.dto.MealType;
 import com.fdiet.diet.exception.DietNotFoundException;
+import com.fdiet.diet.helpers.IPortionScaler;
 import com.fdiet.diet.service.IDietService;
 import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.model.FoodItem;
@@ -20,6 +21,12 @@ import com.fdiet.journal.model.DishScore;
 import com.fdiet.journal.model.ExtraFood;
 import com.fdiet.journal.repository.DishScoreRepository;
 import com.fdiet.journal.repository.ExtraFoodRepository;
+import com.fdiet.reference.domain.HouseholdMeasure;
+import com.fdiet.reference.dto.FoodMeasureDto;
+import com.fdiet.reference.dto.MeasureChoiceDto;
+import com.fdiet.reference.dto.MeasureQueryDto;
+import com.fdiet.reference.model.ReferenceFoodMeasure;
+import com.fdiet.reference.service.IReferenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +52,8 @@ public class JournalService implements IJournalService {
     private final IDietService dietService;
     private final IBedcaFoodService bedcaFoodService;
     private final IFoodItemService foodItemService;
+    private final IReferenceService referenceService;
+    private final IPortionScaler portionScaler;
 
     public JournalService(DishScoreRepository scoreRepository,
                           ExtraFoodRepository extraRepository,
@@ -52,7 +61,9 @@ public class JournalService implements IJournalService {
                           IJournalNutritionService journalNutritionService,
                           IDietService dietService,
                           IBedcaFoodService bedcaFoodService,
-                          IFoodItemService foodItemService) {
+                          IFoodItemService foodItemService,
+                          IReferenceService referenceService,
+                          IPortionScaler portionScaler) {
         this.scoreRepository = scoreRepository;
         this.extraRepository = extraRepository;
         this.journalMapper = journalMapper;
@@ -60,6 +71,8 @@ public class JournalService implements IJournalService {
         this.dietService = dietService;
         this.bedcaFoodService = bedcaFoodService;
         this.foodItemService = foodItemService;
+        this.referenceService = referenceService;
+        this.portionScaler = portionScaler;
     }
 
     /**
@@ -132,15 +145,52 @@ public class JournalService implements IJournalService {
                 ? null
                 : foodItemService.entityById(request.foodItemId());
 
+        String unit = request.unit().trim();
         ExtraFood extra = new ExtraFood(
                 dietId,
                 request.day(),
                 request.name().trim(),
                 request.quantity(),
-                request.unit().trim(),
+                unit,
                 bedca,
                 item);
+        extra.setState(request.state());
+        extra.setSize(request.size());
+        extra.setFoodMeasure(measureFor(dietId, bedca, unit, request));
         return journalMapper.toDto(extraRepository.save(extra));
+    }
+
+    /**
+     * The household measure an extra is weighed by, chosen by the rule that
+     * chooses one for the week — the one asked for when it fits, else the
+     * diet's own criterion, else a published row only when picking it is not a
+     * judgement — so a spoon logged beside the plan weighs what it weighs inside
+     * it. A measure asked for that does not weigh this food in this unit is
+     * refused rather than quietly ignored.
+     */
+    private ReferenceFoodMeasure measureFor(Long dietId, BedcaFood food, String unit,
+                                            LogExtraFoodRequestDto request) {
+        if (food == null || portionScaler.weighsDirectly(unit)
+                || HouseholdMeasure.ofUnit(unit).isEmpty()) {
+            if (request.foodMeasureId() != null) {
+                throw new InvalidJournalEntryException("A household measure weighs a generic food "
+                        + "written in that measure; \"" + unit + "\" needs none");
+            }
+            return null;
+        }
+        MeasureChoiceDto choice = referenceService.chooseMeasures(
+                List.of(new MeasureQueryDto(food.getId(), food.getName(), unit, request.size(),
+                        request.foodMeasureId())),
+                dietId, dietService.referenceProfileCode(dietId)).get(0);
+        FoodMeasureDto chosen = choice.chosen();
+        if (request.foodMeasureId() != null
+                && (chosen == null || !request.foodMeasureId().equals(chosen.id()))) {
+            throw new InvalidJournalEntryException("Household measure " + request.foodMeasureId()
+                    + " does not weigh " + unit + " of this food. "
+                    + "GET /api/reference/measures lists the ones that do");
+        }
+        return chosen == null ? null
+                : referenceService.measureEntities(List.of(chosen.id())).get(chosen.id());
     }
 
     /**

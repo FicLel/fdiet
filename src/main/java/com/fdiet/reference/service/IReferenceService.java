@@ -14,6 +14,7 @@ import com.fdiet.reference.dto.ReferenceProfileDto;
 import com.fdiet.reference.dto.ReferenceRowsDto;
 import com.fdiet.reference.dto.ReferenceSourceDto;
 import com.fdiet.reference.dto.ReferenceSyncSummaryDto;
+import com.fdiet.reference.dto.YieldFactorDto;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
 
 import java.util.Collection;
@@ -79,6 +80,16 @@ public interface IReferenceService {
 
     /** Exchange definitions; the clinical ones only when asked for. */
     List<ExchangeSystemDto> exchangeSystems(boolean includeClinical);
+
+    /**
+     * The published cooking yields that could say what a food weighs raw or
+     * cooked, most specific first, and those whose method {@code methodText}
+     * names ahead of the rest. Offers only; answered in memory.
+     */
+    List<YieldFactorDto> yieldFactors(String foodName, String methodText);
+
+    /** The same for a composition-database food by id, read by its own name. */
+    List<YieldFactorDto> yieldFactorsForFood(Long bedcaFoodId);
 
     /** The household-measure vocabulary the parser reads. */
     List<HouseholdMeasureDto> vocabulary();

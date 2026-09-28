@@ -1,2 +1,5 @@
 code,source_code,name,nutrient,grams_per_unit,clinical,note
 RACION-HC-10,FUNDACION-DIABETES-HC,Ración de hidratos de carbono,CARBOHYDRATE,10,true,"Se cuenta sobre todos los hidratos de carbono de lo que se come, calculados con BEDCA."
+INTERCAMBIO-HC-10,RUSSOLILLO-MARQUES-2011,Intercambio de hidratos de carbono,CARBOHYDRATE,10,false,"10 g de hidratos de carbono, calculados con BEDCA."
+INTERCAMBIO-PROT-10,RUSSOLILLO-MARQUES-2011,Intercambio de proteína,PROTEIN,10,false,"10 g de proteína, calculados con BEDCA."
+INTERCAMBIO-GRASA-10,RUSSOLILLO-MARQUES-2011,Intercambio de grasa,FAT,10,false,"10 g de grasa, calculados con BEDCA."

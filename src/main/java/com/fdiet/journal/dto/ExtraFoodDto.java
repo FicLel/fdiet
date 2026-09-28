@@ -1,6 +1,9 @@
 package com.fdiet.journal.dto;
 
 import com.fdiet.food.dto.NutritionDto;
+import com.fdiet.reference.domain.FoodState;
+import com.fdiet.reference.domain.PortionSize;
+import com.fdiet.reference.dto.FoodMeasureDto;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
@@ -13,7 +16,8 @@ import java.time.LocalDateTime;
  * catalogue calls the food it was matched to, null while it is matched to
  * nothing. {@code nutrition} is the catalogue's per-100 g figures scaled to the
  * quantity logged, worked out on read and never stored — null when nothing was
- * matched, or when the unit is one nothing can weigh.
+ * matched, or when the unit is one nothing can weigh. {@code measure} is the
+ * household measure that weighed it, with its source, when one did.
  */
 public record ExtraFoodDto(
         Long id,
@@ -21,11 +25,15 @@ public record ExtraFoodDto(
         String name,
         BigDecimal quantity,
         String unit,
+        FoodState state,
+        PortionSize size,
         Long bedcaFoodId,
         Long foodItemId,
         String matchedName,
         /** The maker, when the match came from the branded catalogue. */
         String brand,
+        Long foodMeasureId,
+        FoodMeasureDto measure,
         NutritionDto nutrition,
         LocalDateTime loggedAt) {
 }

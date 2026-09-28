@@ -43,11 +43,27 @@ exchanges sit behind a `clinical` flag on the diet. Q6 patients may carry birth 
   than `BELOW`.
 - RD 315/2025 frequencies are not seeded.
 
+**Done 2026-09-28 (V11, V12).**
+- Ranges in the parser: `2-3 nueces`, `(40-60 gr)`, `1 a 2 cdta` keep both ends
+  (`diet_ingredients.quantity_max`); a range weighs nothing until the nutritionist fixes a value in
+  the link drawer (PATCH `quantity`). A publish sends the range back, so it survives.
+- Journal extras are measure-aware (`extra_foods.food_measure_id`, same choosing rule and the same
+  `IPortionScaler` door as the week); the extra panel offers the measures that weigh the unit.
+- The rations strip (and the attribution footer, which was missing there) is on the patient screen.
+- Phase 4: general 10 g exchanges (HC, protein, fat; Russolillo & Marques-Lopes 2011, the definition
+  only) counted per day, meal and dish, behind an *Intercambios* toggle in the strip and the dish
+  panel; the clinical HC ration still only on clinical diets. Alternatives take `basis`
+  (energy/HC/protein/fat) and `profile` (≈ N raciones, fuente). 29 USDA 2014 cooking yields for meat
+  and poultry (`ref_yield_factors`), offered beside a raw/cooked mismatch and never applied.
+
 **Not done yet.**
-- Ranges in the parser (`2-3 nueces`), and journal extras are not measure-aware.
-- The rations strip is in the builder only; the patient's own screen does not show it.
+- A bracket state that contradicts the name (`pechuga a la plancha (150 g en crudo)`) still reads as
+  no state, so the mismatch and the yield hint only fire when the name itself carries no cooking word.
+- Yields exist for meat and poultry only; rice, pasta and legumes (the ~3× case) need Bognár/EuroFIR
+  or FAO permission. The ration count does not use yields either.
+- No alternatives screen in the UI; basis and profile are API-only.
 - Russolillo exchange lists, SENC, DIAL and FINUT figures wait on permission (Phase 0).
-- Phases 4 (exchange views, alternatives by nutrient basis, yields) and 5 (special populations).
+- Phase 5 (special populations): needs the ASPCAT 2022 and AEP 2018 documents read for seedable values.
 
 ---
 

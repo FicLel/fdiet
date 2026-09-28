@@ -123,6 +123,12 @@ export interface DishIngredient {
   /** What the diet calls the food, exactly as written. */
   name: string
   quantity: number
+  /**
+   * The upper end when the text gave a range — `2-3 nueces`, `(40-60 gr)` —
+   * with `quantity` the lower one; null for a single value. A range is counted
+   * nowhere until a person confirms one value.
+   */
+  quantityMax: number | null
   unit: string
   /** The state the text says the food is weighed in — `lentejas cocidas` — or null when it says none. */
   state: FoodState | null
@@ -137,8 +143,28 @@ export interface DishIngredient {
   measure: FoodMeasure | null
   /** Written raw and matched to a cooked food, or the other way round. */
   stateMismatch: boolean
+  /** On a state mismatch, what the quantity weighs in the food's state by a published yield. Offered, never applied. */
+  yieldHint: YieldHint | null
   nutrition: Nutrition | null
   suggestions: FoodSuggestion[] | null
+}
+
+/**
+ * A published cooking yield read against one ingredient: `150 g en crudo ≈ 108 g
+ * cocinado`. `methodNamed` false means the source has no row for the method
+ * written and this is the nearest it publishes.
+ */
+export interface YieldHint {
+  writtenState: FoodState
+  foodState: FoodState
+  writtenGrams: number | null
+  equivalentGrams: number | null
+  yieldPct: number
+  foodLabel: string
+  method: string
+  methodNamed: boolean
+  sourceShortName: string
+  pageRef: string
 }
 
 export interface Dish {
@@ -412,6 +438,8 @@ export interface ExchangeCount {
   gramsPerUnit: number
   dayUnits: number | null
   meals: { mealType: MealType; units: number | null }[]
+  /** Per dish, addressed the way the journal addresses a plate. `complete` is false while a part of it was not counted. */
+  dishes: { mealType: MealType; dishIndex: number; name: string; units: number | null; complete: boolean }[]
 }
 
 /** `counted + unmatched + unweighed + noRation + stateMismatch === ingredients`. */
@@ -510,12 +538,17 @@ export interface ExtraFood {
   name: string
   quantity: number
   unit: string
+  state: FoodState | null
+  size: PortionSize | null
   bedcaFoodId: number | null
   foodItemId: number | null
   /** What the catalogue calls the food, once matched. */
   matchedName: string | null
   /** The maker, when the match came from the branded half. */
   brand: string | null
+  /** The household measure that weighed `1 cucharada`, the same rule the week weighs by. */
+  foodMeasureId: number | null
+  measure: FoodMeasure | null
   /** Scaled to the quantity logged; null when unmatched or unweighable. */
   nutrition: Nutrition | null
   loggedAt: string

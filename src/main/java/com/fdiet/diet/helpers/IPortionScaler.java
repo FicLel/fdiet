@@ -1,5 +1,9 @@
 package com.fdiet.diet.helpers;
 
+import com.fdiet.reference.domain.HouseholdMeasure;
+import com.fdiet.reference.domain.WeightBasis;
+import com.fdiet.reference.model.ReferenceFoodMeasure;
+
 import java.math.BigDecimal;
 
 /**
@@ -22,6 +26,26 @@ public interface IPortionScaler {
      * AESAN 2022). Null when neither the unit nor the measure can weigh it.
      */
     Weighed weigh(BigDecimal quantity, String unit, MeasureWeight measure);
+
+    /**
+     * The same, from the stored household-measure row: it weighs the quantity
+     * only when the unit is the very measure the row is for — a row attached
+     * for "cucharada" does not weigh a quantity since rewritten as "2 lonchas".
+     * The week and the journal both weigh through here, so a spoon logged as an
+     * extra weighs what the same spoon weighs inside the plan.
+     *
+     * @param ediblePortion the matched composition food's edible fraction, or null
+     */
+    default Weighed weigh(BigDecimal quantity, String unit, ReferenceFoodMeasure measure,
+                          BigDecimal ediblePortion) {
+        MeasureWeight weight = null;
+        if (measure != null && HouseholdMeasure.ofUnit(unit)
+                .filter(written -> written == measure.getMeasure()).isPresent()) {
+            weight = new MeasureWeight(measure.gramsPerMeasure(),
+                    measure.getWeightBasis() == WeightBasis.GROSS, ediblePortion);
+        }
+        return weigh(quantity, unit, weight);
+    }
 
     /** Whether the unit is a weight or a volume, which needs no measure to be weighed. */
     boolean weighsDirectly(String unit);

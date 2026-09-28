@@ -169,6 +169,11 @@ class DietRationServiceTest {
             assertThat(hc.dayUnits()).isEqualByComparingTo("1.9");
             assertThat(hc.meals()).singleElement()
                     .extracting(DietRationsDto.MealUnits::units).isEqualTo(new BigDecimal("1.9"));
+            assertThat(hc.dishes()).singleElement().satisfies(dish -> {
+                assertThat(dish.dishIndex()).isZero();
+                assertThat(dish.units()).isEqualByComparingTo("1.9");
+                assertThat(dish.complete()).isTrue();
+            });
         });
     }
 

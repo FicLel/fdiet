@@ -23,10 +23,10 @@ import type { Dish, DishIngredient } from '@/api/types'
 const DEFAULT_UNIT = 'unidad'
 
 export function renderIngredient(ingredient: DishIngredient): string {
-  if (ingredient.quantity === 1 && ingredient.unit === DEFAULT_UNIT) {
+  if (ingredient.quantity === 1 && ingredient.quantityMax === null && ingredient.unit === DEFAULT_UNIT) {
     return ingredient.name
   }
-  return `${ingredient.name} (${formatAmount(ingredient.quantity)} ${ingredient.unit})`
+  return `${ingredient.name} (${quantityText(ingredient)} ${ingredient.unit})`
 }
 
 /**
@@ -46,6 +46,13 @@ function rebuild(dish: Dish, rowLabel: string): string {
   const body = dish.ingredients.map(renderIngredient).join(' + ')
   const named = dish.name && dish.name !== rowLabel && dish.name !== body
   return named ? `${dish.name}: ${body}` : body
+}
+
+/** `40`, or `40-60` for a range nobody has settled — the way the parser reads it back. */
+export function quantityText(ingredient: Pick<DishIngredient, 'quantity' | 'quantityMax'>): string {
+  return ingredient.quantityMax === null
+    ? formatAmount(ingredient.quantity)
+    : `${formatAmount(ingredient.quantity)}-${formatAmount(ingredient.quantityMax)}`
 }
 
 /** `0.5` reads as `0,5`; a whole number keeps no decimals at all. */

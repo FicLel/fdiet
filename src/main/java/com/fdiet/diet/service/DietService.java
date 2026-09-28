@@ -264,6 +264,7 @@ public class DietService implements IDietService {
                             ingredient.getBedcaFood(),
                             ingredient.getQuantity(),
                             ingredient.getUnit());
+                    copied.setQuantityMax(ingredient.getQuantityMax());
                     copied.setState(ingredient.getState());
                     copied.setSize(ingredient.getSize());
                     copied.setFoodMeasure(ingredient.getFoodMeasure());
@@ -324,6 +325,12 @@ public class DietService implements IDietService {
 
     @Override
     @Transactional(readOnly = true)
+    public String referenceProfileCode(Long dietId) {
+        return profileOf(dietId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean hasDishAt(Long dietId, DayOfWeek day, MealType mealType, int dishIndex) {
         if (dietId == null || day == null || mealType == null || dishIndex < 0) {
             return false;
@@ -379,7 +386,9 @@ public class DietService implements IDietService {
             ingredient.setRawName(change.name());
         }
         if (change.quantity() != null) {
+            // One value sent is the range settled: the person chose where in it.
             ingredient.setQuantity(change.quantity());
+            ingredient.setQuantityMax(null);
         }
         if (change.unit() != null) {
             ingredient.setUnit(change.unit());
@@ -554,9 +563,10 @@ public class DietService implements IDietService {
 
     private static DishIngredient withMeasure(DishIngredient ingredient, Long measureId) {
         return new DishIngredient(ingredient.id(), ingredient.name(), ingredient.quantity(),
-                ingredient.unit(), ingredient.state(), ingredient.size(), ingredient.foodItemId(),
+                ingredient.quantityMax(), ingredient.unit(), ingredient.state(), ingredient.size(), ingredient.foodItemId(),
                 ingredient.bedcaFoodId(), measureId, ingredient.matchedName(), ingredient.measure(),
-                ingredient.stateMismatch(), ingredient.nutrition(), ingredient.suggestions());
+                ingredient.stateMismatch(), ingredient.yieldHint(), ingredient.nutrition(),
+                ingredient.suggestions());
     }
 
     private String profileOf(Long dietId) {

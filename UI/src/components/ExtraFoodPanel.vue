@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { catalogueApi } from '@/api/catalogue'
-import type { BedcaFood, DayOfWeek, FoodItem } from '@/api/types'
+import { referenceApi } from '@/api/reference'
+import type { BedcaFood, DayOfWeek, FoodItem, FoodMeasure } from '@/api/types'
 import { usePatientWeek } from '@/stores/patientWeek'
+import { useReference } from '@/stores/reference'
 import { integer, NO_VALUE } from '@/domain/format'
+import { measureSource, perMeasure } from '@/domain/rations'
 
 /**
  * Adding something the plan did not prescribe.
@@ -29,6 +32,8 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>()
 
 const week = usePatientWeek()
+const reference = useReference()
+void reference.ensure().catch(() => undefined)
 
 /** How long a pause in the typing means the query is ready to be run. */
 const SEARCH_DEBOUNCE_MS = 300
@@ -161,6 +166,52 @@ function choose(candidate: Candidate): void {
 
 const parsedAmount = computed(() => Number(amount.value.replace(',', '.')))
 
+/*
+ * A generic food logged in a household measure — "1 cucharada" of oil — is
+ * weighed the way the plan weighs the same spoon: by a measure row somebody
+ * published, or the diet's own criterion. The rows that fit are offered; one
+ * picked is sent, and none picked lets the backend attach one only when the
+ * choice is not a judgement.
+ */
+const measures = ref<FoodMeasure[]>([])
+const pickedMeasure = ref<number | null>(null)
+let measureToken = 0
+
+const measureWord = computed(() => reference.measureOfUnit(unit.value))
+
+watch([chosen, measureWord], async ([food, word]) => {
+  const mine = ++measureToken
+  pickedMeasure.value = null
+  measures.value = []
+  const plan = week.diet.value
+  if (!food || food.bedcaFoodId === null || !word || !plan) {
+    return
+  }
+  try {
+    const rows = await referenceApi.measures(food.bedcaFoodId, {
+      unit: unit.value.trim(),
+      dietId: plan.id,
+      profile: plan.referenceProfileCode,
+    })
+    if (mine === measureToken) {
+      measures.value = rows.filter((row) => row.gramsPerMeasure !== null)
+      if (measures.value.length === 1) {
+        pickedMeasure.value = measures.value[0].id
+      }
+    }
+  } catch {
+    // No measures is an honest answer: the entry is kept, and counts nothing.
+  }
+})
+
+/** What one measure picked weighs, so the preview can be worked out before logging. */
+const gramsPerUnit = computed(() => {
+  if (measureWord.value === null) {
+    return unit.value.trim().toLowerCase() === 'unidad' ? null : 1
+  }
+  return measures.value.find((row) => row.id === pickedMeasure.value)?.gramsPerMeasure ?? null
+})
+
 const valid = computed(
   () => Number.isFinite(parsedAmount.value) && parsedAmount.value > 0 && unit.value.trim() !== '',
 )
@@ -168,10 +219,10 @@ const valid = computed(
 /** What this portion comes to, before it is committed — the label figure scaled. */
 const preview = computed(() => {
   const food = chosen.value
-  if (!food || food.kcalPer100 === null || !valid.value || unit.value.trim().toLowerCase() === 'unidad') {
+  if (!food || food.kcalPer100 === null || !valid.value || gramsPerUnit.value === null) {
     return null
   }
-  return (food.kcalPer100 * parsedAmount.value) / 100
+  return (food.kcalPer100 * parsedAmount.value * gramsPerUnit.value) / 100
 })
 
 async function add(): Promise<void> {
@@ -186,6 +237,7 @@ async function add(): Promise<void> {
     unit: unit.value.trim(),
     bedcaFoodId: food.bedcaFoodId,
     foodItemId: food.foodItemId,
+    foodMeasureId: measureWord.value === null ? null : pickedMeasure.value,
   })
   if (done) {
     chosen.value = null
@@ -330,6 +382,28 @@ async function addAsWritten(): Promise<void> {
           Añadir
         </button>
       </div>
+      <!-- Written in a household measure: which published weight stands for it. -->
+      <div v-if="chosen.bedcaFoodId !== null && measureWord !== null" class="measures">
+        <button
+          v-for="measure in measures"
+          :key="measure.id"
+          class="measure"
+          :class="{ on: pickedMeasure === measure.id }"
+          type="button"
+          :title="[measure.note, measure.pageRef].filter(Boolean).join(' · ')"
+          @click="pickedMeasure = pickedMeasure === measure.id ? null : measure.id"
+        >
+          {{ perMeasure(measure) }}
+          <span class="measure-source">{{ measureSource(measure) }}</span>
+        </button>
+        <p v-if="measures.length === 0" class="measure-note">
+          Ninguna fuente publica cuánto pesa «{{ unit.trim() }}» de este alimento: se guardará sin
+          cifras. Escríbelo en gramos si los sabes.
+        </p>
+        <p v-else-if="pickedMeasure === null" class="measure-note">
+          Elige cuál pesa esta medida, o se guardará sin cifras.
+        </p>
+      </div>
     </div>
 
     <button
@@ -354,6 +428,42 @@ async function addAsWritten(): Promise<void> {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   overflow: hidden;
+}
+
+.measures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.measure {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 5px 9px;
+  font-size: 11.5px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.measure.on {
+  border-color: var(--sage-600);
+  background: var(--sage-50);
+}
+
+.measure-source,
+.measure-note {
+  font-size: 10.5px;
+  color: var(--ink-muted);
+}
+
+.measure-note {
+  margin: 0;
+  width: 100%;
 }
 
 .panel.sheet {

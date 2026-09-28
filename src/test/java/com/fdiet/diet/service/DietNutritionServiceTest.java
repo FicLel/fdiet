@@ -47,6 +47,19 @@ class DietNutritionServiceTest {
     }
 
     @Test
+    void weighsARangeOnlyOnceSomebodySettlesIt() {
+        PlannedIngredient ranged = ingredient(lechuga(), "40", "gr");
+        ranged.setQuantityMax(new BigDecimal("60"));
+
+        assertThat(nutrition.of(ranged)).isNull();
+        assertThat(nutrition.edibleGrams(ranged)).isNull();
+        assertThat(nutrition.summarise(List.of(ranged)).unmeasured()).isEqualTo(1);
+
+        ranged.setQuantityMax(null);
+        assertThat(nutrition.edibleGrams(ranged)).isEqualByComparingTo("40");
+    }
+
+    @Test
     void hasNothingToSayAboutAnIngredientNobodyMatched() {
         assertThat(nutrition.of(ingredient(null, "80", "gr"))).isNull();
     }

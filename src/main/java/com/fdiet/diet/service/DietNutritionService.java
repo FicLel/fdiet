@@ -2,14 +2,10 @@ package com.fdiet.diet.service;
 
 import com.fdiet.diet.dto.NutritionSummaryDto;
 import com.fdiet.diet.helpers.IPortionScaler;
-import com.fdiet.diet.helpers.IPortionScaler.MeasureWeight;
 import com.fdiet.diet.helpers.IPortionScaler.Weighed;
 import com.fdiet.diet.model.PlannedIngredient;
 import com.fdiet.food.dto.NutritionDto;
 import com.fdiet.food.service.INutritionService;
-import com.fdiet.reference.domain.HouseholdMeasure;
-import com.fdiet.reference.domain.WeightBasis;
-import com.fdiet.reference.model.ReferenceFoodMeasure;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -91,20 +87,15 @@ public class DietNutritionService implements IDietNutritionService {
      * weight or a volume, through the attached household measure when the unit
      * is that measure, and not at all otherwise. A measure attached for
      * "cucharada" does not weigh a quantity since rewritten as "2 lonchas".
+     * A range ("40-60 gr") weighs nothing until a person settles it: either end,
+     * or the middle, would be a choice the text did not make.
      */
     private Weighed weigh(PlannedIngredient ingredient) {
-        if (ingredient == null || !ingredient.isMatched()) {
+        if (ingredient == null || !ingredient.isMatched() || ingredient.isRange()) {
             return null;
         }
-        ReferenceFoodMeasure measure = ingredient.getFoodMeasure();
-        MeasureWeight weight = null;
-        if (measure != null && HouseholdMeasure.ofUnit(ingredient.getUnit())
-                .filter(written -> written == measure.getMeasure()).isPresent()) {
-            weight = new MeasureWeight(
-                    measure.gramsPerMeasure(),
-                    measure.getWeightBasis() == WeightBasis.GROSS,
-                    ingredient.getBedcaFood() == null ? null : ingredient.getBedcaFood().getEdiblePortion());
-        }
-        return portionScaler.weigh(ingredient.getQuantity(), ingredient.getUnit(), weight);
+        return portionScaler.weigh(ingredient.getQuantity(), ingredient.getUnit(),
+                ingredient.getFoodMeasure(),
+                ingredient.getBedcaFood() == null ? null : ingredient.getBedcaFood().getEdiblePortion());
     }
 }

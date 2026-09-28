@@ -1,5 +1,6 @@
 package com.fdiet.alternative.service;
 
+import com.fdiet.alternative.dto.AlternativeQueryDto;
 import com.fdiet.alternative.dto.FoodAlternativesDto;
 
 import java.math.BigDecimal;
@@ -34,7 +35,17 @@ public interface IAlternativeService {
      *                 when the question really is "which other cheese", since
      *                 there the same word is the whole family
      */
-    FoodAlternativesDto forFoodId(Long foodId, int limit, BigDecimal grams, boolean sameFood);
+    default FoodAlternativesDto forFoodId(Long foodId, int limit, BigDecimal grams, boolean sameFood) {
+        return forFoodId(foodId, AlternativeQueryDto.byEnergy(limit, grams, sameFood));
+    }
+
+    /**
+     * The same, with the equivalence basis and the reference profile named: how
+     * much of each alternative carries the carbohydrate (or protein, fat,
+     * energy) of the portion, and how many of the profile's rations that is.
+     * The basis never widens who is eligible — the category still decides that.
+     */
+    FoodAlternativesDto forFoodId(Long foodId, AlternativeQueryDto query);
 
     /**
      * The same answer for a food named rather than pointed at, which is how a
@@ -46,5 +57,9 @@ public interface IAlternativeService {
      * guess. An ingredient whose name is not in the catalogue is matched first
      * through {@code GET /api/diets/{id}/ingredients?suggest=true}, by a person.
      */
-    FoodAlternativesDto forName(String name, int limit, BigDecimal grams, boolean sameFood);
+    default FoodAlternativesDto forName(String name, int limit, BigDecimal grams, boolean sameFood) {
+        return forName(name, AlternativeQueryDto.byEnergy(limit, grams, sameFood));
+    }
+
+    FoodAlternativesDto forName(String name, AlternativeQueryDto query);
 }

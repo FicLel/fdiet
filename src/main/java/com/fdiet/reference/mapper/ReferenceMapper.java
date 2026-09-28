@@ -1,6 +1,7 @@
 package com.fdiet.reference.mapper;
 
 import com.fdiet.reference.dto.ExchangeSystemDto;
+import com.fdiet.reference.dto.YieldFactorDto;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.RationDto;
 import com.fdiet.reference.dto.RecommendationDto;
@@ -8,6 +9,7 @@ import com.fdiet.reference.dto.ReferenceProfileDto;
 import com.fdiet.reference.dto.ReferenceRowsDto;
 import com.fdiet.reference.dto.ReferenceSourceDto;
 import com.fdiet.reference.model.ReferenceExchangeSystem;
+import com.fdiet.reference.model.ReferenceYieldFactor;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
 import com.fdiet.reference.model.ReferenceMealShare;
 import com.fdiet.reference.model.ReferencePopulation;
@@ -127,6 +129,40 @@ public class ReferenceMapper implements IReferenceMapper {
                 recommendation.getPeriod(),
                 recommendation.getPageRef(),
                 recommendation.getNote());
+    }
+
+    @Override
+    public YieldFactorDto toDto(ReferenceYieldFactor factor) {
+        return new YieldFactorDto(
+                factor.getId(),
+                factor.getCode(),
+                factor.getSource().getCode(),
+                factor.getSource().getShortName(),
+                factor.getFoodCategory(),
+                factor.getKeywords(),
+                factor.getFoodLabel(),
+                factor.getMethod(),
+                factor.getMethodKeywords(),
+                factor.getYieldPct(),
+                factor.getSamples(),
+                factor.getPageRef(),
+                factor.getNote());
+    }
+
+    @Override
+    public void update(ReferenceYieldFactor factor, ReferenceRowsDto.YieldFactor row,
+                       ReferenceSource source) {
+        factor.setCode(row.code());
+        factor.setSource(source);
+        factor.setFoodCategory(row.foodCategory());
+        factor.setKeywords(row.keywords());
+        factor.setFoodLabel(row.foodLabel());
+        factor.setMethod(row.method());
+        factor.setMethodKeywords(row.methodKeywords());
+        factor.setYieldPct(row.yieldPct());
+        factor.setSamples(row.samples());
+        factor.setPageRef(row.pageRef());
+        factor.setNote(row.note());
     }
 
     @Override

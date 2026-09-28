@@ -1,7 +1,9 @@
 package com.fdiet.alternative.service;
 
+import com.fdiet.alternative.domain.EquivalenceBasis;
 import com.fdiet.alternative.domain.FoodCategory;
 import com.fdiet.alternative.dto.AlternativeDto;
+import com.fdiet.alternative.dto.AlternativeQueryDto;
 import com.fdiet.alternative.dto.FoodAlternativesDto;
 import com.fdiet.alternative.helpers.FoodCategoriser;
 import com.fdiet.alternative.helpers.NutritionSimilarity;
@@ -11,6 +13,11 @@ import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.model.NutrientValue;
 import com.fdiet.food.service.IBedcaFoodService;
 import com.fdiet.food.service.NutritionService;
+import com.fdiet.reference.domain.FoodState;
+import com.fdiet.reference.domain.WeightBasis;
+import com.fdiet.reference.dto.RationDto;
+import com.fdiet.reference.exception.ReferenceNotFoundException;
+import com.fdiet.reference.service.IReferenceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -21,6 +28,9 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -35,13 +45,15 @@ class AlternativeServiceTest {
     private static final Long OIL = 1L;
 
     private final IBedcaFoodService bedcaFoodService = mock(IBedcaFoodService.class);
+    private final IReferenceService reference = mock(IReferenceService.class);
 
     private final AlternativeService service = new AlternativeService(
             bedcaFoodService,
             new NutritionService(),
             new FoodCategoriser(),
             new NutritionSimilarity(),
-            new NameMatcher());
+            new NameMatcher(),
+            reference);
 
     private List<BedcaFood> catalogue;
 
@@ -172,6 +184,73 @@ class AlternativeServiceTest {
         assertThat(pork.equivalentPortion().energyKcal()).isEqualByComparingTo("164.30");
     }
 
+    /**
+     * 100 g of grilled chicken breast carries 31 g of protein; roast pork loin
+     * publishes 30 g per 100 g, so the same protein is 103 g of it.
+     */
+    @Test
+    void holdsAMacronutrientEqualWhenAskedTo() {
+        FoodAlternativesDto alternatives = service.forFoodId(CHICKEN_BREAST,
+                new AlternativeQueryDto(10, new BigDecimal("100"), false, EquivalenceBasis.PROTEIN, null));
+
+        assertThat(alternatives.basis()).isEqualTo(EquivalenceBasis.PROTEIN);
+        AlternativeDto pork = alternatives.alternatives().stream()
+                .filter(alternative -> alternative.name().equals("Cerdo, lomo, asado"))
+                .findFirst().orElseThrow();
+        assertThat(pork.equivalentGrams()).isEqualByComparingTo("103");
+        assertThat(pork.equivalentPortion().proteinG()).isEqualByComparingTo("30.90");
+    }
+
+    @Test
+    void offersNoWeightOfAFoodThatCarriesTooLittleOfTheBasis() {
+        // Chicken publishes no carbohydrate at all, so there is nothing to hold equal.
+        FoodAlternativesDto alternatives = service.forFoodId(CHICKEN_BREAST,
+                new AlternativeQueryDto(10, new BigDecimal("100"), false,
+                        EquivalenceBasis.CARBOHYDRATE, null));
+
+        assertThat(alternatives.alternatives()).isNotEmpty()
+                .allSatisfy(alternative -> assertThat(alternative.equivalentGrams()).isNull());
+    }
+
+    /** 104 g of pork against a 100-125 g ration is 0,8 to 1,0 rations, sent as a range. */
+    @Test
+    void readsTheEquivalentWeightInTheProfilesRations() {
+        when(reference.profileExists("AESAN-2022:ADULTOS")).thenReturn(true);
+        when(reference.countingRation(eq("AESAN-2022:ADULTOS"), anyLong(), anyString()))
+                .thenReturn(meatRation(FoodState.UNSPECIFIED));
+
+        FoodAlternativesDto alternatives = service.forFoodId(CHICKEN_BREAST,
+                new AlternativeQueryDto(10, new BigDecimal("100"), false, null, "AESAN-2022:ADULTOS"));
+
+        assertThat(alternatives.portionRations().rationsMin()).isEqualByComparingTo("0.8");
+        assertThat(alternatives.portionRations().rationsMax()).isEqualByComparingTo("1.0");
+        AlternativeDto pork = alternatives.alternatives().get(0);
+        assertThat(pork.rations().groupLabel()).isEqualTo("Carnes");
+        assertThat(pork.rations().rationsMin()).isEqualByComparingTo("0.8");
+        assertThat(pork.rations().rationsMax()).isEqualByComparingTo("1.0");
+        assertThat(pork.rations().sourceShortName()).isEqualTo("AESAN 2022");
+    }
+
+    @Test
+    void countsNoRationDefinedInAnotherState() {
+        when(reference.profileExists("AESAN-2022:ADULTOS")).thenReturn(true);
+        when(reference.countingRation(eq("AESAN-2022:ADULTOS"), anyLong(), anyString()))
+                .thenReturn(meatRation(FoodState.RAW));
+
+        FoodAlternativesDto alternatives = service.forFoodId(CHICKEN_BREAST,
+                new AlternativeQueryDto(10, new BigDecimal("100"), false, null, "AESAN-2022:ADULTOS"));
+
+        // Grilled chicken against a raw-weight ration is a yield nobody chose.
+        assertThat(alternatives.portionRations()).isNull();
+    }
+
+    @Test
+    void refusesAProfileNobodyLoaded() {
+        assertThatThrownBy(() -> service.forFoodId(CHICKEN_BREAST,
+                new AlternativeQueryDto(10, new BigDecimal("100"), false, null, "NOPE")))
+                .isInstanceOf(ReferenceNotFoundException.class);
+    }
+
     @Test
     void leavesThePortionOutWhenNoneWasAskedAbout() {
         FoodAlternativesDto alternatives = service.forFoodId(CHICKEN_BREAST, 10, null, false);
@@ -200,6 +279,13 @@ class AlternativeServiceTest {
         assertThatThrownBy(() -> service.forName("pechuga de pollo", 10, null, false))
                 .isInstanceOf(BedcaFoodNotFoundException.class)
                 .hasMessageContaining("pechuga de pollo");
+    }
+
+    private static RationDto meatRation(FoodState state) {
+        return new RationDto(1L, "AESAN-2022:CARNE", "AESAN-2022:ADULTOS", "Adultos",
+                "AESAN-2022-007", "AESAN 2022", "CARNE", "Carnes", FoodCategory.MEAT, null, null,
+                null, null, new BigDecimal("100"), new BigDecimal("125"), null, null, null, null,
+                state, WeightBasis.NET_EDIBLE, null, null, "p. 52", null);
     }
 
     /** Energy as published: kilojoules, which is what 947 of the 957 rows use. */

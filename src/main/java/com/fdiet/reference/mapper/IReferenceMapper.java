@@ -1,6 +1,7 @@
 package com.fdiet.reference.mapper;
 
 import com.fdiet.reference.dto.ExchangeSystemDto;
+import com.fdiet.reference.dto.YieldFactorDto;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.RationDto;
 import com.fdiet.reference.dto.RecommendationDto;
@@ -8,6 +9,7 @@ import com.fdiet.reference.dto.ReferenceProfileDto;
 import com.fdiet.reference.dto.ReferenceRowsDto;
 import com.fdiet.reference.dto.ReferenceSourceDto;
 import com.fdiet.reference.model.ReferenceExchangeSystem;
+import com.fdiet.reference.model.ReferenceYieldFactor;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
 import com.fdiet.reference.model.ReferenceMealShare;
 import com.fdiet.reference.model.ReferencePopulation;
@@ -29,6 +31,8 @@ public interface IReferenceMapper {
 
     ExchangeSystemDto toDto(ReferenceExchangeSystem system);
 
+    YieldFactorDto toDto(ReferenceYieldFactor factor);
+
     void update(ReferenceSource source, ReferenceRowsDto.Source row);
 
     void update(ReferencePopulation population, ReferenceRowsDto.Population row,
@@ -45,6 +49,9 @@ public interface IReferenceMapper {
 
     void update(ReferenceMealShare share, ReferenceRowsDto.MealShare row,
                 ReferencePopulation population);
+
+    void update(ReferenceYieldFactor factor, ReferenceRowsDto.YieldFactor row,
+                ReferenceSource source);
 
     void update(ReferenceExchangeSystem system, ReferenceRowsDto.ExchangeSystem row,
                 ReferenceSource source);

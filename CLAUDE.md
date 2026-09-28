@@ -334,6 +334,12 @@ is read measure-first: `1 cdta AOVE` is `AOVE`, 1, `cdta`, and `1 kiwi` is `kiwi
 and size words (`mediano`) stay in the name and are also read into `state` and `size`. A row merged across the
 day columns (`Comida`, `Cena`) names a meal whose dishes are the rows below it.
 
+**A range stays a range** (`V11`): `2-3 nueces`, `(40-60 gr)`, `1 a 2 cdta` are read as `quantity` (the
+lower end) and `quantity_max` (the upper). It used to be read as its last number, which silently chose
+60 g. A ranged ingredient is weighed by nothing — `DietNutritionService` counts it `unmeasured`, the
+ration count names it "Cantidad en intervalo, sin confirmar" — until a person settles it: a PATCH that
+sends `quantity` clears `quantity_max`. `raw_text` keeps the range as written.
+
 `service/FoodResolverService` matches the whole week against both catalogues in four batched calls
 at most: `entitiesByName` for the names it has not seen, `entitiesByIds` for the ones its cache
 already knows. The composition database is asked first, and only the names it does not carry go
@@ -395,15 +401,21 @@ food in five; the name is the one thing every row has.
 
 `AlternativeController` at `/api/alternatives`:
 
-- `GET /api/alternatives/{foodId}?limit=&grams=&sameFood=` — alternatives to a composition-database
-  food, best first.
-- `GET /api/alternatives?name=&limit=&grams=&sameFood=` — the same for a food named the way a diet
+- `GET /api/alternatives/{foodId}?limit=&grams=&sameFood=&basis=&profile=` — alternatives to a
+  composition-database food, best first.
+- `GET /api/alternatives?name=&limit=&grams=&sameFood=&basis=&profile=` — the same for a food named the way a diet
   names it. **Exact only**, case- and accent-insensitively; anything less is a 404 rather than a
   guess, and is resolved by a person through the diet's fix-up list first.
 
 `grams` asks what weight of each alternative carries the same **energy** as that portion — energy
 because it is the one figure every row publishes — and a food whose energy is unpublished gets no
-equivalent weight rather than an invented one. `sameFood` is false by default: six more cuts of
+equivalent weight rather than an invented one. `basis` (`domain/EquivalenceBasis`) holds something else
+equal instead: `CARBOHYDRATE`, `PROTEIN` or `FAT`, each with a floor per 100 g below which a food gets no
+equivalent weight (the lettuce with a chicken breast's protein is a number no plate holds). The basis is
+the *criterion* and never the eligibility — the category still decides who may stand in. `profile`
+reads the portion and every equivalent weight in that reference profile's rations
+(`RationEquivalentDto`, a range when the ration is), null when the profile counts the food in no group
+or defines the ration in another state than the food. `sameFood` is false by default: six more cuts of
 chicken are not an alternative to chicken, but `sameFood=true` is the right question for cheese,
 where the same word is the whole family.
 
@@ -415,7 +427,7 @@ published too few figures to compare).
 ### `reference`
 
 **What a published guideline says a ration, a household measure or a week should be — each figure
-with the document and page it was read from.** It owns the seven `ref_*` tables (`V8`) and is loaded
+with the document and page it was read from.** It owns the eight `ref_*` tables (`V8`, `V12`) and is loaded
 from `reference-data/` (one folder per source, so a licence stays with its figures; see its
 `README.md`) by `ReferenceStartupSync` at startup (`fdiet.reference.sync-on-startup`) and by
 `POST /api/reference/sync`. Codes are stable keys, so a re-sync updates in place and a diet pointing
@@ -425,9 +437,19 @@ reason, not failed.
 Only openly reusable sources are seeded: **AESAN 2022** (the default adult profile,
 `fdiet.reference.default-adult-profile`), the **AESAN/MEC 2010** school consensus (four age bands, and
 the only Spanish meal energy split, which the adult profile *borrows with a label*), **5 al día 2019**
-per-fruit and per-vegetable portions (CC BY-SA 4.0), and the **definition** of the diabetes 10 g
-carbohydrate ration. SENC, DIAL, FINUT and the Russolillo exchange lists need permission and are not
-loaded; `plan.md` has the research and the licence classes.
+per-fruit and per-vegetable portions (CC BY-SA 4.0), the **definitions** of the diabetes 10 g
+carbohydrate ration and of the general 10 g exchanges (carbohydrate, protein, fat — Russolillo &
+Marques-Lopes 2011, the unit only, never their food lists), and a selection of **USDA 2014 cooking
+yields** for meat and poultry (public domain, `ref_yield_factors`, `V12`). SENC, DIAL, FINUT and the
+Russolillo exchange lists need permission and are not loaded; `plan.md` has the research and the
+licence classes.
+
+**A cooking yield is only offered.** When an ingredient's written state disagrees with its matched food
+(`150 g en crudo` against `Pollo, pechuga, plancha`), `DishIngredient.yieldHint` carries the nearest
+published yield and what the quantity weighs in the food's state (≈ 108 g at 72 %). Rows reach foods by
+family + keywords like rations; `method_keywords` rank a row whose method the cooked side names first,
+and `methodNamed: false` says the source publishes no row for the method written. Nothing converts a
+quantity by it.
 
 - `domain/` — `FoodState` (read off BEDCA names, since LanguaL codes proved inconsistent),
   `PortionSize`, `HouseholdMeasure` (the kitchen words and every spelling of them, in code; an alias
@@ -446,12 +468,14 @@ loaded; `plan.md` has the research and the licence classes.
   (`counted + unmatched + unweighed + noRation + stateMismatch = ingredients`). Recommendations come
   back `WITHIN`/`BELOW`/`ABOVE`/`UNCERTAIN`; while anything that could belong to a group was left
   uncounted, a `BELOW` (and a `WITHIN` against a ceiling) is `UNCERTAIN`, because the count is only a
-  floor. Carbohydrate rations are counted only on a diet marked `clinical`.
+  floor. The clinical carbohydrate ration is counted only on a diet marked `clinical`; the general
+  exchanges on every diet, per day, per meal and per dish (`DishUnits`, addressed by slot like a score).
 
 `ReferenceController` at `/api/reference`: `GET sources`, `GET profiles?ageMonths=` (the suggested one
 is marked, never applied), `GET profiles/{code}`, `GET rations?profile=&bedcaFoodId=`,
 `GET measures?bedcaFoodId=&unit=&dietId=&profile=`, `GET vocabulary`,
-`GET exchange-systems?clinical=`, `POST sync` (answers with every source's attribution).
+`GET exchange-systems?clinical=`, `GET yields?bedcaFoodId=`, `POST sync` (answers with every source's
+attribution).
 
 **The machine offers, the nutritionist decides**, here as in food matching: a nutritionist may give a
 measure their own weight for one diet (`ref_food_measures.diet_id`, deleted with the diet and copied
@@ -488,6 +512,12 @@ is worse, and `scored_at` is there so the two can be told apart.
 nothing. The branded half is the usual match here, the reverse of the week: a diet says `lechuga`,
 while a patient logging an extra is normally holding a wrapper with an EAN on it.
 
+**An extra is weighed by the same household measures as the week** (`V11`: `extra_foods.state`,
+`portion_size`, `food_measure_id`). `POST …/extras` takes an optional `foodMeasureId`; without one,
+`JournalService` asks `IReferenceService.chooseMeasures` with the diet's profile and own criteria, so a
+measure attaches on its own only when the choice is not a judgement. Both nutrition services weigh
+through `IPortionScaler.weigh(quantity, unit, measure, ediblePortion)`, one door for both.
+
 There is **no score of zero**. Having no opinion has to stay out of the average rather than drag it
 down, so taking a rating back is a DELETE of the slot's score. `averageScore` is null while nothing
 has been scored, and travels with `scored` — the count it was worked out over — the way every other
@@ -522,6 +552,8 @@ changing an entity, add a migration to match or startup fails.
 | `V8__create_reference_schema.sql` | the seven `ref_*` tables: sources, populations, rations, food measures, recommendations, meal shares, exchange systems |
 | `V9__patient_profile_and_diet_reference.sql` | `patients.birth_date` / `sex`; `diets.reference_profile_code` / `clinical` |
 | `V10__ingredient_measure_state.sql` | `diet_ingredients.state`, `portion_size`, `food_measure_id` |
+| `V11__ingredient_range_and_extra_measure.sql` | `diet_ingredients.quantity_max`; `extra_foods.state`, `portion_size`, `food_measure_id` |
+| `V12__create_yield_factors.sql` | `ref_yield_factors` — published cooking yields, offered and never applied |
 
 ## Data files and licensing
 
@@ -538,8 +570,9 @@ full terms and the attribution string are in `BEDCA-ATTRIBUTION.txt`, and `POST 
 returns the attribution in its response so no caller can store the data without being handed it.
 
 `reference-data/` holds the reference CSVs, each folder under its own source's terms; the 5 al día
-figures are **CC BY-SA 4.0**, so a derived file stays ShareAlike. The UI's builder shows BEDCA's line
-and every reference source a count used in its footer.
+figures are **CC BY-SA 4.0**, so a derived file stays ShareAlike; the USDA yields are US public domain.
+Both the builder and the patient screen show BEDCA's line and every reference source a count used in
+their footer.
 
 ## Dependencies
 

@@ -1,8 +1,11 @@
 package com.fdiet.alternative.service;
 
+import com.fdiet.alternative.domain.EquivalenceBasis;
 import com.fdiet.alternative.domain.FoodCategory;
 import com.fdiet.alternative.dto.AlternativeDto;
+import com.fdiet.alternative.dto.AlternativeQueryDto;
 import com.fdiet.alternative.dto.FoodAlternativesDto;
+import com.fdiet.alternative.dto.RationEquivalentDto;
 import com.fdiet.alternative.helpers.IFoodCategoriser;
 import com.fdiet.alternative.helpers.INutritionSimilarity;
 import com.fdiet.food.dto.NutritionDto;
@@ -11,6 +14,10 @@ import com.fdiet.food.helpers.INameMatcher;
 import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.service.IBedcaFoodService;
 import com.fdiet.food.service.INutritionService;
+import com.fdiet.reference.domain.FoodState;
+import com.fdiet.reference.dto.RationDto;
+import com.fdiet.reference.exception.ReferenceNotFoundException;
+import com.fdiet.reference.service.IReferenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,56 +54,73 @@ public class AlternativeService implements IAlternativeService {
     private final INutritionService nutritionService;
     private final IFoodCategoriser foodCategoriser;
     private final INutritionSimilarity nutritionSimilarity;
+    /** A ration count is read to one decimal: "1,2 raciones", never "1,1834". */
+    private static final int RATIONS_SCALE = 1;
+
     private final INameMatcher nameMatcher;
+    private final IReferenceService referenceService;
 
     public AlternativeService(IBedcaFoodService bedcaFoodService,
                               INutritionService nutritionService,
                               IFoodCategoriser foodCategoriser,
                               INutritionSimilarity nutritionSimilarity,
-                              INameMatcher nameMatcher) {
+                              INameMatcher nameMatcher,
+                              IReferenceService referenceService) {
         this.bedcaFoodService = bedcaFoodService;
         this.nutritionService = nutritionService;
         this.foodCategoriser = foodCategoriser;
         this.nutritionSimilarity = nutritionSimilarity;
         this.nameMatcher = nameMatcher;
+        this.referenceService = referenceService;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public FoodAlternativesDto forFoodId(Long foodId, int limit, BigDecimal grams, boolean sameFood) {
-        return alternativesTo(bedcaFoodService.entityById(foodId), limit, grams, sameFood);
+    public FoodAlternativesDto forFoodId(Long foodId, AlternativeQueryDto query) {
+        requireProfile(query.profileCode());
+        return alternativesTo(bedcaFoodService.entityById(foodId), query);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public FoodAlternativesDto forName(String name, int limit, BigDecimal grams, boolean sameFood) {
+    public FoodAlternativesDto forName(String name, AlternativeQueryDto query) {
+        requireProfile(query.profileCode());
         BedcaFood food = bedcaFoodService.entitiesByName(List.of(name))
                 .get(IBedcaFoodService.normalise(name));
         if (food == null) {
             throw new BedcaFoodNotFoundException(name);
         }
-        return alternativesTo(food, limit, grams, sameFood);
+        return alternativesTo(food, query);
+    }
+
+    /** A profile nobody loaded is the reference module's 404, not a silent "no rations". */
+    private void requireProfile(String code) {
+        if (code != null && !referenceService.profileExists(code)) {
+            throw ReferenceNotFoundException.profile(code);
+        }
     }
 
     /**
      * A food with no category is answered honestly and cheaply: the catalogue is
      * never read, because there is no shelf to read it for.
      */
-    private FoodAlternativesDto alternativesTo(BedcaFood reference,
-                                               int limit,
-                                               BigDecimal grams,
-                                               boolean sameFood) {
+    private FoodAlternativesDto alternativesTo(BedcaFood reference, AlternativeQueryDto query) {
+        BigDecimal grams = query.grams();
+        EquivalenceBasis basis = query.basis();
+        String profile = query.profileCode();
         NutritionDto nutrition = nutritionService.per100g(reference);
         BigDecimal portionFactor = factorOf(grams);
         NutritionDto portion = portionFactor == null ? null : nutrition.scaled(portionFactor);
+        RationEquivalentDto portionRations = rationsOf(profile, reference, grams);
 
         FoodCategory category = foodCategoriser.of(reference.getName());
         if (category == null) {
             return new FoodAlternativesDto(reference.getId(), reference.getName(),
-                    null, null, nutrition, grams, portion, 0, 0, List.of());
+                    null, null, nutrition, grams, portion, basis, profile, portionRations,
+                    0, 0, List.of());
         }
 
-        String head = sameFood ? null : headOf(reference.getName());
+        String head = query.sameFood() ? null : headOf(reference.getName());
         List<BedcaFood> eligible = eligible(reference, category, head);
 
         List<AlternativeDto> ranked = new ArrayList<>();
@@ -106,16 +130,16 @@ public class AlternativeService implements IAlternativeService {
             if (score == null) {
                 continue;
             }
-            ranked.add(offer(candidate, theirs, score, nutrition, grams));
+            ranked.add(offer(candidate, theirs, score, nutrition, grams, basis, profile));
         }
         ranked.sort(Comparator.comparingInt(AlternativeDto::score).reversed()
                 .thenComparing(AlternativeDto::name));
 
         return new FoodAlternativesDto(
                 reference.getId(), reference.getName(), category, category.label(),
-                nutrition, grams, portion,
+                nutrition, grams, portion, basis, profile, portionRations,
                 eligible.size(), ranked.size(),
-                ranked.stream().limit(limit).toList());
+                ranked.stream().limit(query.limit()).toList());
     }
 
     /**
@@ -141,29 +165,59 @@ public class AlternativeService implements IAlternativeService {
                                  NutritionDto theirs,
                                  int score,
                                  NutritionDto reference,
-                                 BigDecimal grams) {
-        BigDecimal equivalentGrams = equivalentGrams(reference, theirs, grams);
+                                 BigDecimal grams,
+                                 EquivalenceBasis basis,
+                                 String profile) {
+        BigDecimal equivalentGrams = equivalentGrams(reference, theirs, grams, basis);
         BigDecimal equivalentFactor = factorOf(equivalentGrams);
         return new AlternativeDto(
                 candidate.getId(), candidate.getName(), score, theirs,
                 equivalentGrams,
-                equivalentFactor == null ? null : theirs.scaled(equivalentFactor));
+                equivalentFactor == null ? null : theirs.scaled(equivalentFactor),
+                rationsOf(profile, candidate, equivalentGrams));
     }
 
     /**
-     * How much of the alternative carries the energy of the portion asked
-     * about. Energy is what the equivalence holds constant because it is the
-     * one figure every food in the catalogue publishes; a food whose energy is
-     * unpublished, or which has none to speak of, gets no equivalent weight
-     * rather than an invented one.
+     * How much of the alternative carries the same figure as the portion asked
+     * about: energy by default, because it is the one figure every food in the
+     * catalogue publishes, or the grams of one macronutrient. A food that leaves
+     * the figure unpublished, or carries too little of it to be weighed against
+     * (the protein of a lettuce), gets no equivalent weight rather than an
+     * invented one; so does a portion that carries none of it.
      */
-    private BigDecimal equivalentGrams(NutritionDto reference, NutritionDto candidate, BigDecimal grams) {
-        if (grams == null || reference.energyKcal() == null || candidate.energyKcal() == null
-                || candidate.energyKcal().signum() <= 0) {
+    private BigDecimal equivalentGrams(NutritionDto reference, NutritionDto candidate,
+                                       BigDecimal grams, EquivalenceBasis basis) {
+        BigDecimal held = basis.of(reference);
+        if (grams == null || held == null || held.signum() <= 0 || !basis.carries(candidate)) {
             return null;
         }
-        return grams.multiply(reference.energyKcal())
-                .divide(candidate.energyKcal(), GRAMS_SCALE, RoundingMode.HALF_UP);
+        return grams.multiply(held)
+                .divide(basis.of(candidate), GRAMS_SCALE, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * A weight of a food read in the profile's rations for it, or null when
+     * there is no honest count: no profile, no group for the food, a ration with
+     * no weight, or a ration defined in another state than the food (a cooked
+     * food against a dry ration), which would need a yield somebody has to choose.
+     */
+    private RationEquivalentDto rationsOf(String profile, BedcaFood food, BigDecimal grams) {
+        if (profile == null || grams == null || grams.signum() <= 0) {
+            return null;
+        }
+        RationDto ration = referenceService.countingRation(profile, food.getId(), food.getName());
+        if (ration == null
+                || FoodState.disagree(FoodState.ofFoodName(food.getName()), ration.state())) {
+            return null;
+        }
+        BigDecimal[] weight = ration.edibleWeight(food.getEdiblePortion());
+        if (weight == null) {
+            return null;
+        }
+        return new RationEquivalentDto(ration.groupCode(), ration.groupLabel(),
+                grams.divide(weight[1], RATIONS_SCALE, RoundingMode.HALF_UP),
+                grams.divide(weight[0], RATIONS_SCALE, RoundingMode.HALF_UP),
+                ration.sourceShortName(), ration.pageRef());
     }
 
     /** What to multiply a per-100 g figure by to get it for {@code grams}. */

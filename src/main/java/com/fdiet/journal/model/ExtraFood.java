@@ -2,6 +2,9 @@ package com.fdiet.journal.model;
 
 import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.model.FoodItem;
+import com.fdiet.reference.domain.FoodState;
+import com.fdiet.reference.domain.PortionSize;
+import com.fdiet.reference.model.ReferenceFoodMeasure;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -60,6 +63,25 @@ public class ExtraFood {
 
     @Column(name = "unit", length = 32, nullable = false)
     private String unit;
+
+    /** The raw/cooked word, when the entry carried one. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "state", length = 16)
+    private FoodState state;
+
+    /** "Pequeña", "mediana", "grande", which decides which measure row can weigh one piece. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "portion_size", length = 8)
+    private PortionSize size;
+
+    /**
+     * The household measure that weighs a quantity logged in one ("1 cucharada",
+     * "1 pieza"), chosen by the same rule as an ingredient of the week: attached
+     * on its own only when the choice is not a judgement.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "food_measure_id")
+    private ReferenceFoodMeasure foodMeasure;
 
     /** The generic food of the composition database, when that is the match. */
     @ManyToOne(fetch = FetchType.LAZY)

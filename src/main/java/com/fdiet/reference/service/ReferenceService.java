@@ -23,6 +23,7 @@ import com.fdiet.reference.dto.ReferenceProfileDto;
 import com.fdiet.reference.dto.ReferenceRowsDto;
 import com.fdiet.reference.dto.ReferenceSourceDto;
 import com.fdiet.reference.dto.ReferenceSyncSummaryDto;
+import com.fdiet.reference.dto.YieldFactorDto;
 import com.fdiet.reference.dto.ReferenceSyncSummaryDto.TableSync;
 import com.fdiet.reference.exception.InvalidReferenceException;
 import com.fdiet.reference.exception.ReferenceNotFoundException;
@@ -35,6 +36,7 @@ import com.fdiet.reference.model.ReferencePopulation;
 import com.fdiet.reference.model.ReferenceRation;
 import com.fdiet.reference.model.ReferenceRecommendation;
 import com.fdiet.reference.model.ReferenceSource;
+import com.fdiet.reference.model.ReferenceYieldFactor;
 import com.fdiet.reference.repository.ReferenceExchangeSystemRepository;
 import com.fdiet.reference.repository.ReferenceFoodMeasureRepository;
 import com.fdiet.reference.repository.ReferenceMealShareRepository;
@@ -42,6 +44,7 @@ import com.fdiet.reference.repository.ReferencePopulationRepository;
 import com.fdiet.reference.repository.ReferenceRationRepository;
 import com.fdiet.reference.repository.ReferenceRecommendationRepository;
 import com.fdiet.reference.repository.ReferenceSourceRepository;
+import com.fdiet.reference.repository.ReferenceYieldFactorRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -80,6 +83,7 @@ public class ReferenceService implements IReferenceService {
     private final ReferenceRecommendationRepository recommendationRepository;
     private final ReferenceMealShareRepository mealShareRepository;
     private final ReferenceExchangeSystemRepository exchangeSystemRepository;
+    private final ReferenceYieldFactorRepository yieldFactorRepository;
     private final IReferenceMapper mapper;
     private final ReferenceMatcher matcher;
     private final IFoodCategoriser categoriser;
@@ -100,6 +104,7 @@ public class ReferenceService implements IReferenceService {
                             ReferenceRecommendationRepository recommendationRepository,
                             ReferenceMealShareRepository mealShareRepository,
                             ReferenceExchangeSystemRepository exchangeSystemRepository,
+                            ReferenceYieldFactorRepository yieldFactorRepository,
                             IReferenceMapper mapper,
                             ReferenceMatcher matcher,
                             IFoodCategoriser categoriser,
@@ -113,6 +118,7 @@ public class ReferenceService implements IReferenceService {
         this.recommendationRepository = recommendationRepository;
         this.mealShareRepository = mealShareRepository;
         this.exchangeSystemRepository = exchangeSystemRepository;
+        this.yieldFactorRepository = yieldFactorRepository;
         this.mapper = mapper;
         this.matcher = matcher;
         this.categoriser = categoriser;
@@ -284,6 +290,23 @@ public class ReferenceService implements IReferenceService {
         return snapshot().exchanges().stream()
                 .filter(system -> includeClinical || !system.clinical())
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<YieldFactorDto> yieldFactors(String foodName, String methodText) {
+        if (foodName == null) {
+            return List.of();
+        }
+        return matcher.yieldsCovering(snapshot().yields(), foodName, categoriser.of(foodName),
+                methodText);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<YieldFactorDto> yieldFactorsForFood(Long bedcaFoodId) {
+        String name = bedcaFoodService.entityById(bedcaFoodId).getName();
+        return yieldFactors(name, name);
     }
 
     @Override
@@ -509,6 +532,14 @@ public class ReferenceService implements IReferenceService {
                         required(sources, row.sourceCode(), "source", row.origin())),
                 exchangeSystemRepository::saveAll));
 
+        Map<String, ReferenceYieldFactor> yields =
+                byCode(yieldFactorRepository.findAll(), ReferenceYieldFactor::getCode);
+        tables.add(upsert("ref_yield_factors", rows.yieldFactors(), yields,
+                ReferenceRowsDto.YieldFactor::code, ReferenceYieldFactor::new,
+                (entity, row) -> mapper.update(entity, row,
+                        required(sources, row.sourceCode(), "source", row.origin())),
+                yieldFactorRepository::saveAll));
+
         requireBorrowedSharesExist(rows);
         snapshot = null;
 
@@ -660,8 +691,12 @@ public class ReferenceService implements IReferenceService {
                 .map(mapper::toDto)
                 .toList();
 
+        List<YieldFactorDto> yields = yieldFactorRepository.findAllByOrderByIdAsc().stream()
+                .map(mapper::toDto)
+                .toList();
+
         return new Snapshot(sources, populations, rations, measures, recommendations, shares,
-                sharePages, exchanges);
+                sharePages, exchanges, yields);
     }
 
     private record Snapshot(
@@ -672,7 +707,8 @@ public class ReferenceService implements IReferenceService {
             Map<String, List<RecommendationDto>> recommendations,
             Map<String, List<MealShareDto>> shares,
             Map<String, String> sharePages,
-            List<ExchangeSystemDto> exchanges) {
+            List<ExchangeSystemDto> exchanges,
+            List<YieldFactorDto> yields) {
     }
 
     private record PopulationView(

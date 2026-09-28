@@ -8,6 +8,7 @@ import com.fdiet.reference.dto.ReferenceProfileDetailDto;
 import com.fdiet.reference.dto.ReferenceProfileDto;
 import com.fdiet.reference.dto.ReferenceSourceDto;
 import com.fdiet.reference.dto.ReferenceSyncSummaryDto;
+import com.fdiet.reference.dto.YieldFactorDto;
 import com.fdiet.reference.service.IReferenceImportService;
 import com.fdiet.reference.service.IReferenceService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -79,6 +80,14 @@ public class ReferenceController {
                                          @RequestParam(required = false) Long dietId,
                                          @RequestParam(required = false) String profile) {
         return referenceService.measuresForFood(bedcaFoodId, unit, dietId, profile);
+    }
+
+    @GetMapping("/yields")
+    @Operation(summary = "Published cooking yields that could say what a composition-database "
+            + "food weighs raw or cooked, most specific first and those whose method the food's "
+            + "name states ahead of the rest. Offers only: nothing converts a quantity by them")
+    public List<YieldFactorDto> yields(@RequestParam Long bedcaFoodId) {
+        return referenceService.yieldFactorsForFood(bedcaFoodId);
     }
 
     @GetMapping("/vocabulary")

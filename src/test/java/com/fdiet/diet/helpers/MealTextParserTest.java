@@ -226,6 +226,51 @@ class MealTextParserTest {
     }
 
     @Test
+    void readsARangeInBracketsAsBothEndsInsteadOfTheLastNumber() {
+        DishIngredient turkey = parser.parse("2-3 lonchas de pavo (40-60 gr)", "Merienda")
+                .ingredients().get(0);
+
+        assertThat(turkey.name()).isEqualTo("2-3 lonchas de pavo");
+        assertThat(turkey.quantity()).isEqualByComparingTo("40");
+        assertThat(turkey.quantityMax()).isEqualByComparingTo("60");
+        assertThat(turkey.unit()).isEqualTo("gr");
+        assertThat(turkey.range()).isTrue();
+    }
+
+    @Test
+    void readsARangeOfPiecesWrittenInFrontOfTheFood() {
+        DishIngredient nuts = parser.parse("2-3 nueces", "Media mañana").ingredients().get(0);
+        DishIngredient spoons = parser.parse("1 a 2 cdta AOVE", "Comida").ingredients().get(0);
+
+        assertThat(nuts.name()).isEqualTo("nueces");
+        assertThat(nuts.quantity()).isEqualByComparingTo("2");
+        assertThat(nuts.quantityMax()).isEqualByComparingTo("3");
+        assertThat(nuts.unit()).isEqualTo("unidad");
+        assertThat(spoons.name()).isEqualTo("AOVE");
+        assertThat(spoons.quantityMax()).isEqualByComparingTo("2");
+        assertThat(spoons.unit()).isEqualTo("cdta");
+    }
+
+    @Test
+    void aSingleValueAndABackwardsRangeAreNoRange() {
+        assertThat(parser.parse("lechuga (80 gr)", "Comida").ingredients().get(0).quantityMax())
+                .isNull();
+        assertThat(parser.parse("1 kiwi", "Postre").ingredients().get(0).quantityMax()).isNull();
+        DishIngredient backwards = parser.parse("arroz (60-40 gr)", "Comida").ingredients().get(0);
+        assertThat(backwards.quantity()).isEqualByComparingTo("60");
+        assertThat(backwards.quantityMax()).isNull();
+    }
+
+    @Test
+    void anAWordThatIsNotARangeIsLeftToTheFood() {
+        DishIngredient fish = parser.parse("1 a la plancha", "Cena").ingredients().get(0);
+
+        assertThat(fish.quantity()).isEqualByComparingTo("1");
+        assertThat(fish.quantityMax()).isNull();
+        assertThat(fish.name()).isEqualTo("a la plancha");
+    }
+
+    @Test
     void returnsNothingForAnEmptyCell() {
         assertThat(parser.parse("   ", "Postre")).isNull();
         assertThat(parser.parse(null, "Postre")).isNull();

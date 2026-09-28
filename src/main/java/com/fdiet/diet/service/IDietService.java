@@ -74,6 +74,13 @@ public interface IDietService {
     boolean exists(Long dietId);
 
     /**
+     * The reference profile the diet is read against, or null when it has none,
+     * without loading its week. Asked by {@code com.fdiet.journal}, which weighs
+     * an extra by the same household measures the week is weighed by.
+     */
+    String referenceProfileCode(Long dietId);
+
+    /**
      * Whether a dish sits at that place in the week — the day, the meal slot,
      * and its position within the meal.
      *

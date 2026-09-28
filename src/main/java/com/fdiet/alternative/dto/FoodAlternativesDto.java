@@ -1,5 +1,6 @@
 package com.fdiet.alternative.dto;
 
+import com.fdiet.alternative.domain.EquivalenceBasis;
 import com.fdiet.alternative.domain.FoodCategory;
 import com.fdiet.food.dto.NutritionDto;
 
@@ -21,7 +22,9 @@ import java.util.List;
  *
  * <p>{@code nutrition} is the asked-for food per 100 g. {@code portion} is the
  * same figures at {@code grams}, and both it and {@code grams} are null unless a
- * portion was asked about.
+ * portion was asked about. {@code basis} is what every equivalent weight holds
+ * constant; {@code portionRations} the asked-for portion in the rations of
+ * {@code profileCode}, null without one.
  */
 public record FoodAlternativesDto(
         Long foodId,
@@ -31,6 +34,9 @@ public record FoodAlternativesDto(
         NutritionDto nutrition,
         BigDecimal grams,
         NutritionDto portion,
+        EquivalenceBasis basis,
+        String profileCode,
+        RationEquivalentDto portionRations,
         int inCategory,
         int ranked,
         List<AlternativeDto> alternatives) {

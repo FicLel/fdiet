@@ -9,8 +9,12 @@ import DayPills from '@/components/DayPills.vue'
 import DaySummary from '@/components/DaySummary.vue'
 import DayTotalCard from '@/components/DayTotalCard.vue'
 import ExtraFoodPanel from '@/components/ExtraFoodPanel.vue'
+import RationsStrip from '@/components/RationsStrip.vue'
+import AttributionFooter from '@/components/AttributionFooter.vue'
 import { usePatientWeek } from '@/stores/patientWeek'
 import { usePatients } from '@/stores/patients'
+import { useRations } from '@/stores/rations'
+import { useReference } from '@/stores/reference'
 import { useViewport } from '@/composables/useViewport'
 import { integer } from '@/domain/format'
 
@@ -31,12 +35,15 @@ import { integer } from '@/domain/format'
 
 const week = usePatientWeek()
 const patients = usePatients()
+const rations = useRations()
+const reference = useReference()
 const { mobile, tablet, desktop } = useViewport()
 
 /** Whether the "add an extra" panel is open, and never on both sides at once. */
 const adding = ref(false)
 
 onMounted(async () => {
+  void reference.ensure().catch(() => undefined)
   if (patients.status.value === 'idle') {
     await patients.load()
   }
@@ -67,6 +74,21 @@ const day = computed(() => week.today.value)
 
 const isToday = computed(() => day.value?.isToday ?? false)
 
+/**
+ * The same count the builder shows, of the same published week — here there is
+ * nothing unpublished, since the plan is read-only on this screen.
+ */
+watch(
+  week.diet,
+  (plan) => {
+    void rations.load(plan?.id ?? null)
+  },
+  { immediate: true },
+)
+
+/** BEDCA always; every reference source the count used, once there is one. */
+const sources = computed(() => rations.rations.value?.sources ?? [])
+
 function openAdd(): void {
   adding.value = true
 }
@@ -92,6 +114,16 @@ function openAdd(): void {
       :average-score="week.journal.value?.averageScore ?? null"
       :scored="week.journal.value?.scored ?? 0"
       :compact="mobile"
+    />
+
+    <RationsStrip
+      v-if="week.status.value === 'ready'"
+      :rations="rations.rations.value"
+      :loading="rations.status.value === 'loading'"
+      :error="rations.error.value"
+      :day="day?.day ?? null"
+      :dirty-count="0"
+      :profile-label="reference.profileLabel(week.diet.value?.referenceProfileCode)"
     />
 
     <p v-if="week.error.value && week.status.value === 'ready'" class="banner">
@@ -248,6 +280,7 @@ function openAdd(): void {
         </div>
       </div>
     </template>
+    <AttributionFooter v-if="week.status.value === 'ready'" :sources="sources" />
   </div>
 </template>
 

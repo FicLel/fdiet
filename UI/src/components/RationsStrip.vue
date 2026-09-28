@@ -11,6 +11,7 @@ import {
 } from '@/domain/rations'
 import { dayName } from '@/domain/week'
 import { MEAL_ORDER } from '@/domain/slots'
+import { useRations } from '@/stores/rations'
 
 /**
  * The week read against its reference profile: rations per group for the day in
@@ -33,6 +34,13 @@ const props = defineProps<{
 }>()
 
 const open = ref(false)
+
+const store = useRations()
+
+/** Which systems each system belongs to, read off the week's own definitions. */
+const clinicalCodes = computed(
+  () => new Set((props.rations?.exchangeSystems ?? []).filter((s) => s.clinical).map((s) => s.code)),
+)
 
 const today = computed<DayRations | null>(() => {
   if (!props.rations || !props.day) {
@@ -72,7 +80,15 @@ const segments = computed(() =>
     .map((meal) => ({ ...meal, width: `${meal.pct}%` })),
 )
 
-const exchanges = computed(() => today.value?.exchanges ?? [])
+/**
+ * The clinical ration shows on a clinical diet regardless; the general 10 g
+ * exchanges only while the exchanges view is on.
+ */
+const exchanges = computed(() =>
+  (today.value?.exchanges ?? []).filter(
+    (system) => clinicalCodes.value.has(system.code) || store.showExchanges.value,
+  ),
+)
 
 function checkTitle(check: RecommendationCheck): string {
   const parts = [STATUS_HINTS[check.status]]
@@ -130,6 +146,16 @@ function mealName(type: string): string {
         </span>
       </template>
 
+      <button
+        class="toggle"
+        type="button"
+        :aria-pressed="store.showExchanges.value"
+        :disabled="!rations"
+        title="Leer cada día y cada plato también en intercambios de 10 g de hidratos, proteína y grasa"
+        @click="store.toggleExchanges()"
+      >
+        {{ store.showExchanges.value ? 'Sin intercambios' : 'Intercambios' }}
+      </button>
       <button
         class="toggle"
         type="button"
@@ -224,10 +250,13 @@ function mealName(type: string): string {
           </template>
 
           <template v-if="exchanges.length > 0">
-            <h3 class="title">Dieta clínica</h3>
+            <h3 class="title">Intercambios · {{ day ? dayName(day) : '' }}</h3>
             <div v-for="system in exchanges" :key="system.code" class="exchange">
               <div class="exchange-head">
-                <span>{{ system.name }} ({{ amount(system.gramsPerUnit) }} g)</span>
+                <span>
+                  {{ system.name }} ({{ amount(system.gramsPerUnit) }} g)
+                  <span v-if="clinicalCodes.has(system.code)" class="faint">· clínico</span>
+                </span>
                 <span class="num strong">{{ amount(system.dayUnits, 1) }} al día</span>
               </div>
               <ul class="exchange-meals">
@@ -238,7 +267,8 @@ function mealName(type: string): string {
               </ul>
             </div>
             <p class="note">
-              Sobre los hidratos de carbono de lo que cuenta en kcal; lo que no cuenta, no suma.
+              Sobre los gramos de lo que cuenta en kcal, calculados con BEDCA; lo que no cuenta, no
+              suma. Por plato, en el panel del plato.
             </p>
           </template>
         </div>

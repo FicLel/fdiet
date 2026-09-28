@@ -1,5 +1,7 @@
 package com.fdiet.alternative.controller;
 
+import com.fdiet.alternative.domain.EquivalenceBasis;
+import com.fdiet.alternative.dto.AlternativeQueryDto;
 import com.fdiet.alternative.dto.FoodAlternativesDto;
 import com.fdiet.alternative.service.IAlternativeService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,13 +41,18 @@ public class AlternativeController {
             + "of the same family are offered — a grilled chicken is answered with meats and "
             + "fish and never with a vegetable, however close the figures — and the order "
             + "within the family is how near the composition is. Pass grams to be told how "
-            + "much of each alternative carries the same energy")
+            + "much of each alternative carries the same energy, or the same carbohydrate, "
+            + "protein or fat with basis; pass profile to have each weight read in that "
+            + "reference profile's rations too")
     public FoodAlternativesDto byFoodId(
             @PathVariable Long foodId,
             @RequestParam(defaultValue = "10") @Min(1) @Max(50) int limit,
             @RequestParam(required = false) @DecimalMin("0.01") BigDecimal grams,
-            @RequestParam(defaultValue = "false") boolean sameFood) {
-        return alternativeService.forFoodId(foodId, limit, grams, sameFood);
+            @RequestParam(defaultValue = "false") boolean sameFood,
+            @RequestParam(defaultValue = "ENERGY") EquivalenceBasis basis,
+            @RequestParam(required = false) String profile) {
+        return alternativeService.forFoodId(foodId,
+                new AlternativeQueryDto(limit, grams, sameFood, basis, profile));
     }
 
     @GetMapping
@@ -57,7 +64,10 @@ public class AlternativeController {
             @RequestParam @NotBlank String name,
             @RequestParam(defaultValue = "10") @Min(1) @Max(50) int limit,
             @RequestParam(required = false) @DecimalMin("0.01") BigDecimal grams,
-            @RequestParam(defaultValue = "false") boolean sameFood) {
-        return alternativeService.forName(name, limit, grams, sameFood);
+            @RequestParam(defaultValue = "false") boolean sameFood,
+            @RequestParam(defaultValue = "ENERGY") EquivalenceBasis basis,
+            @RequestParam(required = false) String profile) {
+        return alternativeService.forName(name,
+                new AlternativeQueryDto(limit, grams, sameFood, basis, profile));
     }
 }

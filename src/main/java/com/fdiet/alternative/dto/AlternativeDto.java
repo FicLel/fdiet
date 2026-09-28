@@ -13,10 +13,13 @@ import java.math.BigDecimal;
  * compositions read alike on the components both publish.
  *
  * <p>{@code nutrition} is per 100 g, always. {@code equivalentGrams} is how much
- * of this food carries the energy of the portion that was asked about, and
- * {@code equivalentPortion} its figures at that weight — both null when no
- * portion was given, and both null when either food's energy is unpublished,
- * because there is then nothing to hold equal.
+ * of this food carries the same energy — or the same grams of carbohydrate,
+ * protein or fat, whichever basis was asked for — as the portion that was asked
+ * about, and {@code equivalentPortion} its figures at that weight. Both are null
+ * when no portion was given, and both null when either food leaves the figure
+ * unpublished or carries too little of it to be weighed against, because there
+ * is then nothing to hold equal. {@code rations} is that weight read in the
+ * reference profile's rations, when a profile was given and counts the food.
  */
 public record AlternativeDto(
         Long bedcaFoodId,
@@ -24,5 +27,6 @@ public record AlternativeDto(
         int score,
         NutritionDto nutrition,
         BigDecimal equivalentGrams,
-        NutritionDto equivalentPortion) {
+        NutritionDto equivalentPortion,
+        RationEquivalentDto rations) {
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ExtraFood } from '@/api/types'
-import { integer, NO_VALUE, quantity } from '@/domain/format'
+import { grams, integer, NO_VALUE, quantity } from '@/domain/format'
 
 /**
  * One thing eaten off the plan.
@@ -25,7 +25,9 @@ const kcal = computed(() => props.extra.nutrition?.energyKcal ?? null)
 
 const portion = computed(() => {
   const amount = quantity(props.extra.quantity, props.extra.unit)
-  return props.extra.brand ? `${amount} · ${props.extra.brand}` : amount
+  const weighed = props.extra.measure?.gramsPerMeasure
+  const measured = weighed == null ? amount : `${amount} · ${grams(weighed)} g cada una`
+  return props.extra.brand ? `${measured} · ${props.extra.brand}` : measured
 })
 
 /** Why there is no figure, when there is none. */

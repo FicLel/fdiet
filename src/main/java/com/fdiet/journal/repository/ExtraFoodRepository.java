@@ -10,15 +10,16 @@ import java.util.Optional;
 /**
  * Owns {@code extra_foods}.
  *
- * <p>The entity graph fetches both catalogue references with the rows. Their
+ * <p>The entity graph fetches both catalogue references, and the household
+ * measure that weighs an entry, with the rows. Their
  * composition figures are what an entry is read for, and without it a week of
  * extras would be a select each.
  */
 public interface ExtraFoodRepository extends JpaRepository<ExtraFood, Long> {
 
-    @EntityGraph(attributePaths = {"bedcaFood", "foodItem"})
+    @EntityGraph(attributePaths = {"bedcaFood", "foodItem", "foodMeasure"})
     List<ExtraFood> findByDietIdOrderByLoggedAtAsc(Long dietId);
 
-    @EntityGraph(attributePaths = {"bedcaFood", "foodItem"})
+    @EntityGraph(attributePaths = {"bedcaFood", "foodItem", "foodMeasure"})
     Optional<ExtraFood> findWithFoodById(Long id);
 }
