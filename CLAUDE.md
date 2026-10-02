@@ -171,9 +171,10 @@ Every diet belongs to one patient, and there is **one active diet per patient** 
 their archived ones; nothing generates a week, the nutritionist writes it. The module keeps two
 shapes of the same idea apart:
 
-- `model/` — the JPA entities `DietPlan`, `PlannedMeal`, `PlannedDish`, `PlannedIngredient` →
-  `diets`, `diet_meals`, `diet_dishes`, `diet_ingredients`. Named `Planned*` so the bare `Diet`
-  and `Meal` stay with the in-memory classes and no file ever imports two of either.
+- `model/` — the JPA entities `DietPlan`, `PlannedMeal`, `PlannedDish` → `diets`, `diet_meals`,
+  `diet_dishes`, and `Recipe`, `RecipeIngredient` → `recipes`, `recipe_ingredients`. Named
+  `Planned*` so the bare `Diet` and `Meal` stay with the in-memory classes and no file ever imports
+  two of either.
 - `domain/` — `Diet` and `Meal`, plain in-memory classes that validate a submitted week (a day
   once per diet, a meal once per slot) and hand it back ordered by `DayOfWeek` / `MealType`
   through their `EnumMap`s. Entities read from the database get their ordering from here rather
@@ -206,7 +207,48 @@ diet would take the patient's journal with it — the scores and off-plan entrie
 id — and the week would arrive under a new name carrying somebody else's opinion of it.
 `POST /api/diets/{id}/copy` is the answer, and it leaves both diets alone.
 
-`PlannedIngredient` carries `raw_name` — what the diet calls the food — and *may* point at one of
+### Recipes (`V13`)
+
+**A plate is a description and a recipe, and the two are not related by text.** `diet_dishes.name`
+is what the patient reads — "Huevos revueltos" — and nothing reads food out of it. The food is the
+plate's `recipe_id`: a `recipes` row holding the ingredients **for one serving**, the text they were
+written as (`raw_text`) and free-text preparation (`steps`). `diet_dishes.servings` (default 1)
+multiplies the recipe for that plate; nothing scaled is stored — `domain/Serving` pairs an
+ingredient with its plate's servings and `DietNutritionService` / `DietRationService` multiply the
+portion factor on read (the counts are never scaled). `recipe_id` null is a description-only plate
+("Comida libre"). The patient sees the recipe — ingredients at the plate's servings, and the
+steps — by pressing the plate.
+
+Two kinds of recipe share the table:
+
+- **Library** (`library = TRUE`) — shared and **linked**: every plate that points at one reads it, in
+  every patient's week, so an edit through `/api/recipes` reaches all of them at once, **without a
+  publish**. `GET /api/recipes/{id}/usage` says whose weeks that is, and the UI shows it before a
+  save. Names are unique through `library_key`, a generated column (the name while in the library,
+  NULL otherwise) under `uk_recipes_library_name` — the `active_flag` trick again. Deleting one
+  still on a plate is refused (`fk_diet_dishes_recipe` has no `ON DELETE`), not cascaded.
+- **Private** (`library = FALSE`) — one plate's own, written in its cell. It is replaced with the
+  week (the publish gates it, like everything else) unless the plate names it by `recipeId`, which
+  keeps it as stored. After a `PUT`, the private recipes the old week held and the new one no longer
+  names are deleted. A copied diet shares library recipes and clones private ones.
+
+**A library recipe is never weighed by one diet's own measure** (`ref_food_measures.diet_id`): that
+row goes with its diet, and the shared recipe would go quietly unweighed everywhere. Saving such an
+ingredient to the library, or PATCHing one to it, is a 400; library ingredients are chosen measures
+without any diet's criteria, and `PUT …/measures` attaches only to private recipes.
+
+`service/RecipeService` (`IRecipeService`) owns both tables and everything about an ingredient:
+reading text, matching (the batched `foodsOf` / `measuresOf`), the fix-up list and the PATCH. The
+diet service hands it the recipe ids its plates serve (`PlannedDishRepository.recipeIdsOf`), so a URL
+naming one diet never reaches another's ingredients. It lives in `diet/` rather than a context of
+its own because it needs the parser and resolver, which are the diet's.
+
+`V13` gave every existing plate a private recipe (its name, its `raw_text`) and renamed
+`diet_ingredients` to `recipe_ingredients` re-parented onto it, so every match survived; the old
+foreign keys keep their `fk_diet_ingredients_*` names. The import still reads each cell into a
+private recipe, named by the text or the row; it never links a library recipe by name.
+
+`RecipeIngredient` carries `raw_name` — what the diet calls the food — and *may* point at one of
 the two catalogues: `bedca_food_id` for a generic composition-database food, the usual match, or
 `food_item_id` for a branded product. **Both are nullable, on purpose, and only one is ever set.**
 Both null means "not matched yet": the ingredient is stored exactly as written and matched later
@@ -215,14 +257,14 @@ lose part of the week. Nutrition figures for an ingredient are only available on
 The entity associations are mappings, not layer crossings — when the diet service needs food
 *data* it goes through `IBedcaFoodService` / `IFoodItemService`, never a food repository.
 
-`PlannedDish` carries `raw_text` for the same reason one level up: **the cell as it was written**.
+`Recipe` carries `raw_text` for the same reason one level up: **the ingredients as they were written**.
 Reading a sentence into a name and quantities cannot be undone — `MealTextParser` keeps one
 quantity per ingredient and no brackets in a name, so `Tostada (60 gr) con tomate (80 gr)` puts
 back together as `Tostada con tomate (80 gr) (60 gr)`, the same food and a moved weight. Since
 `PUT /api/diets/{id}` replaces the whole week, an editor changing one cell has to send the other
 sixty-nine back; without the sentence it could only send rebuilt ones, and a nutritionist would be
 editing a rewrite of what they typed. **It is nullable and never reconstructed**: null means "what
-was written is not known", which is the truth for every dish stored before `V5`, and an invented
+was written is not known", which is the truth for every recipe migrated from a dish stored before `V5`, and an invented
 original would make the loss permanent instead of visible.
 
 ### Nutrition
@@ -244,7 +286,7 @@ Its one assumption is that a millilitre is a gram, which a diet's liquids (water
 juice) are within a few percent of; for olive oil it overstates by about 9 %, and that is kept so
 `10 ml` and `1 cucharada sopera` of oil never disagree.
 
-**A household measure weighs only through a row that says so.** `diet_ingredients.food_measure_id`
+**A household measure weighs only through a row that says so.** `recipe_ingredients.food_measure_id`
 (`V10`) points at a `ref_food_measures` row — published (`1 cucharada sopera` of olive oil, 10 ml,
 AESAN 2022) or the diet's own criterion — and `PortionScaler.weigh` uses it: the row's point weight
 divided by its count (`3 Uds. medianas = 180 g` is 60 g each), cut to the edible part by the food's
@@ -255,7 +297,7 @@ says how much of `counted` rests on one.
 ### Interfaces and injection
 
 Every class in `diet/`, `alternative/` and `patient/` is injected through an interface
-(`IDietService`, `IDietMapper`, `IMealTextParser`, `IPortionScaler`, `IDietNutritionService`,
+(`IDietService`, `IRecipeService`, `IDietMapper`, `IMealTextParser`, `IPortionScaler`, `IDietNutritionService`,
 `IAlternativeService`, `IFoodCategoriser`, `INutritionSimilarity`, `IPatientService`,
 `IPatientMapper`, `IReferenceService`, `IReferenceMapper`, `IDietRationService`, …), as are the food services
 they depend on: `IFoodItemService`, `IBedcaFoodService`, `INutritionService`, `INameMatcher`,
@@ -280,22 +322,28 @@ diet is addressed by its own id:
 
 - `POST /api/diets` — store a week as that patient's diet in force (201); `patientId` in the body.
 - `PUT /api/diets/{id}` — replace a diet's whole week. The body's `patientId` must be the patient
-  the diet already belongs to.
+  the diet already belongs to. Each dish is `{name, servings?, recipeId? | recipe?}`: `recipeId`
+  names a library recipe or one of this diet's own private ones (kept as stored); `recipe`
+  (`{rawText, steps, ingredients}`) writes a new private one; both is a 400, neither is a
+  description-only plate.
 - `POST /api/diets/{id}/copy` (201) — `{patientId, name?, startedOn?}`. Writes the same week again
-  for another patient: its days, dishes, `raw_text` and every food match already made. It becomes
+  for another patient: its days, dishes, servings, private recipes (cloned, `raw_text` and every
+  food match already made) and library links (shared). It becomes
   their diet in force, archiving what they were on; the source is untouched and the **journal is
   not copied**.
 - `GET /api/diets/active?patientId=`, `GET /api/diets/{id}` — the week, ordered by day and slot.
 - `GET /api/diets/current` — every patient's diet in force, without their weeks: who is on a diet
   right now, in one query. This is the board the UI's patient selector is drawn from.
 - `GET /api/diets?patientId=&page=&size=` — that patient's archived diets, without their weeks.
-- `GET /api/diets/{id}/ingredients?resolved=false&suggest=true&page=&size=` — the fix-up list.
+- `GET /api/diets/{id}/ingredients?resolved=false&suggest=true&page=&size=` — the fix-up list:
+  the ingredients of every recipe the diet's plates serve, library ones included.
   `suggest=true` attaches the composition database's best candidates to each unmatched
   ingredient, ranked, costing no query.
 - `PATCH /api/diets/{id}/ingredients/{ingredientId}` — match one ingredient to a food
   (`bedcaFoodId` or `foodItemId`, not both — matching to one releases the other), or correct its
-  name, quantity or unit. Fields left out are left alone.
-- `POST /api/diets/parse` — reads one written cell (`text`, optional `slotName`) into a dish with
+  name, quantity or unit. Fields left out are left alone. On a library recipe's ingredient the
+  change reaches every plate that serves it.
+- `POST /api/diets/parse` — reads recipe text (`text`, optional `slotName`) into a recipe with
   its ingredients matched and priced, **storing nothing**. It exists so the editor never has a
   parser of its own: a second implementation would drift from the importer, and the two would then
   disagree about what the same line of text means.
@@ -309,7 +357,18 @@ diet is addressed by its own id:
 - `GET /api/diets/{id}/rations?profile=` — the week counted in rations (see `reference`).
 - `GET /api/diets/{id}/measures`, `PUT /api/diets/{id}/measures`, `DELETE /api/diets/{id}/measures/{measureId}`
   — the diet's own measure criteria (`{measure, size?, bedcaFoodId, grams | ml, note?}`). A PUT
-  attaches the criterion wherever it is now the chosen measure and answers how many.
+  attaches the criterion wherever it is now the chosen measure (private recipes only) and answers
+  how many.
+
+`RecipeController` at `/api/recipes` — the library only; a private recipe is reached through its plate:
+
+- `GET /api/recipes?name=&page=&size=`, `GET /api/recipes/{id}` — one serving, with its figures.
+- `GET /api/recipes/{id}/usage` — how many plates serve it and in whose diets (answered by the diet
+  service, since the plates are its table).
+- `POST /api/recipes` (201), `PUT /api/recipes/{id}` — `{name, steps?, rawText?, ingredients}`.
+  Ingredients sent are kept with their matches; none sent reads `rawText`. A PUT is live for every
+  plate that serves it.
+- `DELETE /api/recipes/{id}` (204) — one no plate serves; otherwise a 400.
 
 `POST /api/diets` takes `referenceProfileCode` and `clinical` too. Left out on a new diet, the
 profile the patient's age suggests is used (the adult one when the age is unknown); a blank is
@@ -506,7 +565,7 @@ foreign key survives too. The cost is stated rather than hidden: if a republish 
 dish in the slot, the score stays and now describes that one. Losing every score on every publish
 is worse, and `scored_at` is there so the two can be told apart.
 
-`ExtraFood` is shaped like `PlannedIngredient` because it is the same idea from the other side:
+`ExtraFood` is shaped like `RecipeIngredient` because it is the same idea from the other side:
 `raw_name` always kept, a quantity with its own unit, and **at most one** of `bedca_food_id` /
 `food_item_id` set. Both null is an entry nothing matched — kept on the record, counted towards
 nothing. The branded half is the usual match here, the reverse of the week: a diet says `lechuga`,
@@ -554,6 +613,7 @@ changing an entity, add a migration to match or startup fails.
 | `V10__ingredient_measure_state.sql` | `diet_ingredients.state`, `portion_size`, `food_measure_id` |
 | `V11__ingredient_range_and_extra_measure.sql` | `diet_ingredients.quantity_max`; `extra_foods.state`, `portion_size`, `food_measure_id` |
 | `V12__create_yield_factors.sql` | `ref_yield_factors` — published cooking yields, offered and never applied |
+| `V13__create_recipes.sql` | `recipes`; `diet_dishes.recipe_id`, `servings`; `diet_ingredients` becomes `recipe_ingredients`; `raw_text` moves to the recipe |
 
 ## Data files and licensing
 

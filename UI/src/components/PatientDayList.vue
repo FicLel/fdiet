@@ -2,8 +2,9 @@
 import { computed } from 'vue'
 import StarRating from './StarRating.vue'
 import ExtraFoodRow from './ExtraFoodRow.vue'
+import RecipeDetail from './RecipeDetail.vue'
 import type { PatientDay } from '@/stores/patientWeek'
-import { usePatientWeek } from '@/stores/patientWeek'
+import { slotKey, usePatientWeek } from '@/stores/patientWeek'
 import type { GridRow } from '@/domain/slots'
 import { grams, integer, NO_VALUE } from '@/domain/format'
 import { complete } from '@/domain/nutrition'
@@ -45,6 +46,9 @@ const lines = computed(() =>
       label: row.label,
       sub: row.sub,
       text: week.textFor(row, props.day.day),
+      slot: slotKey(row, props.day.day),
+      dish: week.dishFor(row, props.day.day),
+      open: week.openCell.value === slotKey(row, props.day.day),
       score: week.scoreFor(row, props.day.day),
       kcal: totals.ingredients === 0 ? '' : integer(totals.kcal),
       partial: !complete(totals),
@@ -65,29 +69,42 @@ const lines = computed(() =>
         <span class="band-label">{{ line.label }}</span>
       </div>
 
-      <div v-else class="row">
-        <div class="slot">
-          <div class="slot-label">{{ line.label }}</div>
-          <div v-if="line.sub" class="slot-sub">{{ line.sub }}</div>
+      <div v-else class="line" :class="{ open: line.open }">
+        <div class="row">
+          <div class="slot">
+            <div class="slot-label">{{ line.label }}</div>
+            <div v-if="line.sub" class="slot-sub">{{ line.sub }}</div>
+          </div>
+
+          <button
+            class="text"
+            type="button"
+            :aria-expanded="line.open"
+            :title="line.dish?.recipe ? 'Ver la receta' : undefined"
+            @click="week.toggleCell(line.slot)"
+          >
+            {{ line.text }}
+          </button>
+
+          <div class="macros">
+            <span v-for="macroOf in line.macros" :key="macroOf.abbr" class="macro">
+              <span class="macro-abbr">{{ macroOf.abbr }}</span>
+              <span class="num macro-value">{{ macroOf.value }}</span>
+            </span>
+          </div>
+
+          <div class="srf num kcal" :class="{ partial: line.partial }">{{ line.kcal }}</div>
+
+          <StarRating
+            :score="line.score"
+            :size="15"
+            :disabled="week.saving.value"
+            @pick="week.score(line.row, day.day, $event)"
+          />
         </div>
-
-        <p class="text">{{ line.text }}</p>
-
-        <div class="macros">
-          <span v-for="macroOf in line.macros" :key="macroOf.abbr" class="macro">
-            <span class="macro-abbr">{{ macroOf.abbr }}</span>
-            <span class="num macro-value">{{ macroOf.value }}</span>
-          </span>
+        <div v-if="line.open && line.dish?.recipe" class="detail">
+          <RecipeDetail :dish="line.dish" />
         </div>
-
-        <div class="srf num kcal" :class="{ partial: line.partial }">{{ line.kcal }}</div>
-
-        <StarRating
-          :score="line.score"
-          :size="15"
-          :disabled="week.saving.value"
-          @pick="week.score(line.row, day.day, $event)"
-        />
       </div>
     </template>
 
@@ -161,6 +178,15 @@ const lines = computed(() =>
   color: var(--extra-ink);
 }
 
+.line {
+  flex: none;
+  background: var(--surface);
+}
+
+.detail {
+  padding: 0 16px 12px;
+}
+
 .row {
   display: flex;
   align-items: center;
@@ -191,6 +217,10 @@ const lines = computed(() =>
   flex: 1 1 0;
   min-width: 0;
   margin: 0;
+  padding: 0;
+  text-align: left;
+  background: none;
+  cursor: pointer;
   display: -webkit-box;
   font-size: 12.5px;
   line-height: 1.4;

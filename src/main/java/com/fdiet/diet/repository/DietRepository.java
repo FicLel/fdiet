@@ -6,6 +6,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -45,4 +47,10 @@ public interface DietRepository extends JpaRepository<DietPlan, Long> {
      */
     @EntityGraph(attributePaths = "patient")
     List<DietPlan> findByStatusOrderByPatientNameAsc(DietStatus status);
+
+    /** Every diet with a plate serving this recipe, most recently started first. */
+    @EntityGraph(attributePaths = "patient")
+    @Query("select distinct p from DietPlan p join p.meals m join m.dishes d "
+            + "where d.recipe.id = :recipeId order by p.startedOn desc")
+    List<DietPlan> findServingRecipe(@Param("recipeId") Long recipeId);
 }

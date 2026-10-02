@@ -3,7 +3,8 @@ package com.fdiet.diet.mapper;
 import com.fdiet.diet.dto.Dish;
 import com.fdiet.diet.dto.DishIngredient;
 import com.fdiet.diet.model.PlannedDish;
-import com.fdiet.diet.model.PlannedIngredient;
+import com.fdiet.diet.model.Recipe;
+import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.food.model.BedcaFood;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.dto.YieldFactorDto;
@@ -23,12 +24,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * The written cell survives the crossing in both directions.
+ * A plate crosses out as its description, its servings and the recipe behind it,
+ * with the recipe's written text intact.
  *
- * <p>It has to: {@code PUT /api/diets/{id}} replaces a whole week, so an editor
- * changing one cell sends the other sixty-nine back. If the sentence did not
- * come out of the database it could only be rebuilt from the parts, and a
- * rebuilt sentence is not the one that was written.
+ * <p>The text has to survive: an editor puts it back in front of the
+ * nutritionist, and a sentence rebuilt from the parts is not the one written.
  */
 class DietMapperTest {
 
@@ -40,21 +40,27 @@ class DietMapperTest {
     private final DietMapper mapper = new DietMapper(nutrition, reference);
 
     @Test
-    void carriesTheWrittenCellIntoTheEntityAndBackOut() {
-        PlannedDish entity = mapper.toEntity(new Dish("Tostada", CELL, List.of()));
-        assertThat(entity.getRawText()).isEqualTo(CELL);
+    void carriesTheDescriptionServingsAndRecipeTextOut() {
+        Recipe recipe = new Recipe("Tostada con tomate", CELL, "Tostar el pan y rallar el tomate.", false);
+        PlannedDish entity = new PlannedDish("Tostada", recipe, new BigDecimal("1.5"));
 
-        assertThat(mapper.toDto(entity).rawText()).isEqualTo(CELL);
+        Dish dish = mapper.toDto(entity);
+
+        assertThat(dish.name()).isEqualTo("Tostada");
+        assertThat(dish.servings()).isEqualByComparingTo("1.5");
+        assertThat(dish.recipe().rawText()).isEqualTo(CELL);
+        assertThat(dish.recipe().steps()).isEqualTo("Tostar el pan y rallar el tomate.");
+        assertThat(dish.recipe().library()).isFalse();
     }
 
-    /** A dish nobody typed has no written form, and none is invented for it. */
+    /** A plate that is a description only has no recipe, and none is invented for it. */
     @Test
-    void leavesTheCellNullWhenNothingWroteOne() {
-        DishIngredient lettuce = new DishIngredient("lechuga", java.math.BigDecimal.TEN, "gr");
-        PlannedDish entity = mapper.toEntity(new Dish("Ensalada", List.of(lettuce)));
+    void leavesTheRecipeNullOnADescriptionOnlyPlate() {
+        Dish dish = mapper.toDto(new PlannedDish("Comida libre"));
 
-        assertThat(entity.getRawText()).isNull();
-        assertThat(mapper.toDto(entity).rawText()).isNull();
+        assertThat(dish.recipe()).isNull();
+        assertThat(dish.recipeId()).isNull();
+        assertThat(dish.servings()).isEqualByComparingTo("1");
     }
 
     /** 150 g of raw breast priced against grilled breast: 108 g cooked, by USDA's 72 %, offered. */
@@ -63,7 +69,7 @@ class DietMapperTest {
         BedcaFood grilled = new BedcaFood();
         grilled.setId(2297L);
         grilled.setName("Pollo, pechuga, plancha");
-        PlannedIngredient raw = new PlannedIngredient("pechuga de pollo", null, grilled,
+        RecipeIngredient raw = new RecipeIngredient("pechuga de pollo", null, grilled,
                 new BigDecimal("150"), "g");
         raw.setState(FoodState.RAW);
         when(nutrition.edibleGrams(raw)).thenReturn(new BigDecimal("150"));
@@ -92,7 +98,7 @@ class DietMapperTest {
         BedcaFood grilled = new BedcaFood();
         grilled.setId(2297L);
         grilled.setName("Pollo, pechuga, plancha");
-        PlannedIngredient plain = new PlannedIngredient("pechuga de pollo", null, grilled,
+        RecipeIngredient plain = new RecipeIngredient("pechuga de pollo", null, grilled,
                 new BigDecimal("120"), "g");
 
         assertThat(mapper.toDto(plain).yieldHint()).isNull();

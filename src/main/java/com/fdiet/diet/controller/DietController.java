@@ -11,9 +11,9 @@ import com.fdiet.diet.dto.DietRationsDto;
 import com.fdiet.diet.dto.DietRequestDto;
 import com.fdiet.diet.dto.DietSettingsDto;
 import com.fdiet.diet.dto.DietSummaryDto;
-import com.fdiet.diet.dto.Dish;
 import com.fdiet.diet.dto.DishIngredient;
 import com.fdiet.diet.dto.ParseDishRequestDto;
+import com.fdiet.diet.dto.RecipeDto;
 import com.fdiet.diet.dto.ResolveIngredientDto;
 import com.fdiet.diet.exception.InvalidDietException;
 import com.fdiet.diet.service.IDietImportService;
@@ -146,18 +146,19 @@ public class DietController {
     }
 
     @PostMapping("/parse")
-    @Operation(summary = "Read one written cell as a dish and its ingredients, matched against "
-            + "the catalogues, without storing anything. The editor asks for this so the text a "
-            + "diet is written in is read by the same parser the workbook import uses")
-    public Dish parse(@RequestBody @Valid ParseDishRequestDto request) {
+    @Operation(summary = "Read recipe text into its ingredients, matched against the catalogues, "
+            + "without storing anything. The editor asks for this so the text a recipe is written "
+            + "in is read by the same parser the workbook import uses. The name is the one the "
+            + "text carried before a colon, or slotName")
+    public RecipeDto parse(@RequestBody @Valid ParseDishRequestDto request) {
         return dietService.parse(request);
     }
 
     @PostMapping("/compose")
-    @Operation(summary = "Write a food added by ration or household measure as the text a cell "
+    @Operation(summary = "Write a food added by ration or household measure as the text a recipe "
             + "holds — grams (a value inside a ration's range) or foodMeasureId with a count — and "
             + "read that text back through the parser. Stores nothing: the editor appends the "
-            + "fragment to the cell")
+            + "fragment to the recipe")
     public ComposedFragmentDto compose(@RequestBody @Valid ComposeRequestDto request) {
         return dietService.compose(request);
     }

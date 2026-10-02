@@ -167,16 +167,44 @@ export interface YieldHint {
   pageRef: string
 }
 
-export interface Dish {
+/**
+ * What goes into a plate, for one serving, and how it is made.
+ *
+ * `rawText` is the ingredients as the nutritionist wrote them, kept because
+ * reading them cannot be undone; null where nothing wrote one. `library` says it
+ * is shared: every plate that points at it reads the same ingredients, and an
+ * edit to it reaches all of them at once, without a publish.
+ */
+export interface Recipe {
+  id: number | null
   name: string
-  /**
-   * The cell as it was written, when the backend has it. Reading a sentence
-   * into a name and quantities cannot be undone, so this is the only faithful
-   * text there is; null for a dish stored before the column existed, and the
-   * grid falls back to rebuilding one.
-   */
+  library: boolean
+  steps: string | null
   rawText: string | null
   ingredients: DishIngredient[]
+  /** One serving's figures. */
+  nutrition: NutritionSummary | null
+}
+
+/**
+ * One plate: the description the patient reads — "Huevos revueltos" — and the
+ * recipe behind it, served `servings` times. Nothing reads food out of the
+ * description. A null recipe is a plate that is a description only.
+ */
+export interface Dish {
+  name: string
+  servings: number
+  recipeId: number | null
+  recipe: Recipe | null
+  /** The plate's figures, at its servings. */
+  nutrition: NutritionSummary | null
+}
+
+/** Where a recipe is on somebody's plate. */
+export interface RecipeUsage {
+  recipeId: number
+  dishes: number
+  diets: DietSummary[]
 }
 
 export interface Meal {

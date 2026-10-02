@@ -9,6 +9,7 @@ import com.fdiet.diet.dto.Dish;
 import com.fdiet.diet.dto.DishIngredient;
 import com.fdiet.diet.dto.MealDto;
 import com.fdiet.diet.dto.MealType;
+import com.fdiet.diet.dto.RecipeDto;
 import com.fdiet.diet.dto.SheetGridDto;
 import com.fdiet.diet.exception.InvalidDietException;
 import com.fdiet.diet.helpers.IDietWorkbookReader;
@@ -143,15 +144,22 @@ public class DietImportService implements IDietImportService {
                 .toList();
     }
 
-    /** One row of cells, one dish per day that filled it in. */
+    /**
+     * One row of cells, one dish per day that filled it in. The cell becomes the
+     * plate's own recipe, with the whole sentence kept; the plate is described by
+     * the name the cell carried or the row it sits in. Nothing is linked to the
+     * library by name — a library recipe of the same name need not hold the same
+     * quantities, and that would be a guess.
+     */
     private void readRow(SheetGridDto grid, int row, Map<Integer, DayOfWeek> days, String label,
                          MealType meal, Map<DayOfWeek, Map<MealType, List<Dish>>> dishes) {
         String fallbackName = Texts.clean(label, NAME_MAX);
         days.forEach((column, day) -> {
-            Dish dish = mealTextParser.parse(grid.cell(row, column), fallbackName);
-            if (dish == null) {
+            RecipeDto recipe = mealTextParser.parse(grid.cell(row, column), fallbackName);
+            if (recipe == null) {
                 return;
             }
+            Dish dish = new Dish(recipe.name(), recipe);
             dishes.computeIfAbsent(day, d -> new EnumMap<>(MealType.class))
                     .computeIfAbsent(meal, m -> new ArrayList<>())
                     .add(dish);
@@ -200,8 +208,10 @@ public class DietImportService implements IDietImportService {
             for (MealDto meal : day.meals()) {
                 dishes += meal.dishes().size();
                 for (Dish dish : meal.dishes()) {
-                    ingredients += dish.ingredients().size();
-                    for (DishIngredient ingredient : dish.ingredients()) {
+                    List<DishIngredient> read = dish.recipe() == null
+                            ? List.of() : dish.recipe().ingredients();
+                    ingredients += read.size();
+                    for (DishIngredient ingredient : read) {
                         if (ingredient.resolved()) {
                             resolved++;
                         }

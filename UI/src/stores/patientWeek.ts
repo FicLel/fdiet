@@ -7,12 +7,12 @@ import type {
   DayOfWeek,
   Diet,
   DietJournal,
+  Dish,
   ExtraFood,
   MealType,
   Nutrition,
 } from '@/api/types'
 import { buildRows, dishAt, type GridRow, type MealRow } from '@/domain/slots'
-import { renderDish } from '@/domain/dishText'
 import { dishTotals, type DishTotals } from '@/domain/nutrition'
 import { addDays, dayName, dayNumber, longDate, mondayOf, shortDayName, WEEK } from '@/domain/week'
 
@@ -116,9 +116,14 @@ function storedDish(day: DayOfWeek, mealType: MealType, dishIndex: number) {
   )
 }
 
-/** What a cell reads: the sentence the nutritionist wrote, wherever it is kept. */
+/** What a cell reads: the plate's description. The recipe is behind it, a press away. */
 function textFor(row: MealRow, day: DayOfWeek): string {
-  return renderDish(storedDish(day, row.mealType, row.dishIndex), row.label)
+  return storedDish(day, row.mealType, row.dishIndex)?.name ?? ''
+}
+
+/** The plate itself, for the recipe its card opens onto. */
+function dishFor(row: MealRow, day: DayOfWeek): Dish | undefined {
+  return storedDish(day, row.mealType, row.dishIndex)
 }
 
 function totalsFor(row: MealRow, day: DayOfWeek): DishTotals {
@@ -409,6 +414,7 @@ export function usePatientWeek() {
     todayOrFirst,
     // reads
     textFor,
+    dishFor,
     totalsFor,
     scoreFor,
     // writes

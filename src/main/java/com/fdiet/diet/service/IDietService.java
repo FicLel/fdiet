@@ -10,10 +10,11 @@ import com.fdiet.diet.dto.DietRationsDto;
 import com.fdiet.diet.dto.DietRequestDto;
 import com.fdiet.diet.dto.DietSettingsDto;
 import com.fdiet.diet.dto.DietSummaryDto;
-import com.fdiet.diet.dto.Dish;
 import com.fdiet.diet.dto.DishIngredient;
 import com.fdiet.diet.dto.MealType;
 import com.fdiet.diet.dto.ParseDishRequestDto;
+import com.fdiet.diet.dto.RecipeDto;
+import com.fdiet.diet.dto.RecipeUsageDto;
 import com.fdiet.diet.dto.ResolveIngredientDto;
 import com.fdiet.reference.dto.DietMeasureRequestDto;
 import com.fdiet.reference.dto.FoodMeasureDto;
@@ -106,14 +107,14 @@ public interface IDietService {
     DishIngredient resolveIngredient(Long dietId, Long ingredientId, ResolveIngredientDto change);
 
     /**
-     * Reads one written cell as a dish and its ingredients, matched against the
-     * catalogues and priced, without storing a thing.
+     * Reads recipe text into its ingredients, matched against the catalogues and
+     * priced, without storing a thing.
      *
      * <p>The parsing a diet is written by lives in one place. An editor that
      * re-implemented it would drift from the importer, and the two would then
      * disagree about what the same line of text means.
      */
-    Dish parse(ParseDishRequestDto request);
+    RecipeDto parse(ParseDishRequestDto request);
 
     /** Changes a diet's name, profile or clinical mark without sending its week. */
     DietDto updateSettings(Long id, DietSettingsDto settings);
@@ -135,4 +136,7 @@ public interface IDietService {
 
     /** Removes one of the diet's own measures; the ingredients it weighed are left unmeasured. */
     void deleteMeasure(Long dietId, Long measureId);
+
+    /** Which plates serve a recipe, and in whose diets — asked before a library recipe is edited. */
+    RecipeUsageDto recipeUsage(Long recipeId);
 }

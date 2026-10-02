@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import StarRating from './StarRating.vue'
 import MacroBars from './MacroBars.vue'
+import RecipeDetail from './RecipeDetail.vue'
 import ExtraFoodRow from './ExtraFoodRow.vue'
 import type { PatientDay } from '@/stores/patientWeek'
 import { slotKey, usePatientWeek } from '@/stores/patientWeek'
@@ -51,6 +52,7 @@ const lines = computed(() =>
       carbohydratesG: totals.carbohydratesG,
       fatG: totals.fatG,
       open: week.openCell.value === key,
+      dish: week.dishFor(row, props.day.day),
     }
   }),
 )
@@ -116,7 +118,9 @@ const lines = computed(() =>
         </button>
 
         <div v-if="line.open" class="detail">
+          <RecipeDetail :dish="line.dish" />
           <MacroBars
+            v-if="line.ingredients > 0"
             :protein-g="line.proteinG"
             :carbohydrates-g="line.carbohydratesG"
             :fat-g="line.fatG"

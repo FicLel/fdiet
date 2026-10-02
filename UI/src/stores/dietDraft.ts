@@ -7,6 +7,7 @@ import {
   type ImportDietRequest,
   type RequestDish,
   type RequestMeal,
+  type RequestRecipe,
 } from '@/api/diets'
 import { usePatients } from '@/stores/patients'
 import type {
@@ -19,11 +20,12 @@ import type {
   FoodState,
   MealType,
   PortionSize,
+  Recipe,
   YieldHint,
 } from '@/api/types'
 import { buildRows, cellKey, dishAt, mealOf, type GridRow, type MealRow } from '@/domain/slots'
-import { renderDish } from '@/domain/dishText'
-import { dishTotals, type DishTotals } from '@/domain/nutrition'
+import { renderRecipe } from '@/domain/dishText'
+import { dishTotals, ingredientsOf, type DishTotals } from '@/domain/nutrition'
 import { addDays, dayName, dayNumber, longDate, mondayOf, WEEK } from '@/domain/week'
 
 /**
@@ -56,11 +58,33 @@ const PARSE_DEBOUNCE_MS = 450
  */
 const PLACEHOLDER_TARGET_KCAL = 1900
 
+/**
+ * Where a plate's food comes from: a recipe of the shared library (linked, so it
+ * changes with the library), one written for this plate alone, or none — a plate
+ * that is a description only ("Comida libre").
+ */
+export type RecipeMode = 'library' | 'own' | 'none'
+
 export interface CellEdit {
-  /** What the nutritionist typed. */
+  /** The description the patient reads. Nothing reads food out of it. */
+  name: string
+  servings: number
+  mode: RecipeMode
+  /** The plate's own recipe as typed: its ingredients. */
   text: string
-  /** What the backend read out of it, once it has answered. */
-  dish: Dish | null
+  /** The plate's own recipe: how it is made. */
+  steps: string
+  /**
+   * The recipe the plate shows: the library one it links, or what the backend
+   * read out of `text`. While a new text is being read, the last one known.
+   */
+  recipe: Recipe | null
+  /**
+   * The plate's own stored recipe, while nothing about it has been touched: the
+   * publish then names it by id and the backend keeps it — matches and all —
+   * rather than writing it again.
+   */
+  keepRecipeId: number | null
   parsing: boolean
   /** The backend could not read the text; the cell keeps its old figures. */
   failed: boolean
@@ -219,21 +243,41 @@ function storedDish(day: DayOfWeek, mealType: MealType, dishIndex: number): Dish
   )
 }
 
-/** The dish a cell shows: the re-read one when it was edited, else the stored one. */
+/** The dish a cell shows: the one being edited, else the stored one. */
 function dishFor(day: DayOfWeek, mealType: MealType, dishIndex: number): Dish | undefined {
   const edit = edits[`${day}|${mealType}|${dishIndex}`]
   if (!edit) {
     return storedDish(day, mealType, dishIndex)
   }
-  // While the backend is still reading the new text, the old dish is the last
-  // thing actually known about the cell — showing it beats showing nothing.
-  return edit.dish ?? storedDish(day, mealType, dishIndex)
+  if (edit.name.trim() === '' && edit.mode === 'none') {
+    return undefined
+  }
+  const recipe = edit.mode === 'none' ? null : edit.recipe
+  return {
+    name: edit.name,
+    servings: edit.servings,
+    recipeId: recipe?.id ?? null,
+    // The steps are typed here and never read by the backend, so they are the
+    // edit's own rather than whatever the last parse answered with.
+    recipe: recipe && edit.mode === 'own' ? { ...recipe, steps: edit.steps || null } : recipe,
+    nutrition: null,
+  }
 }
 
-/** What the cell reads: the typed text, or the stored dish written back out. */
+/** What the cell reads: the description the patient will see. */
 function textFor(row: MealRow, day: DayOfWeek): string {
   const edit = edits[cellKey(row, day)]
-  return edit ? edit.text : renderDish(storedDish(day, row.mealType, row.dishIndex), row.label)
+  return edit ? edit.name : (storedDish(day, row.mealType, row.dishIndex)?.name ?? '')
+}
+
+/** The plate's own recipe as typed, or its stored text. Empty for a library recipe. */
+function recipeTextFor(row: MealRow, day: DayOfWeek): string {
+  const edit = edits[cellKey(row, day)]
+  if (edit) {
+    return edit.text
+  }
+  const recipe = storedDish(day, row.mealType, row.dishIndex)?.recipe
+  return recipe && !recipe.library ? renderRecipe(recipe) : ''
 }
 
 function totalsFor(row: MealRow, day: DayOfWeek): DishTotals {
@@ -283,18 +327,21 @@ function isEdited(row: MealRow, day: DayOfWeek): boolean {
  */
 const unmatched = computed<IngredientAt[]>(() => {
   const waiting: IngredientAt[] = []
+  // A library recipe served in several cells is one set of rows: listed once.
+  const seen = new Set<number>()
   for (const row of mealRows.value) {
     for (const column of days.value) {
       if (edits[cellKey(row, column.day)]) {
         continue
       }
       const dish = storedDish(column.day, row.mealType, row.dishIndex)
-      for (const ingredient of dish?.ingredients ?? []) {
+      for (const ingredient of ingredientsOf(dish)) {
         if (ingredient.foodItemId !== null || ingredient.bedcaFoodId !== null) {
           continue
         }
         const at = locate(row, column.day, ingredient)
-        if (at) {
+        if (at && !seen.has(at.id)) {
+          seen.add(at.id)
           waiting.push(at)
         }
       }
@@ -314,22 +361,28 @@ function applyIngredient(updated: DishIngredient): boolean {
   if (!plan || updated.id === null) {
     return false
   }
+  // A library recipe may be served in several cells, each holding its own copy
+  // of the same row: every one of them changes.
+  let found = false
   for (const day of plan.days) {
     for (const meal of day.meals) {
       for (const dish of meal.dishes) {
-        const at = dish.ingredients.findIndex((candidate) => candidate.id === updated.id)
+        const ingredients = ingredientsOf(dish)
+        const at = ingredients.findIndex((candidate) => candidate.id === updated.id)
         if (at !== -1) {
-          dish.ingredients[at] = updated
-          // `diet` is a shallowRef — the week arrives whole and is replaced
-          // whole, so nothing under it is tracked. One ingredient changing
-          // beneath it is the exception, and this is it saying so.
-          triggerRef(diet)
-          return true
+          ingredients[at] = updated
+          found = true
         }
       }
     }
   }
-  return false
+  if (found) {
+    // `diet` is a shallowRef — the week arrives whole and is replaced whole, so
+    // nothing under it is tracked. One ingredient changing beneath it is the
+    // exception, and this is it saying so.
+    triggerRef(diet)
+  }
+  return found
 }
 
 /** A stored ingredient by its row id, with the cell it sits in. */
@@ -337,7 +390,7 @@ function findIngredient(id: number): IngredientAt | null {
   for (const row of mealRows.value) {
     for (const column of days.value) {
       const dish = storedDish(column.day, row.mealType, row.dishIndex)
-      const found = dish?.ingredients.find((ingredient) => ingredient.id === id)
+      const found = ingredientsOf(dish).find((ingredient) => ingredient.id === id)
       if (found) {
         return locate(row, column.day, found)
       }
@@ -440,43 +493,122 @@ function clearTimer(key: string): void {
 async function reparse(key: string, slotName: string): Promise<void> {
   parseTimers.delete(key)
   const edit = edits[key]
-  if (!edit || edit.text.trim() === '') {
+  if (!edit || edit.mode !== 'own' || edit.text.trim() === '') {
     return
   }
   const text = edit.text
   try {
-    const dish = await dietsApi.parse({ text, slotName, dietId: diet.value?.id })
+    const recipe = await dietsApi.parse({
+      text,
+      slotName: edit.name.trim() || slotName,
+      dietId: diet.value?.id,
+    })
     // The text may have moved on while the request was in flight.
-    if (edits[key]?.text === text) {
-      edits[key] = { text, dish, parsing: false, failed: false }
+    const current = edits[key]
+    if (current?.mode === 'own' && current.text === text) {
+      current.recipe = recipe
+      // "Ensalada: lechuga (80 gr)" names its plate; a description nobody has
+      // written yet takes that name rather than staying blank.
+      if (current.name.trim() === '' && recipe.name !== slotName) {
+        current.name = recipe.name
+      }
+      current.parsing = false
+      current.failed = false
     }
   } catch {
-    if (edits[key]?.text === text) {
-      edits[key] = { text, dish: edit.dish, parsing: false, failed: true }
+    const current = edits[key]
+    if (current?.mode === 'own' && current.text === text) {
+      current.parsing = false
+      current.failed = true
     }
   }
 }
 
 /**
- * Holds the typed text and asks the backend to read it once the typing pauses.
- * Text that matches what is stored is not an edit at all, so the cell goes back
- * to being clean rather than standing marked for no difference.
+ * The cell's edit, opened from what is stored the first time the cell is
+ * touched. A stored private recipe starts out kept by id, so changing only the
+ * description or the servings writes nothing of the recipe again.
  */
-function setText(row: MealRow, day: DayOfWeek, text: string): void {
+function editOf(row: MealRow, day: DayOfWeek): CellEdit {
   const key = cellKey(row, day)
-  const stored = renderDish(storedDish(day, row.mealType, row.dishIndex), row.label)
+  const existing = edits[key]
+  if (existing) {
+    return existing
+  }
+  const stored = storedDish(day, row.mealType, row.dishIndex)
+  const recipe = stored?.recipe ?? null
+  const own = recipe !== null && !recipe.library
+  edits[key] = {
+    name: stored?.name ?? '',
+    servings: stored?.servings ?? 1,
+    mode: recipe === null ? (stored ? 'none' : 'own') : recipe.library ? 'library' : 'own',
+    text: own ? renderRecipe(recipe) : '',
+    steps: own ? (recipe.steps ?? '') : '',
+    recipe,
+    keepRecipeId: own ? recipe.id : null,
+    parsing: false,
+    failed: false,
+  }
+  return edits[key]
+}
 
-  clearTimer(key)
-  if (text.trim() === stored.trim()) {
+/**
+ * An edit that has come back round to what is stored is no edit at all, so the
+ * cell goes back to being clean rather than standing marked for no difference.
+ */
+function settle(row: MealRow, day: DayOfWeek): void {
+  const key = cellKey(row, day)
+  const edit = edits[key]
+  if (!edit || edit.parsing) {
+    return
+  }
+  const stored = storedDish(day, row.mealType, row.dishIndex)
+  const sameRecipe =
+    edit.mode === 'library'
+      ? edit.recipe?.id === stored?.recipeId
+      : edit.mode === 'own'
+        ? edit.keepRecipeId !== null
+          ? edit.keepRecipeId === stored?.recipeId
+          : !stored && edit.text.trim() === ''
+        : (stored?.recipe ?? null) === null
+  const sameName = edit.name.trim() === (stored?.name ?? '').trim()
+  const sameServings = edit.servings === (stored?.servings ?? 1)
+  if (sameRecipe && sameName && sameServings) {
+    clearTimer(key)
     delete edits[key]
+  }
+}
+
+function setName(row: MealRow, day: DayOfWeek, name: string): void {
+  editOf(row, day).name = name
+  settle(row, day)
+}
+
+function setServings(row: MealRow, day: DayOfWeek, servings: number): void {
+  if (!Number.isFinite(servings) || servings <= 0) {
     return
   }
+  editOf(row, day).servings = servings
+  settle(row, day)
+}
+
+/** Holds the typed recipe text and asks the backend to read it once the typing pauses. */
+function setRecipeText(row: MealRow, day: DayOfWeek, text: string): void {
+  const key = cellKey(row, day)
+  const edit = editOf(row, day)
+  clearTimer(key)
+  edit.mode = 'own'
+  edit.text = text
+  edit.keepRecipeId = null
+  edit.failed = false
   if (text.trim() === '') {
-    // An emptied cell is a dish removed; there is nothing left to read.
-    edits[key] = { text, dish: null, parsing: false, failed: false }
+    // No ingredients written: nothing to read, and nothing on the plate.
+    edit.recipe = null
+    edit.parsing = false
+    settle(row, day)
     return
   }
-  edits[key] = { text, dish: edits[key]?.dish ?? null, parsing: true, failed: false }
+  edit.parsing = true
   parseTimers.set(
     key,
     setTimeout(() => {
@@ -485,13 +617,78 @@ function setText(row: MealRow, day: DayOfWeek, text: string): void {
   )
 }
 
+function setSteps(row: MealRow, day: DayOfWeek, steps: string): void {
+  const edit = editOf(row, day)
+  edit.mode = 'own'
+  edit.steps = steps
+  // The recipe is written again on publish, with the ingredients already read —
+  // and the matches they carry.
+  edit.keepRecipeId = null
+}
+
 /**
- * Appends a composed food to a cell. The text is the one the backend wrote for
- * it, so the sentence stays the only source of truth and is read back by the
- * same parser as anything typed.
+ * Points the plate at a library recipe. It is linked, not copied: the plate
+ * reads whatever the library holds, now and after every later edit to it.
+ */
+function useLibraryRecipe(row: MealRow, day: DayOfWeek, recipe: Recipe): void {
+  const key = cellKey(row, day)
+  const edit = editOf(row, day)
+  clearTimer(key)
+  edit.mode = 'library'
+  edit.recipe = recipe
+  edit.keepRecipeId = null
+  edit.parsing = false
+  edit.failed = false
+  if (edit.name.trim() === '') {
+    edit.name = recipe.name
+  }
+  settle(row, day)
+}
+
+/**
+ * Takes a copy of the linked library recipe as the plate's own, to change it for
+ * this plate alone. The matches come with it; the library is not touched.
+ */
+function detachRecipe(row: MealRow, day: DayOfWeek): void {
+  const edit = editOf(row, day)
+  const recipe = edit.recipe
+  if (edit.mode !== 'library' || !recipe) {
+    return
+  }
+  edit.mode = 'own'
+  edit.text = renderRecipe(recipe)
+  edit.steps = recipe.steps ?? ''
+  edit.recipe = { ...recipe, id: null, library: false }
+  edit.keepRecipeId = null
+}
+
+/** A plate that is a description only. */
+function clearRecipe(row: MealRow, day: DayOfWeek): void {
+  const key = cellKey(row, day)
+  const edit = editOf(row, day)
+  clearTimer(key)
+  edit.mode = 'none'
+  edit.recipe = null
+  edit.keepRecipeId = null
+  edit.parsing = false
+  settle(row, day)
+}
+
+/** Takes the plate out of the week: no description and nothing on it. */
+function removeDish(row: MealRow, day: DayOfWeek): void {
+  const edit = editOf(row, day)
+  edit.name = ''
+  clearRecipe(row, day)
+}
+
+/**
+ * Appends a composed food to the plate's own recipe. The text is the one the
+ * backend wrote for it, so the recipe text stays the only source of truth and is
+ * read back by the same parser as anything typed.
  */
 function appendFragment(row: MealRow, day: DayOfWeek, fragment: string): void {
-  const current = textFor(row, day).trim()
+  const edit = editOf(row, day)
+  const current = edit.mode === 'own' ? edit.text.trim() : ''
   let next: string
   if (current === '') {
     next = fragment
@@ -500,7 +697,7 @@ function appendFragment(row: MealRow, day: DayOfWeek, fragment: string): void {
   } else {
     next = `${current} + ${fragment}`
   }
-  setText(row, day, next)
+  setRecipeText(row, day, next)
 }
 
 /** Puts one cell back the way it is stored. */
@@ -517,14 +714,14 @@ function discardAll(): void {
   }
 }
 
-/** Reads any cell still waiting on its debounce, so nothing is published stale. */
+/** Reads any recipe still waiting on its debounce, so nothing is published stale. */
 async function settleParses(): Promise<void> {
   const pending: Promise<void>[] = []
   for (const row of mealRows.value) {
     for (const column of days.value) {
       const key = cellKey(row, column.day)
       const edit = edits[key]
-      if (edit && edit.text.trim() !== '' && (edit.parsing || edit.dish === null)) {
+      if (edit?.mode === 'own' && edit.text.trim() !== '' && edit.parsing) {
         clearTimer(key)
         pending.push(reparse(key, row.label))
       }
@@ -533,29 +730,15 @@ async function settleParses(): Promise<void> {
   await Promise.all(pending)
 }
 
-/**
- * A meal's dishes in row order. An emptied cell drops its dish, and a cell
- * written where the day had none is appended — the rows below do not shift,
- * because a day that never filled the last row simply has fewer dishes.
- */
-function dishesRequest(day: DayOfWeek, mealType: MealType): RequestDish[] {
-  const dishes: RequestDish[] = []
-  for (const row of mealRows.value.filter((candidate) => candidate.mealType === mealType)) {
-    if (edits[cellKey(row, day)]?.text.trim() === '') {
-      continue
-    }
-    const dish = dishFor(day, mealType, row.dishIndex)
-    if (!dish || dish.ingredients.length === 0) {
-      continue
-    }
-    dishes.push({
-      name: dish.name,
-      // Whatever the backend last held for this cell: the text just typed, for
-      // an edited one, since the parse answers with the sentence it read. Never
-      // a rebuilt line — a cell with none stays without one rather than gaining
-      // an invented original.
-      rawText: dish.rawText,
-      ingredients: dish.ingredients.map((ingredient) => ({
+function recipeRequest(edit: CellEdit): RequestRecipe | null {
+  if (edit.text.trim() === '' && edit.steps.trim() === '') {
+    return null
+  }
+  return {
+    rawText: edit.text.trim() || null,
+    steps: edit.steps.trim() || null,
+    ingredients: (edit.text.trim() === '' ? [] : (edit.recipe?.ingredients ?? [])).map(
+      (ingredient) => ({
         name: ingredient.name,
         quantity: ingredient.quantity,
         quantityMax: ingredient.quantityMax,
@@ -565,8 +748,55 @@ function dishesRequest(day: DayOfWeek, mealType: MealType): RequestDish[] {
         state: ingredient.state,
         size: ingredient.size,
         foodMeasureId: ingredient.foodMeasureId,
-      })),
-    })
+      }),
+    ),
+  }
+}
+
+/**
+ * One cell as the publish sends it. A cell nobody touched names its recipe by
+ * id and the backend keeps it as it is; an edited one names the library recipe
+ * it links, or sends its own recipe written out. A plate with no description
+ * left is not sent: it has been taken out of the week.
+ */
+function dishRequest(day: DayOfWeek, row: MealRow): RequestDish | null {
+  const edit = edits[cellKey(row, day)]
+  if (!edit) {
+    const stored = storedDish(day, row.mealType, row.dishIndex)
+    return stored
+      ? { name: stored.name, servings: stored.servings, recipeId: stored.recipeId }
+      : null
+  }
+  const name = edit.name.trim() || edit.recipe?.name?.trim() || ''
+  if (name === '') {
+    return null
+  }
+  const plate = { name, servings: edit.servings }
+  if (edit.mode === 'library' && edit.recipe?.id != null) {
+    return { ...plate, recipeId: edit.recipe.id }
+  }
+  if (edit.mode === 'own') {
+    if (edit.keepRecipeId !== null) {
+      return { ...plate, recipeId: edit.keepRecipeId }
+    }
+    const recipe = recipeRequest(edit)
+    return recipe ? { ...plate, recipe } : plate
+  }
+  return plate
+}
+
+/**
+ * A meal's dishes in row order. A removed plate drops out, and a plate written
+ * where the day had none is appended — the rows below do not shift, because a
+ * day that never filled the last row simply has fewer dishes.
+ */
+function dishesRequest(day: DayOfWeek, mealType: MealType): RequestDish[] {
+  const dishes: RequestDish[] = []
+  for (const row of mealRows.value.filter((candidate) => candidate.mealType === mealType)) {
+    const dish = dishRequest(day, row)
+    if (dish) {
+      dishes.push(dish)
+    }
   }
   return dishes
 }
@@ -779,13 +1009,21 @@ export function useDietDraft() {
     storedDish,
     findIngredient,
     textFor,
+    recipeTextFor,
     totalsFor,
     isEdited,
     // writes
     load,
     refresh,
     select,
-    setText,
+    setName,
+    setServings,
+    setRecipeText,
+    setSteps,
+    useLibraryRecipe,
+    detachRecipe,
+    clearRecipe,
+    removeDish,
     revert,
     discardAll,
     publish,

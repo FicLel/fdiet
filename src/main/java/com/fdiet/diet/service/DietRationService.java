@@ -1,5 +1,6 @@
 package com.fdiet.diet.service;
 
+import com.fdiet.diet.domain.Serving;
 import com.fdiet.diet.dto.DietRationsDto;
 import com.fdiet.diet.dto.DietRationsDto.Coverage;
 import com.fdiet.diet.dto.DietRationsDto.DayRations;
@@ -15,7 +16,7 @@ import com.fdiet.diet.dto.MealType;
 import com.fdiet.diet.dto.NutritionSummaryDto;
 import com.fdiet.diet.model.DietPlan;
 import com.fdiet.diet.model.PlannedDish;
-import com.fdiet.diet.model.PlannedIngredient;
+import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.diet.model.PlannedMeal;
 import com.fdiet.food.dto.NutritionDto;
 import com.fdiet.food.model.BedcaFood;
@@ -141,27 +142,28 @@ public class DietRationService implements IDietRationService {
         int noRation = 0;
         int stateMismatch = 0;
 
-        List<PlannedIngredient> all = new ArrayList<>();
-        Map<MealType, List<PlannedIngredient>> byMeal = new EnumMap<>(MealType.class);
+        List<Serving> all = new ArrayList<>();
+        Map<MealType, List<Serving>> byMeal = new EnumMap<>(MealType.class);
         Map<MealType, String> mealNames = new EnumMap<>(MealType.class);
         for (PlannedMeal meal : meals) {
             mealNames.put(meal.getType(), meal.getName());
             for (PlannedDish dish : meal.getDishes()) {
-                all.addAll(dish.getIngredients());
-                byMeal.computeIfAbsent(meal.getType(), type -> new ArrayList<>())
-                        .addAll(dish.getIngredients());
+                List<Serving> served = Serving.of(dish);
+                all.addAll(served);
+                byMeal.computeIfAbsent(meal.getType(), type -> new ArrayList<>()).addAll(served);
             }
         }
 
-        for (PlannedIngredient ingredient : all) {
+        for (Serving serving : all) {
+            RecipeIngredient ingredient = serving.ingredient();
             ingredients++;
             if (!ingredient.isMatched()) {
                 unmatched++;
                 uncounted.add(new Uncounted(ingredient.getRawName(), "Sin vincular a un alimento"));
                 continue;
             }
-            BigDecimal grams = nutritionService.edibleGrams(ingredient);
-            if (grams == null) {
+            BigDecimal oneServing = nutritionService.edibleGrams(ingredient);
+            if (oneServing == null) {
                 unweighed++;
                 uncounted.add(new Uncounted(ingredient.getRawName(), ingredient.isRange()
                         ? "Cantidad en intervalo, sin confirmar"
@@ -188,6 +190,7 @@ public class DietRationService implements IDietRationService {
                         + " y la ración es " + stateWord(ration.state())));
                 continue;
             }
+            BigDecimal grams = oneServing.multiply(serving.servings());
             counted++;
             sourceCodes.add(ration.sourceCode());
             groups.computeIfAbsent(ration.groupCode(), g -> new GroupTally(ration.groupLabel()))
@@ -208,7 +211,7 @@ public class DietRationService implements IDietRationService {
         NutritionDto dayTotals = nutritionService.summarise(all).totals();
         List<MealEnergy> energy = new ArrayList<>();
         Map<MealType, NutritionDto> mealTotals = new EnumMap<>(MealType.class);
-        for (Map.Entry<MealType, List<PlannedIngredient>> meal : byMeal.entrySet()) {
+        for (Map.Entry<MealType, List<Serving>> meal : byMeal.entrySet()) {
             NutritionDto totals = nutritionService.summarise(meal.getValue()).totals();
             mealTotals.put(meal.getKey(), totals);
             MealShareDto target = shareOf(shares, meal.getKey());
@@ -222,7 +225,7 @@ public class DietRationService implements IDietRationService {
         for (PlannedMeal meal : meals) {
             List<PlannedDish> dishes = meal.getDishes();
             for (int index = 0; index < dishes.size(); index++) {
-                NutritionSummaryDto summary = nutritionService.summarise(dishes.get(index).getIngredients());
+                NutritionSummaryDto summary = nutritionService.summarise(Serving.of(dishes.get(index)));
                 dishTotals.add(new DishTotals(meal.getType(), index, dishes.get(index).getName(),
                         summary.totals(), summary.complete()));
             }

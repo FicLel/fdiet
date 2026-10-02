@@ -8,8 +8,9 @@ import com.fdiet.diet.dto.MealType;
 import com.fdiet.diet.helpers.PortionScaler;
 import com.fdiet.diet.model.DietPlan;
 import com.fdiet.diet.model.PlannedDish;
-import com.fdiet.diet.model.PlannedIngredient;
+import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.diet.model.PlannedMeal;
+import com.fdiet.diet.model.Recipe;
 import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.model.NutrientValue;
 import com.fdiet.food.service.NutritionService;
@@ -94,6 +95,19 @@ class DietRationServiceTest {
         assertThat(monday.groups().get(1).rationsMax()).isEqualByComparingTo("1.33");
     }
 
+    /** Two servings of a shared recipe are twice the rations of one. */
+    @Test
+    void countsTheRationsOfEveryServing() {
+        DayRations monday = monday(plan(false, new BigDecimal("2"),
+                ingredient("lentejas", "60", "g", FoodState.RAW, food(1L, "Lenteja, seca, cruda", "20"))));
+
+        assertThat(monday.groups()).singleElement().satisfies(legumes -> {
+            assertThat(legumes.rationsMin()).isEqualByComparingTo("2.00");
+            assertThat(legumes.rationsMax()).isEqualByComparingTo("2.40");
+        });
+        assertThat(monday.coverage().ingredients()).isEqualTo(1);
+    }
+
     @Test
     void checksRecommendationsRangeAgainstRange() {
         DietRationsDto week = service.account(plan(false,
@@ -158,7 +172,7 @@ class DietRationServiceTest {
 
     @Test
     void countsCarbohydrateRationsOnlyOnAClinicalDiet() {
-        PlannedIngredient apple = ingredient("manzana", "160", "g", null, food(2L, "Manzana", "12"));
+        RecipeIngredient apple = ingredient("manzana", "160", "g", null, food(2L, "Manzana", "12"));
 
         assertThat(service.account(plan(false, apple), null).days().get(0).exchanges()).isEmpty();
 
@@ -194,25 +208,30 @@ class DietRationServiceTest {
         return service.account(plan, null).days().get(0);
     }
 
-    private static DietPlan plan(boolean clinical, PlannedIngredient... ingredients) {
+    private static DietPlan plan(boolean clinical, RecipeIngredient... ingredients) {
+        return plan(clinical, BigDecimal.ONE, ingredients);
+    }
+
+    private static DietPlan plan(boolean clinical, BigDecimal servings,
+                                 RecipeIngredient... ingredients) {
         DietPlan plan = new DietPlan();
         plan.setId(1L);
         plan.setReferenceProfileCode(PROFILE);
         plan.setClinical(clinical);
         PlannedMeal lunch = new PlannedMeal(DayOfWeek.MONDAY, MealType.LUNCH, "Comida");
         plan.addMeal(lunch);
-        PlannedDish dish = new PlannedDish("Plato", null);
-        lunch.addDish(dish);
-        for (PlannedIngredient ingredient : ingredients) {
-            dish.addIngredient(ingredient);
+        Recipe recipe = new Recipe("Plato", null, null, false);
+        for (RecipeIngredient ingredient : ingredients) {
+            recipe.addIngredient(ingredient);
         }
+        lunch.addDish(new PlannedDish("Plato", recipe, servings));
         return plan;
     }
 
-    private static PlannedIngredient ingredient(String name, String quantity, String unit,
+    private static RecipeIngredient ingredient(String name, String quantity, String unit,
                                                 FoodState state, BedcaFood food) {
-        PlannedIngredient ingredient =
-                new PlannedIngredient(name, null, food, new BigDecimal(quantity), unit);
+        RecipeIngredient ingredient =
+                new RecipeIngredient(name, null, food, new BigDecimal(quantity), unit);
         ingredient.setState(state);
         return ingredient;
     }

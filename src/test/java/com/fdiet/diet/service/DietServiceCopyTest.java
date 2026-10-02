@@ -9,11 +9,13 @@ import com.fdiet.diet.mapper.IDietMapper;
 import com.fdiet.diet.model.DietPlan;
 import com.fdiet.diet.model.DietStatus;
 import com.fdiet.diet.model.PlannedDish;
-import com.fdiet.diet.model.PlannedIngredient;
 import com.fdiet.diet.model.PlannedMeal;
+import com.fdiet.diet.model.Recipe;
+import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.diet.repository.DietRepository;
 import com.fdiet.diet.repository.PlannedDishRepository;
-import com.fdiet.diet.repository.PlannedIngredientRepository;
+import com.fdiet.diet.repository.RecipeIngredientRepository;
+import com.fdiet.diet.repository.RecipeRepository;
 import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.service.IBedcaFoodService;
 import com.fdiet.food.service.IFoodItemService;
@@ -53,20 +55,31 @@ class DietServiceCopyTest {
     private final DietRepository dietRepository = mock(DietRepository.class);
     private final IPatientService patientService = mock(IPatientService.class);
 
-    private final DietService dietService = new DietService(
-            dietRepository,
-            mock(PlannedIngredientRepository.class),
-            mock(PlannedDishRepository.class),
+    private final RecipeRepository recipeRepository = mock(RecipeRepository.class);
+
+    /** The real one: what a copy carries is its work, so it is not mocked away. */
+    private final RecipeService recipeService = new RecipeService(
+            recipeRepository,
+            mock(RecipeIngredientRepository.class),
             mock(IDietMapper.class),
             mock(IMealTextParser.class),
             mock(IFoodResolverService.class),
             mock(IFoodItemService.class),
             mock(IBedcaFoodService.class),
+            mock(IReferenceService.class),
+            new PortionScaler(),
+            5);
+
+    private final DietService dietService = new DietService(
+            dietRepository,
+            mock(PlannedDishRepository.class),
+            mock(IDietMapper.class),
+            recipeService,
+            mock(IBedcaFoodService.class),
             patientService,
             mock(IReferenceService.class),
             new PortionScaler(),
-            mock(IDietRationService.class),
-            5);
+            mock(IDietRationService.class));
 
     @Test
     void writesTheWeekAgainAsNewRowsOwnedByTheOtherPatient() {
@@ -105,7 +118,7 @@ class DietServiceCopyTest {
     }
 
     @Test
-    void carriesTheDishTextAndEveryMatchAlreadyMade() {
+    void carriesTheRecipeTextAndEveryMatchAlreadyMade() {
         DietPlan source = sourceDiet();
         given(source, patient(TARGET_PATIENT_ID, "Ana"));
 
@@ -113,12 +126,18 @@ class DietServiceCopyTest {
 
         PlannedDish dish = savedCopy().getMeals().get(0).getDishes().get(0);
         assertThat(dish.getName()).isEqualTo("Ensalada");
+        assertThat(dish.getServings()).isEqualByComparingTo("1.5");
+        // A private recipe is copied, never shared: the two weeks are edited apart.
+        Recipe sourceRecipe = source.getMeals().get(0).getDishes().get(0).getRecipe();
+        assertThat(dish.getRecipe()).isNotSameAs(sourceRecipe);
+        assertThat(dish.getRecipe().isLibrary()).isFalse();
         // The sentence the nutritionist typed travels. Rebuilding one from the
         // parts would be a different sentence claiming to be the original.
-        assertThat(dish.getRawText()).isEqualTo(CELL);
+        assertThat(dish.getRecipe().getRawText()).isEqualTo(CELL);
+        assertThat(dish.getRecipe().getSteps()).isEqualTo("Lavar y aliñar.");
         assertThat(dish.getIngredients()).hasSize(2);
 
-        PlannedIngredient lettuce = dish.getIngredients().get(0);
+        RecipeIngredient lettuce = dish.getIngredients().get(0);
         assertThat(lettuce.getRawName()).isEqualTo("lechuga");
         assertThat(lettuce.getQuantity()).isEqualByComparingTo("80");
         assertThat(lettuce.getUnit()).isEqualTo("gr");
@@ -129,6 +148,20 @@ class DietServiceCopyTest {
         // One nobody matched stays unmatched rather than being guessed at.
         assertThat(dish.getIngredients().get(1).isMatched()).isFalse();
         assertThat(dish.getIngredients().get(1).getPosition()).isEqualTo(1);
+    }
+
+    /** A library recipe is shared by every plate that serves it, the copy's included. */
+    @Test
+    void pointsAtALibraryRecipeRatherThanCopyingIt() {
+        DietPlan source = sourceDiet();
+        Recipe shared = source.getMeals().get(0).getDishes().get(0).getRecipe();
+        shared.setLibrary(true);
+        given(source, patient(TARGET_PATIENT_ID, "Ana"));
+
+        dietService.copy(SOURCE_ID, new CopyDietRequestDto(TARGET_PATIENT_ID, null, null));
+
+        assertThat(savedCopy().getMeals().get(0).getDishes().get(0).getRecipe()).isSameAs(shared);
+        verify(recipeRepository, never()).save(any());
     }
 
     @Test
@@ -168,6 +201,7 @@ class DietServiceCopyTest {
         when(dietRepository.findFirstByPatientIdAndStatus(TARGET_PATIENT_ID, DietStatus.ACTIVE))
                 .thenReturn(Optional.empty());
         when(dietRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(recipeRepository.save(any())).thenAnswer(call -> call.getArgument(0));
     }
 
     /** The plan the service was asked to store, which is the copy itself. */
@@ -177,7 +211,7 @@ class DietServiceCopyTest {
         return captor.getValue();
     }
 
-    private static PlannedIngredient sourceIngredient(DietPlan source, int at) {
+    private static RecipeIngredient sourceIngredient(DietPlan source, int at) {
         return source.getMeals().get(0).getDishes().get(0).getIngredients().get(at);
     }
 
@@ -192,15 +226,16 @@ class DietServiceCopyTest {
 
         PlannedMeal meal = new PlannedMeal(DayOfWeek.MONDAY, MealType.LUNCH, "Comida");
         plan.addMeal(meal);
-        PlannedDish dish = new PlannedDish("Ensalada", CELL);
-        meal.addDish(dish);
+        Recipe recipe = new Recipe("Ensalada", CELL, "Lavar y aliñar.", false);
+        recipe.setId(7L);
+        meal.addDish(new PlannedDish("Ensalada", recipe, new BigDecimal("1.5")));
 
         BedcaFood lettuce = new BedcaFood();
         lettuce.setId(42L);
         lettuce.setName("Lechuga");
-        dish.addIngredient(new PlannedIngredient(
+        recipe.addIngredient(new RecipeIngredient(
                 "lechuga", null, lettuce, new BigDecimal("80"), "gr"));
-        dish.addIngredient(new PlannedIngredient(
+        recipe.addIngredient(new RecipeIngredient(
                 "tomate", null, null, new BigDecimal("100"), "gr"));
         return plan;
     }

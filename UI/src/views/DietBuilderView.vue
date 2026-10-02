@@ -7,12 +7,14 @@ import WeekGrid from '@/components/WeekGrid.vue'
 import DishEditPanel from '@/components/DishEditPanel.vue'
 import FoodLinkPanel from '@/components/FoodLinkPanel.vue'
 import NewDietDialog from '@/components/NewDietDialog.vue'
+import RecipeLibraryDialog from '@/components/RecipeLibraryDialog.vue'
 import AttributionFooter from '@/components/AttributionFooter.vue'
 import { useDietDraft } from '@/stores/dietDraft'
 import { useFoodLink } from '@/stores/foodLink'
 import { usePatients } from '@/stores/patients'
 import { useRations } from '@/stores/rations'
 import { useReference } from '@/stores/reference'
+import { useRecipes } from '@/stores/recipes'
 import type { DishTotals } from '@/domain/nutrition'
 
 /**
@@ -26,6 +28,7 @@ import type { DishTotals } from '@/domain/nutrition'
 
 const draft = useDietDraft()
 const link = useFoodLink()
+const recipes = useRecipes()
 const patients = usePatients()
 const rations = useRations()
 const reference = useReference()
@@ -160,6 +163,11 @@ const week = computed<DishTotals>(() =>
     <AttributionFooter :sources="sources" />
 
     <NewDietDialog v-if="dialog" :mode="dialog" @close="dialog = null" />
+    <RecipeLibraryDialog
+      v-if="recipes.dialog.value"
+      :initial-id="recipes.dialog.value.recipeId"
+      @close="recipes.closeLibrary()"
+    />
   </div>
 </template>
 

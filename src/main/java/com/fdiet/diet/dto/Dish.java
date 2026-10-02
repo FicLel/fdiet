@@ -1,38 +1,47 @@
 package com.fdiet.diet.dto;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
-import java.util.List;
+import java.math.BigDecimal;
 
 /**
- * One plate: what it is called, what is on it, and — when it is known — the
- * sentence it was written as.
+ * One plate: what the patient reads it as, and the recipe behind it.
  *
- * <p>{@code rawText} is the cell a nutritionist typed, kept because reading it
- * cannot be undone. {@code "Tostada (60 gr) con tomate (80 gr)"} is stored as a
- * name and two quantities, and putting those back together gives a different
- * sentence with the same meaning. An editor that has to return the whole week
- * would rewrite every untouched cell that way, so the sentence itself travels.
+ * <p>{@code name} is the description — "Huevos revueltos" — and nothing reads
+ * food out of it. The food is the {@code recipe}, served {@code servings} times
+ * (1 when left out): a shared recipe is written for one serving, and a patient
+ * who needs more is given more servings of it rather than a copy.
  *
- * <p>It is null whenever nothing wrote one, and is <em>never</em> filled in
- * from the parts: a reconstruction that claims to be the original is worse than
- * an honest absence.
+ * <p>On the way in a plate names its recipe one of two ways, or not at all:
+ * <ul>
+ *   <li>{@code recipeId} — a library recipe, or a private recipe this diet
+ *       already holds and is keeping as it was;</li>
+ *   <li>{@code recipe} — a private recipe written in the plate, read and matched
+ *       the way an imported cell is.</li>
+ * </ul>
+ * Both at once is refused: one of them would have to be ignored. Neither is a
+ * plate that is a description only.
+ *
+ * <p>On the way out {@code recipe} is filled, {@code recipeId} is its id, and
+ * {@code nutrition} is the plate's figures at its servings.
  */
 public record Dish(
-        @NotBlank String name,
-        @Size(max = 1000) String rawText,
-        @NotNull List<@NotNull @Valid DishIngredient> ingredients) {
+        @NotBlank @Size(max = 255) String name,
+        @Positive @DecimalMax("99") BigDecimal servings,
+        Long recipeId,
+        @Valid RecipeDto recipe,
+        NutritionSummaryDto nutrition) {
 
-    /** A dish whose written form is not known — assembled rather than typed. */
-    public Dish(String name, List<DishIngredient> ingredients) {
-        this(name, null, ingredients);
+    public Dish {
+        servings = servings == null ? BigDecimal.ONE : servings;
     }
 
-    /** The same dish, read again into new ingredients. */
-    public Dish withIngredients(List<DishIngredient> read) {
-        return new Dish(name, rawText, read);
+    /** A plate written with its own recipe, one serving. */
+    public Dish(String name, RecipeDto recipe) {
+        this(name, BigDecimal.ONE, null, recipe, null);
     }
 }

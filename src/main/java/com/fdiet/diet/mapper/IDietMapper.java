@@ -6,10 +6,12 @@ import com.fdiet.diet.dto.DietSummaryDto;
 import com.fdiet.diet.dto.Dish;
 import com.fdiet.diet.dto.DishIngredient;
 import com.fdiet.diet.dto.MealDto;
+import com.fdiet.diet.dto.RecipeDto;
 import com.fdiet.diet.model.DietPlan;
 import com.fdiet.diet.model.PlannedDish;
-import com.fdiet.diet.model.PlannedIngredient;
 import com.fdiet.diet.model.PlannedMeal;
+import com.fdiet.diet.model.Recipe;
+import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.diet.service.FoodMatch;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
 
@@ -32,19 +34,19 @@ public interface IDietMapper {
 
     Dish toDto(PlannedDish dish);
 
-    DishIngredient toDto(PlannedIngredient ingredient);
+    DishIngredient toDto(RecipeIngredient ingredient);
 
     /** A meal with no dishes yet; the caller adds them through {@code addDish}. */
     PlannedMeal toEntity(DayOfWeek day, MealDto meal);
 
     /** A dish with no ingredients yet. */
-    PlannedDish toEntity(Dish dish);
+    RecipeDto toDto(Recipe recipe);
 
     /**
      * {@code match} may be null: an unmatched ingredient is still stored. So may
      * {@code measure}: an ingredient written in grams needs none, and one written
      * in a measure nothing weighs yet is stored unmeasured.
      */
-    PlannedIngredient toEntity(DishIngredient ingredient, FoodMatch match,
+    RecipeIngredient toEntity(DishIngredient ingredient, FoodMatch match,
                                ReferenceFoodMeasure measure);
 }

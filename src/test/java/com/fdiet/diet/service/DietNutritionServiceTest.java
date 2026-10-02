@@ -1,8 +1,9 @@
 package com.fdiet.diet.service;
 
+import com.fdiet.diet.domain.Serving;
 import com.fdiet.diet.dto.NutritionSummaryDto;
 import com.fdiet.diet.helpers.PortionScaler;
-import com.fdiet.diet.model.PlannedIngredient;
+import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.food.dto.NutritionDto;
 import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.model.NutrientValue;
@@ -25,7 +26,7 @@ class DietNutritionServiceTest {
     @Test
     void scalesTheHundredGramFigureToTheQuantityWritten() {
         // Lechuga: 65.125 kJ and 1.125 g of protein per 100 g, 80 gr of it.
-        PlannedIngredient lechuga = ingredient(lechuga(), "80", "gr");
+        RecipeIngredient lechuga = ingredient(lechuga(), "80", "gr");
 
         NutritionDto scaled = nutrition.of(lechuga);
 
@@ -35,7 +36,7 @@ class DietNutritionServiceTest {
 
     @Test
     void weighsMillilitresAsGrams() {
-        PlannedIngredient broth = ingredient(lechuga(), "300", "mL");
+        RecipeIngredient broth = ingredient(lechuga(), "300", "mL");
 
         assertThat(nutrition.of(broth).proteinG()).isEqualByComparingTo("3.38");
     }
@@ -48,12 +49,12 @@ class DietNutritionServiceTest {
 
     @Test
     void weighsARangeOnlyOnceSomebodySettlesIt() {
-        PlannedIngredient ranged = ingredient(lechuga(), "40", "gr");
+        RecipeIngredient ranged = ingredient(lechuga(), "40", "gr");
         ranged.setQuantityMax(new BigDecimal("60"));
 
         assertThat(nutrition.of(ranged)).isNull();
         assertThat(nutrition.edibleGrams(ranged)).isNull();
-        assertThat(nutrition.summarise(List.of(ranged)).unmeasured()).isEqualTo(1);
+        assertThat(summarise(List.of(ranged)).unmeasured()).isEqualTo(1);
 
         ranged.setQuantityMax(null);
         assertThat(nutrition.edibleGrams(ranged)).isEqualByComparingTo("40");
@@ -66,13 +67,13 @@ class DietNutritionServiceTest {
 
     @Test
     void countsEveryIngredientIntoExactlyOneOfTheThreeBuckets() {
-        List<PlannedIngredient> ingredients = List.of(
+        List<RecipeIngredient> ingredients = List.of(
                 ingredient(lechuga(), "80", "gr"),      // counted
                 ingredient(lechuga(), "100", "gr"),     // counted
                 ingredient(lechuga(), "1", "unidad"),   // matched, unweighable
                 ingredient(null, "80", "gr"));          // not matched yet
 
-        NutritionSummaryDto summary = nutrition.summarise(ingredients);
+        NutritionSummaryDto summary = summarise(ingredients);
 
         assertThat(summary.ingredients()).isEqualTo(4);
         assertThat(summary.counted()).isEqualTo(2);
@@ -87,7 +88,7 @@ class DietNutritionServiceTest {
 
     @Test
     void saysSoWhenEveryIngredientContributed() {
-        NutritionSummaryDto summary = nutrition.summarise(List.of(
+        NutritionSummaryDto summary = summarise(List.of(
                 ingredient(lechuga(), "80", "gr"),
                 ingredient(lechuga(), "20", "gr")));
 
@@ -96,7 +97,7 @@ class DietNutritionServiceTest {
 
     @Test
     void leavesTheTotalsOfAnUnmatchedWeekBlankRatherThanZero() {
-        NutritionSummaryDto summary = nutrition.summarise(List.of(
+        NutritionSummaryDto summary = summarise(List.of(
                 ingredient(null, "80", "gr"),
                 ingredient(null, "100", "gr")));
 
@@ -107,7 +108,7 @@ class DietNutritionServiceTest {
     @Test
     void weighsAHouseholdMeasureThroughTheRowAttachedToIt() {
         // AESAN 2022: 1 cucharada sopera of olive oil is 10 ml, read as 10 g.
-        PlannedIngredient oil = ingredient(lechuga(), "2", "cda");
+        RecipeIngredient oil = ingredient(lechuga(), "2", "cda");
         oil.setFoodMeasure(measure(HouseholdMeasure.CUCHARADA_SOPERA, null, "10", "1", WeightBasis.UNSPECIFIED));
 
         assertThat(nutrition.edibleGrams(oil)).isEqualByComparingTo("20");
@@ -118,7 +119,7 @@ class DietNutritionServiceTest {
     @Test
     void dividesAPublishedCountDownToOneMeasure() {
         // 5 al día: "3 Uds. medianas" of apricot are 180 g, so one is 60 g.
-        PlannedIngredient apricots = ingredient(lechuga(), "2", "unidades");
+        RecipeIngredient apricots = ingredient(lechuga(), "2", "unidades");
         apricots.setFoodMeasure(measure(HouseholdMeasure.UNIDAD, "180", null, "3", WeightBasis.NET_EDIBLE));
 
         assertThat(nutrition.edibleGrams(apricots)).isEqualByComparingTo("120");
@@ -128,7 +129,7 @@ class DietNutritionServiceTest {
     void cutsAGrossMeasureToTheEdiblePartAndRefusesWithoutOne() {
         BedcaFood kiwi = lechuga();
         kiwi.setEdiblePortion(new BigDecimal("0.85"));
-        PlannedIngredient piece = ingredient(kiwi, "1", "unidad");
+        RecipeIngredient piece = ingredient(kiwi, "1", "unidad");
         piece.setFoodMeasure(measure(HouseholdMeasure.UNIDAD, "100", null, "1", WeightBasis.GROSS));
 
         assertThat(nutrition.edibleGrams(piece)).isEqualByComparingTo("85");
@@ -139,7 +140,7 @@ class DietNutritionServiceTest {
 
     @Test
     void aRangeWeighsNothing() {
-        PlannedIngredient egg = ingredient(lechuga(), "1", "unidad");
+        RecipeIngredient egg = ingredient(lechuga(), "1", "unidad");
         ReferenceFoodMeasure range = measure(HouseholdMeasure.UNIDAD, "53", null, "1", WeightBasis.UNSPECIFIED);
         range.setGramsMax(new BigDecimal("63"));
         egg.setFoodMeasure(range);
@@ -149,22 +150,22 @@ class DietNutritionServiceTest {
 
     @Test
     void aMeasureOnlyWeighsTheUnitItMeasures() {
-        PlannedIngredient slices = ingredient(lechuga(), "2", "lonchas");
+        RecipeIngredient slices = ingredient(lechuga(), "2", "lonchas");
         slices.setFoodMeasure(measure(HouseholdMeasure.CUCHARADA_SOPERA, null, "10", "1", WeightBasis.UNSPECIFIED));
         assertThat(nutrition.of(slices)).isNull();
 
         // A weight is a weight, whatever measure the ingredient once had.
-        PlannedIngredient grams = ingredient(lechuga(), "80", "gr");
+        RecipeIngredient grams = ingredient(lechuga(), "80", "gr");
         grams.setFoodMeasure(measure(HouseholdMeasure.CUCHARADA_SOPERA, null, "10", "1", WeightBasis.UNSPECIFIED));
         assertThat(nutrition.edibleGrams(grams)).isEqualByComparingTo("80");
     }
 
     @Test
     void saysHowMuchOfTheTotalRestsOnAHouseholdMeasure() {
-        PlannedIngredient oil = ingredient(lechuga(), "1", "cdta");
+        RecipeIngredient oil = ingredient(lechuga(), "1", "cdta");
         oil.setFoodMeasure(measure(HouseholdMeasure.CUCHARADITA, null, "5", "1", WeightBasis.UNSPECIFIED));
 
-        NutritionSummaryDto summary = nutrition.summarise(List.of(
+        NutritionSummaryDto summary = summarise(List.of(
                 ingredient(lechuga(), "80", "gr"), oil, ingredient(lechuga(), "1", "cda")));
 
         assertThat(summary.counted()).isEqualTo(2);
@@ -172,6 +173,28 @@ class DietNutritionServiceTest {
         assertThat(summary.unmeasured()).isEqualTo(1);
         assertThat(summary.counted() + summary.unmeasured() + summary.unmatched())
                 .isEqualTo(summary.ingredients());
+    }
+
+    /** A shared recipe served one and a half times: the figures scale, the counts do not. */
+    @Test
+    void scalesTheFiguresByTheServingsAndLeavesTheCountsAlone() {
+        RecipeIngredient lettuce = ingredient(lechuga(), "80", "gr");
+        RecipeIngredient spoon = ingredient(lechuga(), "1", "unidad");
+
+        NutritionSummaryDto single = summarise(List.of(lettuce, spoon));
+        NutritionSummaryDto served = nutrition.summarise(List.of(
+                new Serving(lettuce, new BigDecimal("1.5")), new Serving(spoon, new BigDecimal("1.5"))));
+
+        // One and a half servings of 80 g are 120 g, and read exactly as 120 g do.
+        assertThat(served.totals().energyKcal()).isEqualByComparingTo(
+                summarise(List.of(ingredient(lechuga(), "120", "gr"))).totals().energyKcal());
+        assertThat(served.ingredients()).isEqualTo(single.ingredients());
+        assertThat(served.counted()).isEqualTo(1);
+        assertThat(served.unmeasured()).isEqualTo(1);
+    }
+
+    private NutritionSummaryDto summarise(List<RecipeIngredient> ingredients) {
+        return nutrition.summarise(Serving.single(ingredients));
     }
 
     private static ReferenceFoodMeasure measure(HouseholdMeasure household, String grams, String ml,
@@ -200,7 +223,7 @@ class DietNutritionServiceTest {
         return food;
     }
 
-    private static PlannedIngredient ingredient(BedcaFood food, String quantity, String unit) {
-        return new PlannedIngredient("lechuga", null, food, new BigDecimal(quantity), unit);
+    private static RecipeIngredient ingredient(BedcaFood food, String quantity, String unit) {
+        return new RecipeIngredient("lechuga", null, food, new BigDecimal(quantity), unit);
     }
 }

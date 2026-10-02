@@ -26,7 +26,7 @@ import java.time.LocalDateTime;
 /**
  * Something eaten on a day of the week that the plan did not prescribe.
  *
- * <p>Shaped like {@link com.fdiet.diet.model.PlannedIngredient} on purpose,
+ * <p>Shaped like {@link com.fdiet.diet.model.RecipeIngredient} on purpose,
  * because it is the same idea seen from the other side: a name as it was
  * written, a quantity with its own unit, and at most one of the two catalogues
  * pointed at. {@code rawName} is always kept — an entry nothing matched is

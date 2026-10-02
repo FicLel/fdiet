@@ -2,8 +2,8 @@ package com.fdiet.diet.helpers;
 
 import com.fdiet.common.helper.Numbers;
 import com.fdiet.common.helper.Texts;
-import com.fdiet.diet.dto.Dish;
 import com.fdiet.diet.dto.DishIngredient;
+import com.fdiet.diet.dto.RecipeDto;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.HouseholdMeasure;
 import com.fdiet.reference.domain.PortionSize;
@@ -97,7 +97,7 @@ public class MealTextParser implements IMealTextParser {
     private static final char COLON = ':';
 
     @Override
-    public Dish parse(String text, String fallbackName) {
+    public RecipeDto parse(String text, String fallbackName) {
         String cell = Texts.trimToNull(text);
         if (cell == null) {
             return null;
@@ -123,7 +123,7 @@ public class MealTextParser implements IMealTextParser {
         }
         // The cell travels beside what was read out of it: reading is lossy, and
         // whoever wrote the sentence is entitled to get that sentence back.
-        return new Dish(clean(name == null ? cell : name),
+        return new RecipeDto(clean(name == null ? cell : name),
                 Texts.truncate(cell, TEXT_MAX),
                 List.copyOf(ingredients));
     }

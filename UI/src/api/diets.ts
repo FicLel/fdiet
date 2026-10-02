@@ -6,13 +6,13 @@ import type {
   DietMeasureSaved,
   DietRations,
   DietSummary,
-  Dish,
   DishIngredient,
   FoodMeasure,
   FoodState,
   HouseholdMeasure,
   Page,
   PortionSize,
+  Recipe,
 } from './types'
 
 /** What one ingredient may be corrected to; a field left out is left alone. */
@@ -26,12 +26,12 @@ export interface ResolveIngredient {
   foodMeasureId?: number | null
 }
 
-/** One written cell, to be read by the same parser the workbook import uses. */
+/** Recipe text, to be read by the same parser the workbook import uses. */
 export interface ParseDishRequest {
   text: string
-  /** What the grid row is called; the parser names the dish after it when the cell does not. */
+  /** What the plate is called; the parser names the recipe after it when the text does not. */
   slotName?: string
-  /** The diet the cell belongs to, so its own measure criteria are applied. */
+  /** The diet the recipe is written in, so its own measure criteria are applied. */
   dietId?: number
 }
 
@@ -53,16 +53,25 @@ export interface RequestIngredient {
   foodMeasureId?: number | null
 }
 
+/** A plate's own recipe on the way back: the text as written, the steps, and what was read. */
+export interface RequestRecipe {
+  name?: string | null
+  rawText: string | null
+  steps: string | null
+  ingredients: RequestIngredient[]
+}
+
+/**
+ * A plate on the way back. `name` is the description the patient reads. It names
+ * its recipe by `recipeId` — a library recipe, or the private one it already has,
+ * kept as stored — or writes its own in `recipe`; never both, and neither for a
+ * plate that is a description only.
+ */
 export interface RequestDish {
   name: string
-  /**
-   * The cell as written. Sent back untouched for a cell nobody edited, and left
-   * out when the diet never carried one — a rebuilt sentence is not the one the
-   * nutritionist typed, and storing it as if it were would make the loss
-   * permanent.
-   */
-  rawText?: string | null
-  ingredients: RequestIngredient[]
+  servings: number
+  recipeId?: number | null
+  recipe?: RequestRecipe | null
 }
 
 export interface RequestMeal {
@@ -182,11 +191,11 @@ export const dietsApi = {
     http.patch<DishIngredient>(`/diets/${id}/ingredients/${ingredientId}`, change),
 
   /**
-   * Reads a cell the nutritionist typed into a dish and its ingredients, matched
-   * and priced, without storing anything. The parser lives in one place so the
+   * Reads recipe text the nutritionist typed into its ingredients, matched and
+   * priced, without storing anything. The parser lives in one place so the
    * editor and the workbook import never disagree about the same line of text.
    */
-  parse: (request: ParseDishRequest) => http.post<Dish>('/diets/parse', request),
+  parse: (request: ParseDishRequest) => http.post<Recipe>('/diets/parse', request),
 
   /** Replaces a diet's whole week. What is not sent is deleted. */
   update: (id: number, week: DietRequest) => http.put<Diet>(`/diets/${id}`, week),

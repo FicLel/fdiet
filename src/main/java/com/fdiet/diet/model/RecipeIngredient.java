@@ -22,7 +22,7 @@ import lombok.Setter;
 import java.math.BigDecimal;
 
 /**
- * What a {@link PlannedDish} is made of, in the quantity the diet prescribes.
+ * What a {@link Recipe} is made of, in the quantity it prescribes for one serving.
  *
  * <p>{@code rawName} is what the diet calls the food and is always there. The
  * nutrition figures come from whichever half of the catalogue it was matched
@@ -37,18 +37,18 @@ import java.math.BigDecimal;
  * {@link #foodMeasure} when one is attached, and not at all when none is.
  */
 @Entity
-@Table(name = "diet_ingredients")
+@Table(name = "recipe_ingredients")
 @Getter
 @Setter
-public class PlannedIngredient {
+public class RecipeIngredient {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "dish_id", nullable = false)
-    private PlannedDish dish;
+    @JoinColumn(name = "recipe_id", nullable = false)
+    private Recipe recipe;
 
     /** The branded catalogue product, when the diet names one. */
     @ManyToOne(fetch = FetchType.LAZY)
@@ -101,14 +101,14 @@ public class PlannedIngredient {
     @Column(name = "portion_size", length = 8)
     private PortionSize size;
 
-    /** Its place in the dish, from 0. Unique within the dish. */
+    /** Its place in the recipe, from 0. Unique within the recipe. */
     @Column(name = "position", nullable = false)
     private int position;
 
-    protected PlannedIngredient() {
+    protected RecipeIngredient() {
     }
 
-    public PlannedIngredient(String rawName,
+    public RecipeIngredient(String rawName,
                              FoodItem foodItem,
                              BedcaFood bedcaFood,
                              BigDecimal quantity,

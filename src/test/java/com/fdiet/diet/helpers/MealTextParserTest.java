@@ -1,7 +1,7 @@
 package com.fdiet.diet.helpers;
 
-import com.fdiet.diet.dto.Dish;
 import com.fdiet.diet.dto.DishIngredient;
+import com.fdiet.diet.dto.RecipeDto;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.PortionSize;
 import org.junit.jupiter.api.Test;
@@ -17,7 +17,7 @@ class MealTextParserTest {
 
     @Test
     void readsTheDishNameAndItsIngredients() {
-        Dish dish = parser.parse(
+        RecipeDto dish = parser.parse(
                 "Ensalada: lechuga (80 gr) + tomate (100 gr) + pepino (80 gr) + 1 cdta AOVE",
                 "Primer plato");
 
@@ -30,7 +30,7 @@ class MealTextParserTest {
 
     @Test
     void readsACountAndAHouseholdMeasureWrittenInFrontOfTheFood() {
-        Dish dish = parser.parse("Ensalada: lechuga (80 gr) + 1 cdta AOVE", "Primer plato");
+        RecipeDto dish = parser.parse("Ensalada: lechuga (80 gr) + 1 cdta AOVE", "Primer plato");
 
         DishIngredient oil = dish.ingredients().get(1);
         assertThat(oil.name()).isEqualTo("AOVE");
@@ -40,7 +40,7 @@ class MealTextParserTest {
 
     @Test
     void fallsBackToOneUnitWhenNoQuantityIsGiven() {
-        Dish dish = parser.parse("Pescado (120 gr) + sal + limón", "Segundo plato");
+        RecipeDto dish = parser.parse("Pescado (120 gr) + sal + limón", "Segundo plato");
 
         DishIngredient salt = dish.ingredients().get(1);
         assertThat(salt.name()).isEqualTo("sal");
@@ -50,7 +50,7 @@ class MealTextParserTest {
 
     @Test
     void usesTheRowLabelWhenTheTextNamesNoDish() {
-        Dish dish = parser.parse(
+        RecipeDto dish = parser.parse(
                 "1 vaso de leche semidesnatada (250 mL) + plátano pequeño (120 gr)", "Desayuno");
 
         assertThat(dish.name()).isEqualTo("Desayuno");
@@ -62,7 +62,7 @@ class MealTextParserTest {
 
     @Test
     void takesTheLastQuantityInTheBrackets() {
-        Dish dish = parser.parse("2 tostadas integrales (60 gr) con aguacate (1/2 unidad, 80 gr) "
+        RecipeDto dish = parser.parse("2 tostadas integrales (60 gr) con aguacate (1/2 unidad, 80 gr) "
                 + "+ café con leche semidesnatada (150 mL) sin azúcar", "Desayuno");
 
         DishIngredient toast = dish.ingredients().get(0);
@@ -77,7 +77,7 @@ class MealTextParserTest {
 
     @Test
     void readsAFractionAsTheQuantityWhenItIsAllThereIs() {
-        Dish dish = parser.parse("aguacate (1/2 unidad)", "Desayuno");
+        RecipeDto dish = parser.parse("aguacate (1/2 unidad)", "Desayuno");
 
         assertThat(dish.ingredients()).singleElement()
                 .satisfies(ingredient -> {
@@ -89,7 +89,7 @@ class MealTextParserTest {
 
     @Test
     void doesNotSplitInsideBrackets() {
-        Dish dish = parser.parse(
+        RecipeDto dish = parser.parse(
                 "Frutos secos variados (20 g: nueces + almendras) + 1 plátano maduro (150 g)",
                 "Merienda");
 
@@ -101,7 +101,7 @@ class MealTextParserTest {
     void keepsTheFirstFoodWhenTheColonComesAfterASeparator() {
         // A colon this late names a garnish, not the dish: reading it as the
         // dish name would drop the tuna the meal is built on.
-        Dish dish = parser.parse("Atún al natural o a la plancha (160 gr) + judías verdes al vapor: "
+        RecipeDto dish = parser.parse("Atún al natural o a la plancha (160 gr) + judías verdes al vapor: "
                 + "judías verdes (200 gr) + sal + limón", "Segundo plato");
 
         assertThat(dish.name()).isEqualTo("Segundo plato");
@@ -112,7 +112,7 @@ class MealTextParserTest {
 
     @Test
     void readsALeadingCountAsThatManyPieces() {
-        Dish dish = parser.parse("1 kiwi", "Postre");
+        RecipeDto dish = parser.parse("1 kiwi", "Postre");
 
         assertThat(dish.name()).isEqualTo("Postre");
         assertThat(dish.ingredients()).singleElement().satisfies(kiwi -> {
@@ -150,7 +150,7 @@ class MealTextParserTest {
 
     @Test
     void keepsTheRawOrCookedWordInsteadOfDroppingIt() {
-        Dish dish = parser.parse("arroz blanco (70 g crudo) + lentejas cocidas (180 gr) "
+        RecipeDto dish = parser.parse("arroz blanco (70 g crudo) + lentejas cocidas (180 gr) "
                 + "+ garbanzos (100 g cocidos sin piel) + 1 huevo cocido", "Comida");
 
         assertThat(dish.ingredients()).extracting(DishIngredient::state).containsExactly(
@@ -163,7 +163,7 @@ class MealTextParserTest {
 
     @Test
     void readsDryWeightOnlyWhereSecoCannotBeTheFood() {
-        Dish dish = parser.parse("pasta (70 g en seco) + frutos secos (20 g)", "Comida");
+        RecipeDto dish = parser.parse("pasta (70 g en seco) + frutos secos (20 g)", "Comida");
 
         assertThat(dish.ingredients().get(0).state()).isEqualTo(FoodState.DRY);
         assertThat(dish.ingredients().get(1).state()).isNull();
@@ -200,7 +200,7 @@ class MealTextParserTest {
 
     @Test
     void everyIngredientStartsUnresolved() {
-        Dish dish = parser.parse("Ensalada: lechuga (80 gr)", "Primer plato");
+        RecipeDto dish = parser.parse("Ensalada: lechuga (80 gr)", "Primer plato");
 
         assertThat(dish.ingredients()).allSatisfy(ingredient -> {
             assertThat(ingredient.foodItemId()).isNull();
@@ -218,7 +218,7 @@ class MealTextParserTest {
         String cell = "Tostada de pan integral (60 gr) con tomate rallado (80 gr) "
                 + "y 3 lonchas de pavo (60 gr)";
 
-        Dish dish = parser.parse("  " + cell + "  ", "Desayuno");
+        RecipeDto dish = parser.parse("  " + cell + "  ", "Desayuno");
 
         assertThat(dish.rawText()).isEqualTo(cell);
         assertThat(dish.ingredients()).extracting(DishIngredient::name)

@@ -1,9 +1,10 @@
-import type { Dish, Nutrition } from '@/api/types'
+import type { Dish, DishIngredient, Nutrition } from '@/api/types'
 
 /**
- * A dish carries no totals of its own — the backend summarises a meal, a day
- * and the week, and hands each ingredient its own scaled figures. Adding the
- * ingredients up here costs nothing and keeps the counts with the total.
+ * Each ingredient carries its own figures for one serving of its recipe, and a
+ * plate is that recipe served `servings` times. Adding them up here, rather than
+ * taking the plate's own summary, lets a figure move while a recipe is being
+ * typed — the same arithmetic either way.
  *
  * **A total always travels with its counts.** A dish whose ingredients are half
  * unmatched adds up to a number that looks exactly like a complete one.
@@ -44,12 +45,24 @@ function measured(nutrition: Nutrition | null): boolean {
   return nutrition !== null && Object.values(nutrition).some((value) => value !== null)
 }
 
+/** A plate's ingredients: its recipe's, or none for a plate that is a description only. */
+export function ingredientsOf(dish: Dish | undefined): DishIngredient[] {
+  return dish?.recipe?.ingredients ?? []
+}
+
 export function dishTotals(dish: Dish | undefined): DishTotals {
   if (!dish) {
     return EMPTY_TOTALS
   }
-  const totals: DishTotals = { ...EMPTY_TOTALS, ingredients: dish.ingredients.length }
-  for (const ingredient of dish.ingredients) {
+  return recipeTotals(ingredientsOf(dish), dish.servings)
+}
+
+/** One serving's ingredients, `servings` times over. The counts are not scaled. */
+export function recipeTotals(ingredients: DishIngredient[], servings = 1): DishTotals {
+  const scaled = (value: number | null | undefined): number | null | undefined =>
+    value === null || value === undefined ? value : value * servings
+  const totals: DishTotals = { ...EMPTY_TOTALS, ingredients: ingredients.length }
+  for (const ingredient of ingredients) {
     if (ingredient.foodItemId === null && ingredient.bedcaFoodId === null) {
       totals.unmatched++
       continue
@@ -59,10 +72,10 @@ export function dishTotals(dish: Dish | undefined): DishTotals {
       continue
     }
     totals.counted++
-    totals.kcal = add(totals.kcal, ingredient.nutrition?.energyKcal)
-    totals.proteinG = add(totals.proteinG, ingredient.nutrition?.proteinG)
-    totals.carbohydratesG = add(totals.carbohydratesG, ingredient.nutrition?.carbohydratesG)
-    totals.fatG = add(totals.fatG, ingredient.nutrition?.fatG)
+    totals.kcal = add(totals.kcal, scaled(ingredient.nutrition?.energyKcal))
+    totals.proteinG = add(totals.proteinG, scaled(ingredient.nutrition?.proteinG))
+    totals.carbohydratesG = add(totals.carbohydratesG, scaled(ingredient.nutrition?.carbohydratesG))
+    totals.fatG = add(totals.fatG, scaled(ingredient.nutrition?.fatG))
   }
   return totals
 }

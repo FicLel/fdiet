@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import StarRating from './StarRating.vue'
 import MacroBars from './MacroBars.vue'
+import RecipeDetail from './RecipeDetail.vue'
 import type { DayOfWeek } from '@/api/types'
 import type { MealRow } from '@/domain/slots'
 import { usePatientWeek, slotKey } from '@/stores/patientWeek'
@@ -11,8 +12,9 @@ import { complete } from '@/domain/nutrition'
 /**
  * One plate of the week as the patient reads it.
  *
- * The cell itself is three lines and a figure; everything else — the whole
- * sentence, the macros, the stars — is in a card that opens over it. The card
+ * The cell itself is the plate's description and a figure; everything else —
+ * the recipe (what goes in it, at this plate's servings, and how it is made),
+ * the macros, the stars — is in a card that opens over it. The card
  * opens on hover where there is a cursor and on a press everywhere, and the
  * press is what pins it: a touch screen has no hover, and a card that vanished
  * the moment a finger moved could not be scored from.
@@ -33,6 +35,7 @@ const week = usePatientWeek()
 
 const key = computed(() => slotKey(props.row, props.day))
 const text = computed(() => week.textFor(props.row, props.day))
+const dish = computed(() => week.dishFor(props.row, props.day))
 const totals = computed(() => week.totalsFor(props.row, props.day))
 const score = computed(() => week.scoreFor(props.row, props.day))
 const pinned = computed(() => week.openCell.value === key.value)
@@ -66,7 +69,7 @@ const slotLabel = computed(() =>
 </script>
 
 <template>
-  <div class="cell" :class="{ pinned, empty: totals.ingredients === 0 }">
+  <div class="cell" :class="{ pinned, empty: text === '' }">
     <button
       class="face"
       type="button"
@@ -96,7 +99,7 @@ const slotLabel = computed(() =>
     </button>
 
     <div
-      v-if="totals.ingredients > 0"
+      v-if="text !== ''"
       class="card"
       :class="{ left: alignRight, bottom: alignBottom, pinned }"
     >
@@ -107,7 +110,9 @@ const slotLabel = computed(() =>
 
       <p class="card-text">{{ text }}</p>
 
-      <div class="card-figures">
+      <RecipeDetail :dish="dish" />
+
+      <div v-if="totals.ingredients > 0" class="card-figures">
         <span class="srf num card-kcal">{{ kcal }}</span>
         <span class="card-unit">kcal</span>
         <span class="num card-share">{{ share }}</span>
@@ -119,6 +124,7 @@ const slotLabel = computed(() =>
       </p>
 
       <MacroBars
+        v-if="totals.ingredients > 0"
         class="card-macros"
         compact
         :protein-g="totals.proteinG"

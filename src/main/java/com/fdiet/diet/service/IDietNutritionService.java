@@ -1,7 +1,8 @@
 package com.fdiet.diet.service;
 
+import com.fdiet.diet.domain.Serving;
 import com.fdiet.diet.dto.NutritionSummaryDto;
-import com.fdiet.diet.model.PlannedIngredient;
+import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.food.dto.NutritionDto;
 
 import java.math.BigDecimal;
@@ -20,15 +21,20 @@ public interface IDietNutritionService {
      * This ingredient's own figures, for the quantity written. Null when it has
      * not been matched to a food, or when its unit cannot be weighed.
      */
-    NutritionDto of(PlannedIngredient ingredient);
+    NutritionDto of(RecipeIngredient ingredient);
 
     /**
      * The grams of edible food the ingredient comes to — the weight its figures
      * are scaled from — or null when it cannot be weighed. What a ration count
      * divides.
      */
-    BigDecimal edibleGrams(PlannedIngredient ingredient);
+    BigDecimal edibleGrams(RecipeIngredient ingredient);
 
-    /** The total, with the count of what did and did not contribute to it. */
-    NutritionSummaryDto summarise(Collection<PlannedIngredient> ingredients);
+    /**
+     * The total of these ingredients at the servings each is served in, with the
+     * count of what did and did not contribute to it. Servings scale the figures
+     * and never the counts: an ingredient is one ingredient however much of it
+     * is on the plate.
+     */
+    NutritionSummaryDto summarise(Collection<Serving> servings);
 }

@@ -1,6 +1,5 @@
 package com.fdiet.diet.model;
 
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -9,17 +8,23 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.ArrayList;
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * One plate of a {@link PlannedMeal}, made of catalogue foods.
+ * One plate of a {@link PlannedMeal}: what the patient reads it as, and the
+ * recipe behind it.
+ *
+ * <p>{@code name} is the description — "Huevos revueltos" — and nothing reads
+ * food out of it. What is on the plate is the {@link Recipe}, served
+ * {@code servings} times: a library recipe is written for one serving and shared,
+ * so a patient who needs half as much again is given 1.5 of it rather than a copy
+ * that would stop following the original. Null recipe is a plate that is only a
+ * description ("Comida libre").
  *
  * <p>{@code position} is an ordinary column the caller fills in, not an
  * {@code @OrderColumn}: on a {@code mappedBy} collection Hibernate writes that
@@ -40,28 +45,24 @@ public class PlannedDish {
     @JoinColumn(name = "meal_id", nullable = false)
     private PlannedMeal meal;
 
+    /** The description the patient reads. */
     @Column(name = "name", length = 255, nullable = false)
     private String name;
 
     /**
-     * The cell as it was written, when it is known.
-     *
-     * <p>The name and the ingredients are what the sentence was read as, and
-     * reading it is not reversible. This is the sentence, so an editor that has
-     * to send the whole week back can return the cells it did not touch exactly
-     * as they were. Null where nothing wrote one — never a reconstruction,
-     * which would be a different sentence dressed up as the original.
+     * No cascade: a library recipe outlives every dish that serves it, and a
+     * private one is written and removed by the service that owns recipes.
      */
-    @Column(name = "raw_text", length = 1000)
-    private String rawText;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "recipe_id")
+    private Recipe recipe;
+
+    @Column(name = "servings", precision = 6, scale = 2, nullable = false)
+    private BigDecimal servings = BigDecimal.ONE;
 
     /** Its place in the meal, from 0. Unique within the meal. */
     @Column(name = "position", nullable = false)
     private int position;
-
-    @OneToMany(mappedBy = "dish", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("position ASC")
-    private List<PlannedIngredient> ingredients = new ArrayList<>();
 
     protected PlannedDish() {
     }
@@ -70,14 +71,14 @@ public class PlannedDish {
         this.name = name;
     }
 
-    public PlannedDish(String name, String rawText) {
+    public PlannedDish(String name, Recipe recipe, BigDecimal servings) {
         this.name = name;
-        this.rawText = rawText;
+        this.recipe = recipe;
+        this.servings = servings == null ? BigDecimal.ONE : servings;
     }
 
-    public void addIngredient(PlannedIngredient ingredient) {
-        ingredient.setPosition(ingredients.size());
-        ingredients.add(ingredient);
-        ingredient.setDish(this);
+    /** The recipe's ingredients, or none for a description-only plate. */
+    public List<RecipeIngredient> getIngredients() {
+        return recipe == null ? List.of() : recipe.getIngredients();
     }
 }

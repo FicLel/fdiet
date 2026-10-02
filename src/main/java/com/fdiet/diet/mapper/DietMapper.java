@@ -1,18 +1,20 @@
 package com.fdiet.diet.mapper;
 
 import com.fdiet.diet.domain.Diet;
+import com.fdiet.diet.domain.Serving;
 import com.fdiet.diet.dto.DietDay;
 import com.fdiet.diet.dto.DietDto;
 import com.fdiet.diet.dto.DietSummaryDto;
 import com.fdiet.diet.dto.Dish;
 import com.fdiet.diet.dto.DishIngredient;
 import com.fdiet.diet.dto.MealDto;
-import com.fdiet.diet.dto.NutritionSummaryDto;
+import com.fdiet.diet.dto.RecipeDto;
 import com.fdiet.diet.dto.YieldHintDto;
 import com.fdiet.diet.model.DietPlan;
 import com.fdiet.diet.model.PlannedDish;
-import com.fdiet.diet.model.PlannedIngredient;
 import com.fdiet.diet.model.PlannedMeal;
+import com.fdiet.diet.model.Recipe;
+import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.diet.service.FoodMatch;
 import com.fdiet.diet.service.IDietNutritionService;
 import com.fdiet.food.model.BedcaFood;
@@ -64,7 +66,7 @@ public class DietMapper implements IDietMapper {
                 plan.getReferenceProfileCode(),
                 plan.isClinical(),
                 toDays(plan),
-                dietNutritionService.summarise(ingredientsOf(plan.getMeals())));
+                dietNutritionService.summarise(Serving.ofMeals(plan.getMeals())));
     }
 
     @Override
@@ -93,11 +95,11 @@ public class DietMapper implements IDietMapper {
     @Override
     public List<DietDay> toDays(DietPlan plan) {
         Map<DayOfWeek, List<MealDto>> byDay = new LinkedHashMap<>();
-        Map<DayOfWeek, List<PlannedIngredient>> ingredientsByDay = new LinkedHashMap<>();
+        Map<DayOfWeek, List<Serving>> servingsByDay = new LinkedHashMap<>();
         for (PlannedMeal meal : plan.getMeals()) {
             byDay.computeIfAbsent(meal.getDayOfWeek(), day -> new ArrayList<>()).add(toDto(meal));
-            ingredientsByDay.computeIfAbsent(meal.getDayOfWeek(), day -> new ArrayList<>())
-                    .addAll(ingredientsOf(List.of(meal)));
+            servingsByDay.computeIfAbsent(meal.getDayOfWeek(), day -> new ArrayList<>())
+                    .addAll(Serving.ofMeals(List.of(meal)));
         }
         List<DietDay> days = byDay.entrySet().stream()
                 .map(entry -> new DietDay(entry.getKey(), entry.getValue()))
@@ -105,7 +107,7 @@ public class DietMapper implements IDietMapper {
 
         return new Diet(days).days().stream()
                 .map(day -> new DietDay(day.day(), day.meals(), dietNutritionService.summarise(
-                        ingredientsByDay.getOrDefault(day.day(), List.of()))))
+                        servingsByDay.getOrDefault(day.day(), List.of()))))
                 .toList();
     }
 
@@ -115,13 +117,29 @@ public class DietMapper implements IDietMapper {
                 meal.getType(),
                 meal.getName(),
                 meal.getDishes().stream().map(this::toDto).toList(),
-                dietNutritionService.summarise(ingredientsOf(List.of(meal))));
+                dietNutritionService.summarise(Serving.ofMeals(List.of(meal))));
     }
 
     @Override
     public Dish toDto(PlannedDish dish) {
-        return new Dish(dish.getName(), dish.getRawText(),
-                dish.getIngredients().stream().map(this::toDto).toList());
+        Recipe recipe = dish.getRecipe();
+        return new Dish(dish.getName(), dish.getServings(),
+                recipe == null ? null : recipe.getId(),
+                recipe == null ? null : toDto(recipe),
+                dietNutritionService.summarise(Serving.of(dish)));
+    }
+
+    /** One serving: the plate that serves it says how many. */
+    @Override
+    public RecipeDto toDto(Recipe recipe) {
+        return new RecipeDto(
+                recipe.getId(),
+                recipe.getName(),
+                recipe.isLibrary(),
+                recipe.getSteps(),
+                recipe.getRawText(),
+                recipe.getIngredients().stream().map(this::toDto).toList(),
+                dietNutritionService.summarise(Serving.single(recipe.getIngredients())));
     }
 
     /**
@@ -131,7 +149,7 @@ public class DietMapper implements IDietMapper {
      * choose.
      */
     @Override
-    public DishIngredient toDto(PlannedIngredient ingredient) {
+    public DishIngredient toDto(RecipeIngredient ingredient) {
         FoodItem foodItem = ingredient.getFoodItem();
         BedcaFood bedcaFood = ingredient.getBedcaFood();
         ReferenceFoodMeasure measure = ingredient.getFoodMeasure();
@@ -162,14 +180,9 @@ public class DietMapper implements IDietMapper {
     }
 
     @Override
-    public PlannedDish toEntity(Dish dish) {
-        return new PlannedDish(dish.name(), dish.rawText());
-    }
-
-    @Override
-    public PlannedIngredient toEntity(DishIngredient ingredient, FoodMatch match,
+    public RecipeIngredient toEntity(DishIngredient ingredient, FoodMatch match,
                                       ReferenceFoodMeasure measure) {
-        PlannedIngredient entity = new PlannedIngredient(
+        RecipeIngredient entity = new RecipeIngredient(
                 ingredient.name(),
                 match == null ? null : match.foodItem(),
                 match == null ? null : match.bedcaFood(),
@@ -189,7 +202,7 @@ public class DietMapper implements IDietMapper {
      * cooked one: the food's name ({@code Pollo, pechuga, plancha}) when the text
      * said raw, the text ({@code pechuga a la plancha (120 g)}) when the food is raw.
      */
-    private YieldHintDto yieldHint(PlannedIngredient ingredient, BedcaFood food) {
+    private YieldHintDto yieldHint(RecipeIngredient ingredient, BedcaFood food) {
         FoodState written = ingredient.getState();
         FoodState published = FoodState.ofFoodName(food.getName());
         boolean toCooked = written.uncooked() && published.cooked();
@@ -214,15 +227,5 @@ public class DietMapper implements IDietMapper {
             return bedcaFood.getName();
         }
         return foodItem == null ? null : foodItem.getCommercialName();
-    }
-
-    private static List<PlannedIngredient> ingredientsOf(Iterable<PlannedMeal> meals) {
-        List<PlannedIngredient> ingredients = new ArrayList<>();
-        for (PlannedMeal meal : meals) {
-            for (PlannedDish dish : meal.getDishes()) {
-                ingredients.addAll(dish.getIngredients());
-            }
-        }
-        return ingredients;
     }
 }

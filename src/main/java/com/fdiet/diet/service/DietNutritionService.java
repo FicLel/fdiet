@@ -1,9 +1,10 @@
 package com.fdiet.diet.service;
 
+import com.fdiet.diet.domain.Serving;
 import com.fdiet.diet.dto.NutritionSummaryDto;
 import com.fdiet.diet.helpers.IPortionScaler;
 import com.fdiet.diet.helpers.IPortionScaler.Weighed;
-import com.fdiet.diet.model.PlannedIngredient;
+import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.food.dto.NutritionDto;
 import com.fdiet.food.service.INutritionService;
 import org.springframework.stereotype.Service;
@@ -33,7 +34,16 @@ public class DietNutritionService implements IDietNutritionService {
     }
 
     @Override
-    public NutritionDto of(PlannedIngredient ingredient) {
+    public NutritionDto of(RecipeIngredient ingredient) {
+        return of(ingredient, BigDecimal.ONE);
+    }
+
+    /**
+     * The servings multiply the portion before the figures are scaled, so one and
+     * a half servings of 80 g read exactly as 120 g would — never as a rounded
+     * figure rounded again.
+     */
+    private NutritionDto of(RecipeIngredient ingredient, BigDecimal servings) {
         Weighed weighed = weigh(ingredient);
         if (weighed == null) {
             return null;
@@ -41,11 +51,11 @@ public class DietNutritionService implements IDietNutritionService {
         NutritionDto per100g = ingredient.getBedcaFood() != null
                 ? nutritionService.per100g(ingredient.getBedcaFood())
                 : nutritionService.per100g(ingredient.getFoodItem());
-        return per100g.isEmpty() ? null : per100g.scaled(weighed.factor());
+        return per100g.isEmpty() ? null : per100g.scaled(weighed.factor().multiply(servings));
     }
 
     @Override
-    public BigDecimal edibleGrams(PlannedIngredient ingredient) {
+    public BigDecimal edibleGrams(RecipeIngredient ingredient) {
         Weighed weighed = weigh(ingredient);
         return weighed == null ? null : weighed.factor().multiply(HUNDRED).setScale(2, RoundingMode.HALF_UP);
     }
@@ -55,19 +65,20 @@ public class DietNutritionService implements IDietNutritionService {
      * be mistaken for a complete one.
      */
     @Override
-    public NutritionSummaryDto summarise(Collection<PlannedIngredient> ingredients) {
+    public NutritionSummaryDto summarise(Collection<Serving> servings) {
         NutritionDto totals = NutritionDto.EMPTY;
         int counted = 0;
         int unmatched = 0;
         int unmeasured = 0;
         int byMeasure = 0;
 
-        for (PlannedIngredient ingredient : ingredients) {
+        for (Serving serving : servings) {
+            RecipeIngredient ingredient = serving.ingredient();
             if (!ingredient.isMatched()) {
                 unmatched++;
                 continue;
             }
-            NutritionDto scaled = of(ingredient);
+            NutritionDto scaled = of(ingredient, serving.servings());
             if (scaled == null) {
                 unmeasured++;
                 continue;
@@ -79,7 +90,7 @@ public class DietNutritionService implements IDietNutritionService {
             }
         }
         return new NutritionSummaryDto(
-                totals, ingredients.size(), counted, unmatched, unmeasured, byMeasure);
+                totals, servings.size(), counted, unmatched, unmeasured, byMeasure);
     }
 
     /**
@@ -90,7 +101,7 @@ public class DietNutritionService implements IDietNutritionService {
      * A range ("40-60 gr") weighs nothing until a person settles it: either end,
      * or the middle, would be a choice the text did not make.
      */
-    private Weighed weigh(PlannedIngredient ingredient) {
+    private Weighed weigh(RecipeIngredient ingredient) {
         if (ingredient == null || !ingredient.isMatched() || ingredient.isRange()) {
             return null;
         }

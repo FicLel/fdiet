@@ -5,6 +5,7 @@ import PatientSelect from './PatientSelect.vue'
 import CopyDietMenu from './CopyDietMenu.vue'
 import DietSettingsMenu from './DietSettingsMenu.vue'
 import { weekLabel } from '@/domain/week'
+import { useRecipes } from '@/stores/recipes'
 
 /**
  * The selector on the left says whose week is being written; the copy menu on
@@ -19,6 +20,8 @@ const props = defineProps<{
 }>()
 
 defineEmits<{ discard: []; publish: []; newDiet: [] }>()
+
+const recipes = useRecipes()
 
 const label = computed(() => `Semana del ${weekLabel(props.monday)}`)
 
@@ -48,6 +51,10 @@ const dirtyLabel = computed(() => {
 
     <button class="to-patient" type="button" title="Empezar o importar otra semana" @click="$emit('newDiet')">
       Nueva dieta
+    </button>
+
+    <button class="to-patient" type="button" title="Las recetas guardadas, para elegirlas en cualquier plato" @click="recipes.openLibrary()">
+      Recetario
     </button>
 
     <CopyDietMenu />

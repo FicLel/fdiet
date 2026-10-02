@@ -59,7 +59,7 @@ class DietImportServiceTest {
         assertThat(lunch.name()).isEqualTo("Comida");
         assertThat(lunch.dishes()).extracting("name")
                 .containsExactly("Ensalada", "Segundo plato", "Postre");
-        assertThat(lunch.dishes().get(0).ingredients()).extracting("name").containsExactly("lechuga");
+        assertThat(lunch.dishes().get(0).recipe().ingredients()).extracting("name").containsExactly("lechuga");
     }
 
     @Test
@@ -69,20 +69,20 @@ class DietImportServiceTest {
         MealDto breakfast = mealOf(stored, DayOfWeek.MONDAY, MealType.BREAKFAST);
         assertThat(breakfast.name()).isEqualTo("Desayuno");
         assertThat(breakfast.dishes()).hasSize(1);
-        assertThat(breakfast.dishes().get(0).ingredients()).singleElement()
+        assertThat(breakfast.dishes().get(0).recipe().ingredients()).singleElement()
                 .satisfies(ingredient -> {
                     assertThat(ingredient).hasFieldOrPropertyWithValue("name", "Tostada integral");
                     assertThat(ingredient).hasFieldOrPropertyWithValue("unit", "gr");
                 });
     }
 
-    /** The cell reaches the diet as it was typed, not only as it was read. */
+    /** The cell reaches the plate's recipe as it was typed, not only as it was read. */
     @Test
     void carriesEachCellAsItWasWritten() {
         DietRequestDto stored = importAndCapture();
 
         assertThat(mealOf(stored, DayOfWeek.MONDAY, MealType.LUNCH).dishes())
-                .extracting("rawText")
+                .extracting(dish -> dish.recipe().rawText())
                 .containsExactly("Ensalada: lechuga (80 gr)", "Pechuga de pollo (180 gr)", "1 kiwi");
     }
 
