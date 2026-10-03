@@ -23,7 +23,7 @@ public record RationDto(
         FoodCategory foodCategory,
         String keywords,
         String foodLabel,
-        Long bedcaFoodId,
+        Long compositionFoodId,
         RationRole role,
         BigDecimal gramsMin,
         BigDecimal gramsMax,

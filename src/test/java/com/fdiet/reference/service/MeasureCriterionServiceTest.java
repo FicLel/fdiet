@@ -1,8 +1,10 @@
 package com.fdiet.reference.service;
 
+import com.fdiet.alternative.domain.FoodCategory;
 import com.fdiet.alternative.helpers.IFoodCategoriser;
-import com.fdiet.food.model.BedcaFood;
-import com.fdiet.food.service.IBedcaFoodService;
+import com.fdiet.food.model.CompositionFood;
+import com.fdiet.food.model.CompositionSource;
+import com.fdiet.food.service.ICompositionFoodService;
 import com.fdiet.reference.domain.HouseholdMeasure;
 import com.fdiet.reference.domain.MeasureUser;
 import com.fdiet.reference.domain.PortionSize;
@@ -39,12 +41,16 @@ import static org.mockito.Mockito.when;
  */
 class MeasureCriterionServiceTest {
 
-    private static final long EGG = 2127L;
-    private static final long BREAD = 2110L;
+    /** Composition food ids: CIQUAL's whole raw egg and a white sliced bread. */
+    private static final long EGG = 501L;
+    private static final long BREAD = 502L;
+    /** A composition food the crosswalk names no Spanish name for. */
+    private static final long UNNAMED = 503L;
     private static final long CRITERION_ID = 40L;
 
     private final ReferenceFoodMeasureRepository repository = mock(ReferenceFoodMeasureRepository.class);
-    private final IBedcaFoodService bedcaFoodService = mock(IBedcaFoodService.class);
+    private final ICompositionFoodService compositionFoodService = mock(ICompositionFoodService.class);
+    private final IFoodCategoriser categoriser = mock(IFoodCategoriser.class);
     private final IMeasureUsageCounter ingredients = counter(MeasureUser.RECIPE_INGREDIENT);
     private final IMeasureUsageCounter extras = counter(MeasureUser.EXTRA_FOOD);
 
@@ -52,19 +58,20 @@ class MeasureCriterionServiceTest {
     private final ObjectProvider<IMeasureUsageCounter> counters = mock(ObjectProvider.class);
 
     private final MeasureCriterionService service = new MeasureCriterionService(repository,
-            new ReferenceMapper(), mock(IFoodCategoriser.class), bedcaFoodService, counters);
+            new ReferenceMapper(), categoriser, compositionFoodService, counters);
 
     @BeforeEach
     void wireCounters() {
         when(counters.orderedStream()).thenAnswer(call -> Stream.of(ingredients, extras));
-        when(bedcaFoodService.entityById(EGG)).thenReturn(food(EGG, "Huevo, entero, crudo"));
-        when(bedcaFoodService.entityById(BREAD)).thenReturn(food(BREAD, "Pan de molde, blanco"));
+        when(compositionFoodService.entityById(EGG)).thenReturn(food(EGG, "Huevo, entero, crudo"));
+        when(compositionFoodService.entityById(BREAD)).thenReturn(food(BREAD, "Pan de molde, blanco"));
+        when(compositionFoodService.entityById(UNNAMED)).thenReturn(food(UNNAMED, null));
         when(repository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
     }
 
     @Test
     void writesAGlobalCriterionThatBelongsToNoDietAndNoSource() {
-        when(repository.findByGlobalCriterionTrueAndBedcaFoodIdInOrderByIdAsc(anyCollection()))
+        when(repository.findByGlobalCriterionTrueAndCompositionFoodIdInOrderByIdAsc(anyCollection()))
                 .thenReturn(List.of());
 
         FoodMeasureDto saved = service.createGlobal(eggs("58"));
@@ -78,9 +85,38 @@ class MeasureCriterionServiceTest {
         assertThat(saved.householdText()).isEqualTo("1 unidad mediana");
     }
 
+    /** The criterion names the composition food by id, and reads its family off the Spanish name. */
+    @Test
+    void keysACriterionOnItsCompositionFood() {
+        when(repository.findByGlobalCriterionTrueAndCompositionFoodIdInOrderByIdAsc(anyCollection()))
+                .thenReturn(List.of());
+        when(categoriser.of("Huevo, entero, crudo")).thenReturn(FoodCategory.EGG);
+
+        FoodMeasureDto saved = service.createGlobal(eggs("58"));
+
+        assertThat(saved.compositionFoodId()).isEqualTo(EGG);
+        assertThat(saved.foodLabel()).isEqualTo("Huevo, entero, crudo");
+        assertThat(saved.foodCategory()).isEqualTo(FoodCategory.EGG);
+    }
+
+    /** No Spanish name yet: labelled by its English one, in no family, still weighing that food by id. */
+    @Test
+    void keysACriterionOnACompositionFoodWithoutASpanishName() {
+        when(repository.findByGlobalCriterionTrueAndCompositionFoodIdInOrderByIdAsc(anyCollection()))
+                .thenReturn(List.of());
+
+        FoodMeasureDto saved = service.createGlobal(new MeasureCriterionRequestDto(
+                HouseholdMeasure.UNIDAD, null, UNNAMED, new BigDecimal("40"), null, null));
+
+        assertThat(saved.compositionFoodId()).isEqualTo(UNNAMED);
+        assertThat(saved.foodLabel()).isEqualTo("Food " + UNNAMED);
+        assertThat(saved.foodCategory()).isNull();
+        verify(categoriser, never()).of(any());
+    }
+
     @Test
     void refusesASecondCriterionForTheSameFoodMeasureAndSize() {
-        when(repository.findByGlobalCriterionTrueAndBedcaFoodIdInOrderByIdAsc(anyCollection()))
+        when(repository.findByGlobalCriterionTrueAndCompositionFoodIdInOrderByIdAsc(anyCollection()))
                 .thenReturn(List.of(stored("58")));
 
         assertThatThrownBy(() -> service.createGlobal(eggs("60")))
@@ -181,7 +217,7 @@ class MeasureCriterionServiceTest {
         row.setMeasure(HouseholdMeasure.UNIDAD);
         row.setSize(PortionSize.MEDIUM);
         row.setCount(BigDecimal.ONE);
-        row.setBedcaFoodId(EGG);
+        row.setCompositionFoodId(EGG);
         row.setFoodLabel("Huevo, entero, crudo");
         row.setHouseholdText("1 unidad mediana");
         row.setGramsMin(new BigDecimal(grams));
@@ -189,10 +225,14 @@ class MeasureCriterionServiceTest {
         return row;
     }
 
-    private static BedcaFood food(long id, String name) {
-        BedcaFood food = new BedcaFood();
+    private static CompositionFood food(long id, String nameEs) {
+        CompositionFood food = new CompositionFood();
         food.setId(id);
-        food.setName(name);
+        food.setSource(CompositionSource.CIQUAL);
+        food.setSourceCode(String.valueOf(id));
+        food.setNameOriginal("Aliment " + id);
+        food.setNameEn("Food " + id);
+        food.setNameEs(nameEs);
         return food;
     }
 

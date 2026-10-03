@@ -196,7 +196,7 @@ class RecipeServiceTest {
         row.setMeasure(HouseholdMeasure.UNIDAD);
         row.setSize(PortionSize.MEDIUM);
         row.setCount(BigDecimal.ONE);
-        row.setBedcaFoodId(2127L);
+        row.setCompositionFoodId(2127L);
         row.setFoodLabel("Huevo, entero, crudo");
         row.setGramsMin(new BigDecimal("58"));
         row.setGramsMax(new BigDecimal("58"));

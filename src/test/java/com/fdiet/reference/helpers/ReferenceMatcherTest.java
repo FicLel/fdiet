@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ReferenceMatcherTest {
 
+    /** Composition food ids, as reference rows and criteria name them. */
     private static final long KIWI = 2228L;
     private static final long AOVE = 2544L;
     private static final long EGG = 2127L;
@@ -40,6 +41,43 @@ class ReferenceMatcherTest {
                 query(KIWI, "Kiwi", "unidad", null, null), FoodCategory.FRUIT, AESAN);
 
         assertThat(choice.chosen()).isEqualTo(kiwi);
+    }
+
+    /**
+     * A BEDCA-matched ingredient (until FD-033 phase D) is known by its name only:
+     * a row naming a composition food never covers it, whatever its family.
+     */
+    @Test
+    void aRowNamingAFoodNeverCoversAFoodKnownByNameOnly() {
+        FoodMeasureDto kiwi = measure(1L, "5ALDIA-2019", HouseholdMeasure.UNIDAD, PortionSize.MEDIUM,
+                KIWI, FoodCategory.FRUIT, null, "80", "80");
+
+        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(kiwi), List.of(), List.of(),
+                MeasureQueryDto.byNameOnly("Kiwi", "unidad", null, null), FoodCategory.FRUIT, AESAN);
+
+        assertThat(choice.chosen()).isNull();
+        assertThat(choice.candidates()).isEmpty();
+    }
+
+    /** No Spanish name yet, so no family: the row naming the food still weighs it. */
+    @Test
+    void aCompositionFoodWithoutANameIsWeighedByTheRowNamingIt() {
+        FoodMeasureDto kiwi = measure(1L, "5ALDIA-2019", HouseholdMeasure.UNIDAD, PortionSize.MEDIUM,
+                KIWI, null, null, "80", "80");
+
+        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(kiwi), List.of(), List.of(),
+                query(KIWI, null, "unidad", null, null), null, AESAN);
+
+        assertThat(choice.chosen()).isEqualTo(kiwi);
+    }
+
+    @Test
+    void aQueryNamingNoFoodIsWeighedByNothing() {
+        FoodMeasureDto kiwi = measure(1L, "5ALDIA-2019", HouseholdMeasure.UNIDAD, PortionSize.MEDIUM,
+                KIWI, null, null, "80", "80");
+
+        assertThat(matcher.chooseMeasure(List.of(kiwi), List.of(), List.of(),
+                query(null, null, "unidad", null, null), null, AESAN)).isEqualTo(MeasureChoiceDto.NONE);
     }
 
     @Test

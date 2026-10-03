@@ -1,6 +1,7 @@
 package com.fdiet.reference.dto;
 
 import com.fdiet.alternative.domain.FoodCategory;
+import com.fdiet.food.dto.CompositionKey;
 import com.fdiet.reference.domain.ExchangeNutrient;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.HouseholdMeasure;
@@ -21,8 +22,11 @@ import java.util.List;
  *
  * <p>Rows point at each other by code — a ration names its population, a
  * population its source — so the files can be reviewed one at a time and the
- * ids stay the database's business. {@code origin} is the file and line a row
- * came from, so a row that cannot be stored says where to look.
+ * ids stay the database's business. A row names a composition food the same
+ * way, by {@code (source, source_code)}: {@code composition_foods.id} is given
+ * by each database, while the source's own code is the same everywhere.
+ * {@code origin} is the file and line a row came from, so a row that cannot be
+ * stored says where to look.
  */
 public record ReferenceRowsDto(
         List<Source> sources,
@@ -47,7 +51,7 @@ public record ReferenceRowsDto(
 
     public record Ration(String origin, String code, String populationCode, String groupCode,
                          String groupLabel, FoodCategory foodCategory, String keywords,
-                         Long bedcaFoodId, String foodLabel, RationRole role,
+                         CompositionKey compositionFood, String foodLabel, RationRole role,
                          BigDecimal gramsMin, BigDecimal gramsMax, BigDecimal mlMin,
                          BigDecimal mlMax, BigDecimal unitsMin, BigDecimal unitsMax,
                          FoodState state, WeightBasis weightBasis, String householdText,
@@ -56,7 +60,8 @@ public record ReferenceRowsDto(
 
     public record FoodMeasure(String origin, String code, String sourceCode,
                               HouseholdMeasure measure, PortionSize size, BigDecimal count,
-                              Long bedcaFoodId, FoodCategory foodCategory, String keywords,
+                              CompositionKey compositionFood, FoodCategory foodCategory,
+                              String keywords,
                               String foodLabel, BigDecimal gramsMin, BigDecimal gramsMax,
                               BigDecimal mlMin, BigDecimal mlMax, FoodState state,
                               WeightBasis weightBasis, BigDecimal grossGrams,

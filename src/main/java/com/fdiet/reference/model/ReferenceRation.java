@@ -23,8 +23,9 @@ import java.math.BigDecimal;
 /**
  * One standard serving as a guideline defines it, for one population.
  *
- * <p>It reaches the foods it covers either by naming one composition-database
- * food ({@code bedcaFoodId}), or by a food family narrowed by keywords — the
+ * <p>It reaches the foods it covers either by naming one composition food
+ * ({@code compositionFoodId}, CIQUAL 2025 or BLS 4.0), or by a food family
+ * narrowed by keywords — the
  * family is read off the food's name by {@code IFoodCategoriser}, the same way
  * {@code com.fdiet.alternative} reads it, so the two never disagree about what
  * a food is.
@@ -60,8 +61,8 @@ public class ReferenceRation {
     private String keywords;
 
     /** Plain id rather than an association: the figures are never read through it. */
-    @Column(name = "bedca_food_id")
-    private Long bedcaFoodId;
+    @Column(name = "composition_food_id")
+    private Long compositionFoodId;
 
     @Column(name = "food_label", length = 160)
     private String foodLabel;

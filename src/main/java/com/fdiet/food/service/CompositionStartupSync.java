@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
@@ -25,6 +26,13 @@ import org.springframework.stereotype.Component;
         matchIfMissing = true)
 public class CompositionStartupSync {
 
+    /**
+     * Runs before the reference sync ({@code ReferenceStartupSync}): reference rows
+     * name composition foods, and on a fresh database they can only be keyed once
+     * the foods are in.
+     */
+    public static final int ORDER = 0;
+
     private static final Logger log = LoggerFactory.getLogger(CompositionStartupSync.class);
 
     private final ICompositionImportService importService;
@@ -37,6 +45,7 @@ public class CompositionStartupSync {
     }
 
     @EventListener(ApplicationReadyEvent.class)
+    @Order(ORDER)
     public void sync() {
         try {
             if (compositionFoodService.isEmpty()) {

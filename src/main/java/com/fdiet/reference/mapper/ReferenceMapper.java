@@ -69,7 +69,7 @@ public class ReferenceMapper implements IReferenceMapper {
                 ration.getFoodCategory(),
                 ration.getKeywords(),
                 ration.getFoodLabel(),
-                ration.getBedcaFoodId(),
+                ration.getCompositionFoodId(),
                 ration.getRole(),
                 ration.getGramsMin(),
                 ration.getGramsMax(),
@@ -97,7 +97,7 @@ public class ReferenceMapper implements IReferenceMapper {
                 measure.getSize(),
                 measure.getCount(),
                 measure.getFoodLabel(),
-                measure.getBedcaFoodId(),
+                measure.getCompositionFoodId(),
                 measure.getFoodCategory(),
                 measure.getKeywords(),
                 measure.getGramsMin(),
@@ -213,14 +213,14 @@ public class ReferenceMapper implements IReferenceMapper {
 
     @Override
     public void update(ReferenceRation ration, ReferenceRowsDto.Ration row,
-                       ReferencePopulation population) {
+                       ReferencePopulation population, Long compositionFoodId) {
         ration.setCode(row.code());
         ration.setPopulation(population);
         ration.setGroupCode(row.groupCode());
         ration.setGroupLabel(row.groupLabel());
         ration.setFoodCategory(row.foodCategory());
         ration.setKeywords(row.keywords());
-        ration.setBedcaFoodId(row.bedcaFoodId());
+        ration.setCompositionFoodId(compositionFoodId);
         ration.setFoodLabel(row.foodLabel());
         ration.setRole(row.role());
         ration.setGramsMin(row.gramsMin());
@@ -239,7 +239,7 @@ public class ReferenceMapper implements IReferenceMapper {
 
     @Override
     public void update(ReferenceFoodMeasure measure, ReferenceRowsDto.FoodMeasure row,
-                       ReferenceSource source) {
+                       ReferenceSource source, Long compositionFoodId) {
         measure.setCode(row.code());
         measure.setSource(source);
         measure.setDietId(null);
@@ -247,7 +247,7 @@ public class ReferenceMapper implements IReferenceMapper {
         measure.setMeasure(row.measure());
         measure.setSize(row.size());
         measure.setCount(row.count());
-        measure.setBedcaFoodId(row.bedcaFoodId());
+        measure.setCompositionFoodId(compositionFoodId);
         measure.setFoodCategory(row.foodCategory());
         measure.setKeywords(row.keywords());
         measure.setFoodLabel(row.foodLabel());

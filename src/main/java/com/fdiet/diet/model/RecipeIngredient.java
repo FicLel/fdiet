@@ -129,4 +129,15 @@ public class RecipeIngredient {
     public boolean isMatched() {
         return foodItem != null || bedcaFood != null;
     }
+
+    /**
+     * The composition food (CIQUAL 2025 / BLS 4.0) the ingredient is matched to:
+     * none yet, because every match is to BEDCA until FD-033 phase D re-matches
+     * ingredients against that table. A reference row or a criterion names a
+     * composition food and is compared with this, never with the BEDCA food's id;
+     * phase D answers it from the ingredient's own column.
+     */
+    public Long compositionFoodId() {
+        return null;
+    }
 }

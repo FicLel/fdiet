@@ -22,8 +22,8 @@ public interface IMeasureCriterionService {
     /** One diet's own criteria. One query. */
     List<FoodMeasureDto> dietRows(Long dietId);
 
-    /** The global criteria for these foods. One query, none for an empty set. */
-    List<FoodMeasureDto> globalRows(Collection<Long> bedcaFoodIds);
+    /** The global criteria for these composition foods. One query, none for an empty set. */
+    List<FoodMeasureDto> globalRows(Collection<Long> compositionFoodIds);
 
     /**
      * Writes the diet's criterion for one measure of one food (and size),
@@ -37,8 +37,8 @@ public interface IMeasureCriterionService {
     /** A diet's criteria written again for another diet: old id to new id. */
     Map<Long, Long> copyDietMeasures(Long fromDietId, Long toDietId);
 
-    /** Every global criterion, or only one food's when {@code bedcaFoodId} is given. */
-    List<FoodMeasureDto> globalCriteria(Long bedcaFoodId);
+    /** Every global criterion, or only one composition food's when {@code compositionFoodId} is given. */
+    List<FoodMeasureDto> globalCriteria(Long compositionFoodId);
 
     FoodMeasureDto globalCriterion(Long id);
 

@@ -131,6 +131,21 @@ public class CompositionFoodService implements ICompositionFoodService {
                 .collect(Collectors.toMap(CompositionFood::getId, Function.identity(), (a, b) -> a));
     }
 
+    /** O(n) in the keys asked for, answered from the index: no query once it is built. */
+    @Override
+    @Transactional(readOnly = true)
+    public Map<CompositionKey, Long> idsByKey(Collection<CompositionKey> keys) {
+        Map<CompositionKey, Long> byKey = index().ids();
+        Map<CompositionKey, Long> found = new HashMap<>();
+        for (CompositionKey key : keys) {
+            Long id = byKey.get(key);
+            if (id != null) {
+                found.put(key, id);
+            }
+        }
+        return found;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public boolean isEmpty() {
@@ -207,13 +222,15 @@ public class CompositionFoodService implements ICompositionFoodService {
 
     /**
      * Every food once, O(n): its Spanish words tokenised for ranking, all its
-     * names joined for the as-typed fallback, and its Spanish names into the
-     * exact-name index.
+     * names joined for the as-typed fallback, its Spanish names into the
+     * exact-name index, and its {@code (source, source_code)} against its id.
      */
     private Index indexOf(List<CompositionIndexRow> rows) {
         List<IndexedFood> foods = new ArrayList<>(rows.size());
         List<NameIndex.Entry<Long>> named = new ArrayList<>();
+        Map<CompositionKey, Long> ids = new HashMap<>(rows.size() * 2);
         for (CompositionIndexRow row : rows) {
+            ids.put(row.key(), row.id());
             List<String> spanish = row.nameEs() == null
                     ? List.of()
                     : Stream.concat(Stream.of(row.nameEs()),
@@ -230,11 +247,11 @@ public class CompositionFoodService implements ICompositionFoodService {
                     Objects.requireNonNullElse(Texts.key(everyName), ""),
                     List.copyOf(nameMatcher.tokens(String.join(" ", spanish)))));
         }
-        return new Index(List.copyOf(foods), NameIndex.of(named));
+        return new Index(List.copyOf(foods), NameIndex.of(named), Map.copyOf(ids));
     }
 
-    /** The search rows and the exact-name lookup, built together and dropped together. */
-    private record Index(List<IndexedFood> foods, NameIndex<Long> names) {
+    /** The search rows, the exact-name lookup and the stable keys, built together and dropped together. */
+    private record Index(List<IndexedFood> foods, NameIndex<Long> names, Map<CompositionKey, Long> ids) {
     }
 
     /** One food as a search sees it: what to show, every name upper-cased, its Spanish words. */

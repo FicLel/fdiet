@@ -34,8 +34,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -74,7 +74,7 @@ class DietRationServiceTest {
                 "Ración de hidratos de carbono", ExchangeNutrient.CARBOHYDRATE, BigDecimal.TEN, true,
                 "FUNDACION-DIABETES-HC", "Raciones de HC", null)));
         when(reference.sources()).thenReturn(List.of());
-        when(reference.countingRation(eq(PROFILE), anyLong(), anyString())).thenAnswer(call -> {
+        when(reference.countingRation(eq(PROFILE), isNull(), anyString())).thenAnswer(call -> {
             String name = call.getArgument(2);
             return name.startsWith("Lenteja") ? LEGUMES : name.startsWith("Manzana") ? FRUIT : null;
         });
@@ -195,7 +195,7 @@ class DietRationServiceTest {
     void countsNothingWithoutAProfile() {
         DietPlan plan = plan(false, ingredient("manzana", "160", "g", null, food(2L, "Manzana", "12")));
         plan.setReferenceProfileCode(null);
-        when(reference.countingRation(any(), anyLong(), anyString())).thenReturn(null);
+        when(reference.countingRation(any(), isNull(), anyString())).thenReturn(null);
 
         DietRationsDto week = service.account(plan, null);
 

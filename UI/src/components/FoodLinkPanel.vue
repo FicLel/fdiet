@@ -5,6 +5,7 @@ import { integer, NO_VALUE } from '@/domain/format'
 import { measureSource, measureText, perMeasure, stateWord } from '@/domain/rations'
 import { amountText } from '@/domain/dishText'
 import { dayName } from '@/domain/week'
+import DietCriterionPanel from './DietCriterionPanel.vue'
 
 /**
  * Matching one written ingredient to a food of the catalogue.
@@ -63,12 +64,6 @@ const yieldLine = computed(() => {
   return `${integer(hint.writtenGrams)} g ${stateWord(hint.writtenState)} ≈ ${integer(hint.equivalentGrams)} g ${stateWord(hint.foodState)}`
 })
 
-/** The nutritionist's own weight for this measure, for this diet. */
-const ownValue = ref<number | null>(null)
-const ownUnit = ref<'g' | 'ml'>('g')
-const ownNote = ref('')
-const ownSaved = ref<string | null>(null)
-
 const currentMeasure = computed(() => {
   const measure = at.value?.measure
   if (!measure) {
@@ -77,28 +72,9 @@ const currentMeasure = computed(() => {
   return `${perMeasure(measure) ?? measureText(measure)} · ${measureSource(measure)}`
 })
 
-async function saveOwn(): Promise<void> {
-  ownSaved.value = null
-  if (ownValue.value === null) {
-    return
-  }
-  const attached = await link.saveOwnMeasure(ownValue.value, ownUnit.value, ownNote.value)
-  if (attached !== null) {
-    ownSaved.value =
-      attached === 1
-        ? 'Guardado para esta dieta y aplicado a 1 ingrediente.'
-        : `Guardado para esta dieta y aplicado a ${attached} ingredientes.`
-    ownValue.value = null
-    ownNote.value = ''
-  }
-}
-
 watch(
   () => at.value?.id,
   () => {
-    ownSaved.value = null
-    ownValue.value = null
-    ownNote.value = ''
     settled.value = at.value?.quantityMax != null ? at.value.quantity : null
   },
   { immediate: true },
@@ -219,37 +195,7 @@ watch(
           Ninguna fuente cargada publica esta medida para este alimento.
         </p>
 
-        <form class="own" @submit.prevent="saveOwn()">
-          <span class="own-title">Criterio para esta dieta</span>
-          <div class="own-line">
-            <span class="own-lead">1 {{ at.unit }} =</span>
-            <input
-              v-model.number="ownValue"
-              class="own-input num"
-              type="number"
-              min="0.1"
-              step="0.1"
-              aria-label="Peso de una medida"
-            />
-            <select v-model="ownUnit" class="own-input unit" aria-label="Unidad">
-              <option value="g">g</option>
-              <option value="ml">ml</option>
-            </select>
-            <button
-              class="own-save"
-              type="submit"
-              :disabled="ownValue === null || ownValue <= 0 || link.savingMeasure.value"
-            >
-              Guardar
-            </button>
-          </div>
-          <input v-model="ownNote" class="own-input" type="text" maxlength="500" placeholder="Nota (opcional)" />
-          <p class="note">
-            Sólo para esta dieta, y para todos sus «{{ at.unit }}» de este alimento. Queda anotado como
-            criterio tuyo, no como dato publicado.
-          </p>
-          <p v-if="ownSaved" class="note ok">{{ ownSaved }}</p>
-        </form>
+        <DietCriterionPanel />
       </div>
 
       <div class="queue">
@@ -511,10 +457,6 @@ watch(
   color: var(--ink-strong);
 }
 
-.note.ok {
-  color: var(--sage-700);
-}
-
 .measure {
   display: flex;
   flex-direction: column;
@@ -550,23 +492,6 @@ watch(
   color: var(--ink-faint);
 }
 
-.own {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin-top: 4px;
-  padding-top: 8px;
-  border-top: 1px dashed var(--line);
-}
-
-.own-title {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-}
-
 .own-line {
   display: flex;
   align-items: center;
@@ -591,10 +516,6 @@ watch(
 
 .own-line .own-input {
   width: 70px;
-}
-
-.own-line .own-input.unit {
-  width: 56px;
 }
 
 .own-save {

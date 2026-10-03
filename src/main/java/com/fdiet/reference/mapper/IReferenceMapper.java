@@ -38,11 +38,13 @@ public interface IReferenceMapper {
     void update(ReferencePopulation population, ReferenceRowsDto.Population row,
                 ReferenceSource source);
 
+    /** Writes a ration row; {@code compositionFoodId} is its food's key resolved to this database's id. */
     void update(ReferenceRation ration, ReferenceRowsDto.Ration row,
-                ReferencePopulation population);
+                ReferencePopulation population, Long compositionFoodId);
 
+    /** Writes a measure row; {@code compositionFoodId} is its food's key resolved to this database's id. */
     void update(ReferenceFoodMeasure measure, ReferenceRowsDto.FoodMeasure row,
-                ReferenceSource source);
+                ReferenceSource source, Long compositionFoodId);
 
     void update(ReferenceRecommendation recommendation, ReferenceRowsDto.Recommendation row,
                 ReferencePopulation population);

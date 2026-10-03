@@ -204,7 +204,7 @@ public class JournalService implements IJournalService, IMeasureUsageCounter {
             return null;
         }
         MeasureChoiceDto choice = referenceService.chooseMeasures(
-                List.of(new MeasureQueryDto(food.getId(), food.getName(), unit, request.size(),
+                List.of(MeasureQueryDto.byNameOnly(food.getName(), unit, request.size(),
                         request.foodMeasureId())),
                 dietId, dietService.referenceProfileCode(dietId)).get(0);
         FoodMeasureDto chosen = choice.chosen();

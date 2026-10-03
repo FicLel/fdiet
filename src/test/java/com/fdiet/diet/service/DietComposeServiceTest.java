@@ -101,7 +101,7 @@ class DietComposeServiceTest {
         row.setMeasure(HouseholdMeasure.UNIDAD);
         row.setSize(PortionSize.MEDIUM);
         row.setCount(BigDecimal.ONE);
-        row.setBedcaFoodId(EGG);
+        row.setCompositionFoodId(EGG);
         row.setFoodLabel("Huevo, entero, crudo");
         row.setGramsMin(new BigDecimal("58"));
         row.setGramsMax(new BigDecimal("58"));

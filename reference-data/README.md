@@ -44,10 +44,18 @@ database. See `plan.md` §5.
   value twice. A measure with a range weighs nothing until a nutritionist gives the diet a value.
 - **State and basis are what the source wrote.** `state`: `RAW`, `DRY` (en seco), `COOKED`, `CANNED`,
   `DRAINED`, `UNSPECIFIED`. `weight_basis`: `NET_EDIBLE`, `GROSS`, `UNSPECIFIED`.
-- **Which foods a row covers.** `bedca_food_id` names one food. Otherwise `food_category` (fdiet's
-  food family, read off the BEDCA name) narrowed by `keywords`: phrases separated by `;`, without
-  accents, each word allowed its plural; the longest matching phrase wins; a phrase starting with `!`
-  excludes (`yogur;!liquido`).
+- **Which foods a row covers.** `composition_source` + `composition_code` name one food of the open
+  composition tables (`CIQUAL` + its `alim_code`, or `BLS` + its BLS code) — the key each source
+  publishes, because `composition_foods.id` differs per installation. The sync resolves them in one
+  lookup; a row whose food is not loaded (`POST /api/composition/sync` first) is skipped with a reason.
+  Every food named must have a row in `composition/composition-es/links.csv`, which gives it the
+  Spanish name its family is read from (`ReferenceCompositionKeysTest` checks it). Otherwise
+  `food_category` (fdiet's food family, read off the food's Spanish name) narrowed by `keywords`:
+  phrases separated by `;`, without accents, each word allowed its plural; the longest matching phrase
+  wins; a phrase starting with `!` excludes (`yogur;!liquido`). A row naming a food covers that
+  composition food only — until FD-033 phase D, an ingredient matched to a BEDCA food is reached by
+  family rows alone. (Until 2026-10-03 rows named a BEDCA food in `bedca_food_id`; FD-033 phase C
+  replaced it, and `product/spikes/FD-033-C-rekey-mapping.md` lists every pick.)
 - **Millilitres are read as grams**, the one assumption `PortionScaler` makes for every liquid.
   For olive oil that overstates the weight by about 9 % (0.91 g/ml).
 - `group_code` ties a ration to the recommendations that count it.

@@ -380,22 +380,20 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
      */
     @Override
     @Transactional
-    public int attachDietMeasure(Collection<Long> recipeIds, Long bedcaFoodId,
+    public int attachDietMeasure(Collection<Long> recipeIds, Long compositionFoodId,
                                  HouseholdMeasure measure, Long dietId, String profile) {
         if (recipeIds.isEmpty()) {
             return 0;
         }
         List<RecipeIngredient> candidates = ingredientRepository.findByRecipeIdIn(recipeIds).stream()
                 .filter(ingredient -> !ingredient.getRecipe().isLibrary()
-                        && ingredient.getBedcaFood() != null
-                        && ingredient.getBedcaFood().getId().equals(bedcaFoodId)
+                        && compositionFoodId.equals(ingredient.compositionFoodId())
                         && HouseholdMeasure.ofUnit(ingredient.getUnit())
                         .filter(written -> written == measure).isPresent())
                 .toList();
         List<MeasureChoiceDto> choices = referenceService.chooseMeasures(candidates.stream()
-                .map(ingredient -> new MeasureQueryDto(ingredient.getBedcaFood().getId(),
-                        ingredient.getBedcaFood().getName(), ingredient.getUnit(), ingredient.getSize(),
-                        null))
+                .map(ingredient -> new MeasureQueryDto(ingredient.compositionFoodId(), null,
+                        ingredient.getUnit(), ingredient.getSize(), null))
                 .toList(), dietId, profile);
         Map<Long, ReferenceFoodMeasure> entities = referenceService.measureEntities(choices.stream()
                 .map(MeasureChoiceDto::chosen).filter(Objects::nonNull).map(FoodMeasureDto::id)

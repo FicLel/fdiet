@@ -2,16 +2,17 @@ package com.fdiet.reference.service;
 
 import com.fdiet.alternative.domain.FoodCategory;
 import com.fdiet.alternative.helpers.IFoodCategoriser;
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.service.IBedcaFoodService;
+import com.fdiet.food.service.ICompositionFoodService;
 import com.fdiet.reference.domain.HouseholdMeasure;
-import com.fdiet.reference.dto.MeasureCriterionRequestDto;
 import com.fdiet.reference.dto.ExchangeSystemDto;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.HouseholdMeasureDto;
 import com.fdiet.reference.dto.MealShareDto;
 import com.fdiet.reference.dto.MealSharesDto;
 import com.fdiet.reference.dto.MeasureChoiceDto;
+import com.fdiet.reference.dto.MeasureCriterionRequestDto;
 import com.fdiet.reference.dto.MeasureQueryDto;
 import com.fdiet.reference.dto.RationDto;
 import com.fdiet.reference.dto.RecommendationDto;
@@ -21,27 +22,11 @@ import com.fdiet.reference.dto.ReferenceRowsDto;
 import com.fdiet.reference.dto.ReferenceSourceDto;
 import com.fdiet.reference.dto.ReferenceSyncSummaryDto;
 import com.fdiet.reference.dto.YieldFactorDto;
-import com.fdiet.reference.dto.ReferenceSyncSummaryDto.TableSync;
 import com.fdiet.reference.exception.InvalidReferenceException;
 import com.fdiet.reference.exception.ReferenceNotFoundException;
 import com.fdiet.reference.helpers.ReferenceMatcher;
 import com.fdiet.reference.mapper.IReferenceMapper;
-import com.fdiet.reference.model.ReferenceExchangeSystem;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
-import com.fdiet.reference.model.ReferenceMealShare;
-import com.fdiet.reference.model.ReferencePopulation;
-import com.fdiet.reference.model.ReferenceRation;
-import com.fdiet.reference.model.ReferenceRecommendation;
-import com.fdiet.reference.model.ReferenceSource;
-import com.fdiet.reference.model.ReferenceYieldFactor;
-import com.fdiet.reference.repository.ReferenceExchangeSystemRepository;
-import com.fdiet.reference.repository.ReferenceFoodMeasureRepository;
-import com.fdiet.reference.repository.ReferenceMealShareRepository;
-import com.fdiet.reference.repository.ReferencePopulationRepository;
-import com.fdiet.reference.repository.ReferenceRationRepository;
-import com.fdiet.reference.repository.ReferenceRecommendationRepository;
-import com.fdiet.reference.repository.ReferenceSourceRepository;
-import com.fdiet.reference.repository.ReferenceYieldFactorRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,18 +34,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.BiConsumer;
-import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 @Service
@@ -69,17 +47,11 @@ public class ReferenceService implements IReferenceService {
     /** Somebody this old reads against the adult profile, whatever else covers the age. */
     private static final int ADULT_MONTHS = 18 * 12;
 
-    private final ReferenceSourceRepository sourceRepository;
-    private final ReferencePopulationRepository populationRepository;
-    private final ReferenceRationRepository rationRepository;
-    private final ReferenceFoodMeasureRepository measureRepository;
-    private final ReferenceRecommendationRepository recommendationRepository;
-    private final ReferenceMealShareRepository mealShareRepository;
-    private final ReferenceExchangeSystemRepository exchangeSystemRepository;
-    private final ReferenceYieldFactorRepository yieldFactorRepository;
+    private final ReferenceTables tables;
     private final IReferenceMapper mapper;
     private final ReferenceMatcher matcher;
     private final IFoodCategoriser categoriser;
+    private final ICompositionFoodService compositionFoodService;
     private final IBedcaFoodService bedcaFoodService;
     private final IMeasureCriterionService criteria;
     private final String defaultAdultProfile;
@@ -89,34 +61,22 @@ public class ReferenceService implements IReferenceService {
      * weighing. Dropped whenever a sync writes. Holds transport records only —
      * never entities, which would be detached by the time anybody read them.
      */
-    private volatile Snapshot snapshot;
+    private volatile ReferenceSnapshot snapshot;
 
-    public ReferenceService(ReferenceSourceRepository sourceRepository,
-                            ReferencePopulationRepository populationRepository,
-                            ReferenceRationRepository rationRepository,
-                            ReferenceFoodMeasureRepository measureRepository,
-                            ReferenceRecommendationRepository recommendationRepository,
-                            ReferenceMealShareRepository mealShareRepository,
-                            ReferenceExchangeSystemRepository exchangeSystemRepository,
-                            ReferenceYieldFactorRepository yieldFactorRepository,
+    public ReferenceService(ReferenceTables tables,
                             IReferenceMapper mapper,
                             ReferenceMatcher matcher,
                             IFoodCategoriser categoriser,
+                            ICompositionFoodService compositionFoodService,
                             IBedcaFoodService bedcaFoodService,
                             IMeasureCriterionService criteria,
                             @Value("${fdiet.reference.default-adult-profile:AESAN-2022:ADULTOS}")
                             String defaultAdultProfile) {
-        this.sourceRepository = sourceRepository;
-        this.populationRepository = populationRepository;
-        this.rationRepository = rationRepository;
-        this.measureRepository = measureRepository;
-        this.recommendationRepository = recommendationRepository;
-        this.mealShareRepository = mealShareRepository;
-        this.exchangeSystemRepository = exchangeSystemRepository;
-        this.yieldFactorRepository = yieldFactorRepository;
+        this.tables = tables;
         this.mapper = mapper;
         this.matcher = matcher;
         this.categoriser = categoriser;
+        this.compositionFoodService = compositionFoodService;
         this.bedcaFoodService = bedcaFoodService;
         this.criteria = criteria;
         this.defaultAdultProfile = defaultAdultProfile;
@@ -200,43 +160,44 @@ public class ReferenceService implements IReferenceService {
      */
     @Override
     @Transactional(readOnly = true)
-    public List<RationDto> rationsForFood(String profileCode, Long bedcaFoodId) {
-        if (bedcaFoodId == null) {
+    public List<RationDto> rationsForFood(String profileCode, Long compositionFoodId,
+                                          Long bedcaFoodId) {
+        if (compositionFoodId == null && bedcaFoodId == null) {
             return rations(profileCode);
         }
-        BedcaFood food = bedcaFoodService.entityById(bedcaFoodId);
-        FoodCategory category = categoriser.of(food.getName());
-        Snapshot current = snapshot();
+        LookedUpFood food = food(compositionFoodId, bedcaFoodId);
+        FoodCategory category = categoryOf(food.name());
+        ReferenceSnapshot current = snapshot();
 
         List<RationDto> answer = new ArrayList<>();
         if (profileCode != null) {
             population(profileCode);
             answer.addAll(matcher.rationsCovering(current.rations().stream()
                     .filter(ration -> ration.profileCode().equals(profileCode))
-                    .toList(), food.getId(), food.getName(), category));
+                    .toList(), food.compositionFoodId(), food.name(), category));
         }
         List<RationDto> perFood = current.rations().stream()
-                .filter(ration -> ration.bedcaFoodId() != null || ration.keywords() != null)
+                .filter(ration -> ration.compositionFoodId() != null || ration.keywords() != null)
                 .filter(ration -> {
                     PopulationView view = current.populations().get(ration.profileCode());
                     return view != null && !view.selectable();
                 })
                 .toList();
-        answer.addAll(matcher.rationsCovering(perFood, food.getId(), food.getName(), category));
+        answer.addAll(matcher.rationsCovering(perFood, food.compositionFoodId(), food.name(), category));
         return answer;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public RationDto countingRation(String profileCode, Long bedcaFoodId, String foodName) {
-        if (profileCode == null || bedcaFoodId == null || foodName == null) {
+    public RationDto countingRation(String profileCode, Long compositionFoodId, String foodName) {
+        if (profileCode == null || (compositionFoodId == null && foodName == null)) {
             return null;
         }
         List<RationDto> profileRations = snapshot().rations().stream()
                 .filter(ration -> ration.profileCode().equals(profileCode))
                 .toList();
-        return matcher.countingRation(profileRations, bedcaFoodId, foodName,
-                categoriser.of(foodName));
+        return matcher.countingRation(profileRations, compositionFoodId, foodName,
+                categoryOf(foodName));
     }
 
     @Override
@@ -261,7 +222,7 @@ public class ReferenceService implements IReferenceService {
     @Transactional(readOnly = true)
     public MealSharesDto mealShares(String profileCode) {
         PopulationView view = population(profileCode);
-        Snapshot current = snapshot();
+        ReferenceSnapshot current = snapshot();
         String from = current.shares().containsKey(profileCode) ? profileCode : view.mealSharesFrom();
         if (from == null || !current.shares().containsKey(from)) {
             return null;
@@ -294,14 +255,14 @@ public class ReferenceService implements IReferenceService {
         if (foodName == null) {
             return List.of();
         }
-        return matcher.yieldsCovering(snapshot().yields(), foodName, categoriser.of(foodName),
+        return matcher.yieldsCovering(snapshot().yields(), foodName, categoryOf(foodName),
                 methodText);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<YieldFactorDto> yieldFactorsForFood(Long bedcaFoodId) {
-        String name = bedcaFoodService.entityById(bedcaFoodId).getName();
+    public List<YieldFactorDto> yieldFactorsForFood(Long compositionFoodId, Long bedcaFoodId) {
+        String name = food(compositionFoodId, bedcaFoodId).name();
         return yieldFactors(name, name);
     }
 
@@ -314,15 +275,17 @@ public class ReferenceService implements IReferenceService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<FoodMeasureDto> measuresForFood(Long bedcaFoodId, String unit, Long dietId,
-                                                String profileCode) {
-        BedcaFood food = bedcaFoodService.entityById(bedcaFoodId);
-        Snapshot current = snapshot();
+    public List<FoodMeasureDto> measuresForFood(Long compositionFoodId, Long bedcaFoodId,
+                                                String unit, Long dietId, String profileCode) {
+        LookedUpFood food = food(compositionFoodId, bedcaFoodId);
+        ReferenceSnapshot current = snapshot();
         List<FoodMeasureDto> own = dietId == null ? List.of() : criteria.dietRows(dietId);
-        List<FoodMeasureDto> global = criteria.globalRows(List.of(food.getId()));
+        List<FoodMeasureDto> global = food.compositionFoodId() == null
+                ? List.of()
+                : criteria.globalRows(List.of(food.compositionFoodId()));
         PopulationView profile = profileCode == null ? null : current.populations().get(profileCode);
         String profileSource = profile == null ? null : profile.sourceCode();
-        FoodCategory category = categoriser.of(food.getName());
+        FoodCategory category = categoryOf(food.name());
 
         List<String> units = unit != null
                 ? List.of(unit)
@@ -330,7 +293,7 @@ public class ReferenceService implements IReferenceService {
         List<FoodMeasureDto> all = new ArrayList<>();
         for (String written : units) {
             all.addAll(matcher.chooseMeasure(current.measures(), own, global,
-                    new MeasureQueryDto(food.getId(), food.getName(), written, null, null),
+                    new MeasureQueryDto(food.compositionFoodId(), food.name(), written, null, null),
                     category, profileSource).candidates());
         }
         return all;
@@ -343,29 +306,26 @@ public class ReferenceService implements IReferenceService {
         if (queries.isEmpty()) {
             return List.of();
         }
-        Snapshot current = snapshot();
+        ReferenceSnapshot current = snapshot();
         List<FoodMeasureDto> own = dietId == null ? List.of() : criteria.dietRows(dietId);
         List<FoodMeasureDto> global = criteria.globalRows(queries.stream()
-                .map(MeasureQueryDto::bedcaFoodId).filter(Objects::nonNull).collect(Collectors.toSet()));
+                .map(MeasureQueryDto::compositionFoodId).filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
         PopulationView profile = profileCode == null ? null : current.populations().get(profileCode);
         String profileSource = profile == null ? null : profile.sourceCode();
 
         return queries.stream()
-                .map(query -> query.bedcaFoodId() == null || query.foodName() == null
+                .map(query -> !query.namesAFood()
                         ? MeasureChoiceDto.NONE
                         : matcher.chooseMeasure(current.measures(), own, global, query,
-                        categoriser.of(query.foodName()), profileSource))
+                        categoryOf(query.foodName()), profileSource))
                 .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public Map<Long, ReferenceFoodMeasure> measureEntities(Collection<Long> ids) {
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        return measureRepository.findAllById(ids).stream()
-                .collect(Collectors.toMap(ReferenceFoodMeasure::getId, Function.identity()));
+        return tables.measureEntities(ids);
     }
 
     @Override
@@ -393,97 +353,12 @@ public class ReferenceService implements IReferenceService {
         return criteria.copyDietMeasures(fromDietId, toDietId);
     }
 
-    /**
-     * One pass per table, in the order the rows point at each other. A code
-     * already stored is written over and keeps its id, so a re-sync brings
-     * corrections in and every diet still pointing at a measure keeps pointing
-     * at it. A row naming a composition-database food that is not loaded is
-     * skipped and said so — the composition database may simply not be synced
-     * yet — while a row naming a source or population that does not exist is a
-     * mistake in the files, and nothing is stored.
-     */
     @Override
     @Transactional
     public ReferenceSyncSummaryDto store(ReferenceRowsDto rows) {
-        List<TableSync> tables = new ArrayList<>();
-        List<String> skipped = new ArrayList<>();
-
-        Map<String, ReferenceSource> sources = byCode(sourceRepository.findAll(), ReferenceSource::getCode);
-        tables.add(upsert("ref_sources", rows.sources(), sources, ReferenceRowsDto.Source::code,
-                ReferenceSource::new, (entity, row) -> mapper.update(entity, row),
-                sourceRepository::saveAll));
-
-        Map<String, ReferencePopulation> populations =
-                byCode(populationRepository.findAll(), ReferencePopulation::getCode);
-        tables.add(upsert("ref_populations", rows.populations(), populations,
-                ReferenceRowsDto.Population::code, ReferencePopulation::new,
-                (entity, row) -> mapper.update(entity, row,
-                        required(sources, row.sourceCode(), "source", row.origin())),
-                populationRepository::saveAll));
-
-        Set<Long> foods = knownFoods(rows);
-
-        Map<String, ReferenceRation> rations = byCode(rationRepository.findAll(), ReferenceRation::getCode);
-        List<ReferenceRowsDto.Ration> rationRows = rows.rations().stream()
-                .filter(row -> foodKnown(row.bedcaFoodId(), foods, row.origin(), row.code(), skipped))
-                .toList();
-        tables.add(upsert("ref_rations", rationRows, rations, ReferenceRowsDto.Ration::code,
-                ReferenceRation::new,
-                (entity, row) -> mapper.update(entity, row,
-                        required(populations, row.populationCode(), "population", row.origin())),
-                rationRepository::saveAll));
-
-        Map<String, ReferenceFoodMeasure> measures = byCode(
-                measureRepository.findByDietIdIsNullAndGlobalCriterionFalseOrderByIdAsc(),
-                ReferenceFoodMeasure::getCode);
-        List<ReferenceRowsDto.FoodMeasure> measureRows = rows.foodMeasures().stream()
-                .filter(row -> foodKnown(row.bedcaFoodId(), foods, row.origin(), row.code(), skipped))
-                .toList();
-        tables.add(upsert("ref_food_measures", measureRows, measures,
-                ReferenceRowsDto.FoodMeasure::code, ReferenceFoodMeasure::new,
-                (entity, row) -> mapper.update(entity, row,
-                        required(sources, row.sourceCode(), "source", row.origin())),
-                measureRepository::saveAll));
-
-        Map<String, ReferenceRecommendation> recommendations =
-                byCode(recommendationRepository.findAll(), ReferenceRecommendation::getCode);
-        tables.add(upsert("ref_recommendations", rows.recommendations(), recommendations,
-                ReferenceRowsDto.Recommendation::code, ReferenceRecommendation::new,
-                (entity, row) -> mapper.update(entity, row,
-                        required(populations, row.populationCode(), "population", row.origin())),
-                recommendationRepository::saveAll));
-
-        Map<String, ReferenceMealShare> shares =
-                byCode(mealShareRepository.findAll(), ReferenceMealShare::getCode);
-        tables.add(upsert("ref_meal_shares", rows.mealShares(), shares,
-                ReferenceRowsDto.MealShare::code, ReferenceMealShare::new,
-                (entity, row) -> mapper.update(entity, row,
-                        required(populations, row.populationCode(), "population", row.origin())),
-                mealShareRepository::saveAll));
-
-        Map<String, ReferenceExchangeSystem> exchanges =
-                byCode(exchangeSystemRepository.findAll(), ReferenceExchangeSystem::getCode);
-        tables.add(upsert("ref_exchange_systems", rows.exchangeSystems(), exchanges,
-                ReferenceRowsDto.ExchangeSystem::code, ReferenceExchangeSystem::new,
-                (entity, row) -> mapper.update(entity, row,
-                        required(sources, row.sourceCode(), "source", row.origin())),
-                exchangeSystemRepository::saveAll));
-
-        Map<String, ReferenceYieldFactor> yields =
-                byCode(yieldFactorRepository.findAll(), ReferenceYieldFactor::getCode);
-        tables.add(upsert("ref_yield_factors", rows.yieldFactors(), yields,
-                ReferenceRowsDto.YieldFactor::code, ReferenceYieldFactor::new,
-                (entity, row) -> mapper.update(entity, row,
-                        required(sources, row.sourceCode(), "source", row.origin())),
-                yieldFactorRepository::saveAll));
-
-        requireBorrowedSharesExist(rows);
+        ReferenceSyncSummaryDto summary = tables.store(rows);
         snapshot = null;
-
-        List<String> attributions = rows.sources().stream()
-                .map(ReferenceRowsDto.Source::attribution)
-                .toList();
-        return new ReferenceSyncSummaryDto(tables, skipped, attributions);
+        return summary;
     }
 
     private PopulationView population(String code) {
@@ -494,183 +369,38 @@ public class ReferenceService implements IReferenceService {
         return view;
     }
 
-    private Set<Long> knownFoods(ReferenceRowsDto rows) {
-        Set<Long> wanted = new HashSet<>();
-        rows.rations().stream().map(ReferenceRowsDto.Ration::bedcaFoodId)
-                .filter(Objects::nonNull).forEach(wanted::add);
-        rows.foodMeasures().stream().map(ReferenceRowsDto.FoodMeasure::bedcaFoodId)
-                .filter(Objects::nonNull).forEach(wanted::add);
-        return bedcaFoodService.entitiesByIds(wanted).keySet();
-    }
-
-    private static boolean foodKnown(Long bedcaFoodId, Set<Long> known, String origin, String code,
-                                     List<String> skipped) {
-        if (bedcaFoodId == null || known.contains(bedcaFoodId)) {
-            return true;
-        }
-        skipped.add(origin + " " + code + ": composition-database food " + bedcaFoodId
-                + " is not loaded (run POST /api/bedca/sync, then sync again)");
-        return false;
-    }
-
-    private void requireBorrowedSharesExist(ReferenceRowsDto rows) {
-        Set<String> withShares = rows.mealShares().stream()
-                .map(ReferenceRowsDto.MealShare::populationCode)
-                .collect(Collectors.toSet());
-        for (ReferenceRowsDto.Population population : rows.populations()) {
-            String from = population.mealSharesFrom();
-            if (from != null && !withShares.contains(from)) {
-                throw new InvalidReferenceException(population.origin() + " " + population.code()
-                        + " borrows meal shares from " + from + ", which has none");
-            }
-        }
-    }
-
-    private static <E> Map<String, E> byCode(Collection<E> entities, Function<E, String> codeOf) {
-        Map<String, E> map = new LinkedHashMap<>();
-        for (E entity : entities) {
-            String code = codeOf.apply(entity);
-            if (code != null) {
-                map.put(code, entity);
-            }
-        }
-        return map;
-    }
-
-    private static <E> E required(Map<String, E> byCode, String code, String what, String origin) {
-        E found = code == null ? null : byCode.get(code);
-        if (found == null) {
-            throw new InvalidReferenceException(origin + ": no " + what + " with code " + code);
-        }
-        return found;
-    }
-
-    private static <E, R> TableSync upsert(String table, List<R> rows, Map<String, E> stored,
-                                           Function<R, String> codeOf,
-                                           Supplier<E> create,
-                                           BiConsumer<E, R> apply,
-                                           Function<List<E>, List<E>> saveAll) {
-        List<E> changed = new ArrayList<>(rows.size());
-        int inserted = 0;
-        int updated = 0;
-        Set<String> seen = new HashSet<>();
-        for (R row : rows) {
-            String code = codeOf.apply(row);
-            if (!seen.add(code)) {
-                throw new InvalidReferenceException(table + ": code " + code + " appears twice");
-            }
-            E entity = stored.get(code);
-            if (entity == null) {
-                entity = create.get();
-                inserted++;
-            } else {
-                updated++;
-            }
-            apply.accept(entity, row);
-            changed.add(entity);
-        }
-        List<E> saved = saveAll.apply(changed);
-        for (int at = 0; at < saved.size(); at++) {
-            stored.put(codeOf.apply(rows.get(at)), saved.get(at));
-        }
-        return new TableSync(table, rows.size(), inserted, updated);
-    }
-
-    private Snapshot snapshot() {
-        Snapshot current = snapshot;
+    private ReferenceSnapshot snapshot() {
+        ReferenceSnapshot current = snapshot;
         if (current == null) {
-            current = load();
+            current = tables.load();
             snapshot = current;
         }
         return current;
     }
 
-    private Snapshot load() {
-        List<ReferenceSourceDto> sources = sourceRepository.findAllByOrderByTierAscYearDesc().stream()
-                .map(mapper::toDto)
-                .toList();
-
-        Map<String, PopulationView> populations = new LinkedHashMap<>();
-        for (ReferencePopulation population : populationRepository.findAllByOrderByIdAsc()) {
-            ReferenceSource source = population.getSource();
-            populations.put(population.getCode(), new PopulationView(
-                    population.getCode(), population.getLabel(), source.getCode(),
-                    source.getShortName(), source.getTier(), source.getYear(),
-                    population.getAgeMinMonths(), population.getAgeMaxMonths(),
-                    population.getContext(), population.getMealSharesFrom(),
-                    population.getMealSharesNote(), population.isSelectable(), population.getId()));
+    /**
+     * The food a lookup names: a composition food — its id, and its Spanish name
+     * when the crosswalk gives one — or, until FD-033 phase D re-matches every
+     * ingredient, a BEDCA food by its name only. The BEDCA id goes no further
+     * than this: it is never compared with the composition id a row names.
+     */
+    private LookedUpFood food(Long compositionFoodId, Long bedcaFoodId) {
+        if ((compositionFoodId == null) == (bedcaFoodId == null)) {
+            throw new InvalidReferenceException(
+                    "Name the food by exactly one of compositionFoodId and bedcaFoodId");
         }
-
-        List<RationDto> rations = rationRepository.findAllByOrderByIdAsc().stream()
-                .map(mapper::toDto)
-                .toList();
-        List<FoodMeasureDto> measures = measureRepository
-                .findByDietIdIsNullAndGlobalCriterionFalseOrderByIdAsc().stream()
-                .map(mapper::toDto)
-                .toList();
-
-        Map<String, List<RecommendationDto>> recommendations = new LinkedHashMap<>();
-        for (ReferenceRecommendation row : recommendationRepository.findAllByOrderByIdAsc()) {
-            recommendations.computeIfAbsent(row.getPopulation().getCode(), code -> new ArrayList<>())
-                    .add(mapper.toDto(row));
+        if (compositionFoodId != null) {
+            CompositionFood food = compositionFoodService.entityById(compositionFoodId);
+            return new LookedUpFood(food.getId(), food.getNameEs());
         }
-
-        Map<String, List<MealShareDto>> shares = new LinkedHashMap<>();
-        Map<String, String> sharePages = new HashMap<>();
-        for (ReferenceMealShare row : mealShareRepository.findAllByOrderByIdAsc()) {
-            String code = row.getPopulation().getCode();
-            shares.computeIfAbsent(code, c -> new ArrayList<>())
-                    .add(new MealShareDto(row.getMealType(), row.getPctMin(), row.getPctMax(),
-                            row.getNote()));
-            sharePages.putIfAbsent(code, row.getPageRef());
-        }
-
-        List<ExchangeSystemDto> exchanges = exchangeSystemRepository.findAllByOrderByIdAsc().stream()
-                .map(mapper::toDto)
-                .toList();
-
-        List<YieldFactorDto> yields = yieldFactorRepository.findAllByOrderByIdAsc().stream()
-                .map(mapper::toDto)
-                .toList();
-
-        return new Snapshot(sources, populations, rations, measures, recommendations, shares,
-                sharePages, exchanges, yields);
+        return new LookedUpFood(null, bedcaFoodService.entityById(bedcaFoodId).getName());
     }
 
-    private record Snapshot(
-            List<ReferenceSourceDto> sources,
-            Map<String, PopulationView> populations,
-            List<RationDto> rations,
-            List<FoodMeasureDto> measures,
-            Map<String, List<RecommendationDto>> recommendations,
-            Map<String, List<MealShareDto>> shares,
-            Map<String, String> sharePages,
-            List<ExchangeSystemDto> exchanges,
-            List<YieldFactorDto> yields) {
+    /** The family a food name reads as; null without a name. */
+    private FoodCategory categoryOf(String foodName) {
+        return foodName == null ? null : categoriser.of(foodName);
     }
 
-    private record PopulationView(
-            String code, String label, String sourceCode, String sourceShortName, int sourceTier,
-            Integer sourceYear, Integer ageMinMonths, Integer ageMaxMonths, String context,
-            String mealSharesFrom, String mealSharesNote, boolean selectable, Long id) {
-
-        /** Nearest tier first, then the newest document, then the order it was loaded in. */
-        static final Comparator<PopulationView> ORDER = Comparator
-                .comparingInt(PopulationView::sourceTier)
-                .thenComparing(view -> view.sourceYear() == null ? 0 : -view.sourceYear())
-                .thenComparing(PopulationView::id);
-
-        boolean covers(int ageMonths) {
-            if (ageMinMonths == null && ageMaxMonths == null) {
-                return false;
-            }
-            return (ageMinMonths == null || ageMonths >= ageMinMonths)
-                    && (ageMaxMonths == null || ageMonths <= ageMaxMonths);
-        }
-
-        ReferenceProfileDto profile(boolean suggested) {
-            return new ReferenceProfileDto(code, label, sourceCode, sourceShortName, ageMinMonths,
-                    ageMaxMonths, context, selectable, suggested);
-        }
+    private record LookedUpFood(Long compositionFoodId, String name) {
     }
 }

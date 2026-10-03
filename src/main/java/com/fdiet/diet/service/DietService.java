@@ -386,7 +386,7 @@ public class DietService implements IDietService {
                 .orElseThrow(() -> DietNotFoundException.diet(dietId));
         FoodMeasureDto saved = referenceService.saveDietMeasure(dietId, request);
         int attached = recipeService.attachDietMeasure(dishRepository.recipeIdsOf(dietId),
-                request.bedcaFoodId(), request.measure(), dietId, plan.getReferenceProfileCode());
+                request.compositionFoodId(), request.measure(), dietId, plan.getReferenceProfileCode());
         return new DietMeasureSavedDto(saved, attached);
     }
 

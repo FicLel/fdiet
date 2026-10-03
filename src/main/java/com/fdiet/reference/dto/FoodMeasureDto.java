@@ -26,7 +26,7 @@ public record FoodMeasureDto(
         PortionSize size,
         BigDecimal count,
         String foodLabel,
-        Long bedcaFoodId,
+        Long compositionFoodId,
         FoodCategory foodCategory,
         String keywords,
         BigDecimal gramsMin,

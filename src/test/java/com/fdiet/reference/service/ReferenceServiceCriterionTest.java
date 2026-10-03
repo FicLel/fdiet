@@ -2,8 +2,14 @@ package com.fdiet.reference.service;
 
 import com.fdiet.alternative.domain.FoodCategory;
 import com.fdiet.alternative.helpers.IFoodCategoriser;
+import com.fdiet.food.dto.CompositionKey;
 import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
+import com.fdiet.food.model.CompositionSource;
 import com.fdiet.food.service.IBedcaFoodService;
+import com.fdiet.food.service.ICompositionFoodService;
+import com.fdiet.reference.dto.ReferenceSyncSummaryDto;
+import com.fdiet.reference.exception.InvalidReferenceException;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.HouseholdMeasure;
 import com.fdiet.reference.domain.LicenceClass;
@@ -31,10 +37,12 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -48,10 +56,19 @@ import static org.mockito.Mockito.when;
  * Where the reference service meets the nutritionist's global criteria: they
  * weigh with no diet at all — an unsaved week, a library recipe — and the sync
  * of the published rows neither reads them as published nor writes them.
+ *
+ * <p>Both name a composition food (FD-033 phase C). A food known only by a BEDCA
+ * id — every matched ingredient until phase D — reaches the family rows by its
+ * name and never a row or criterion naming a food, even when the two ids happen
+ * to be the same number.
  */
 class ReferenceServiceCriterionTest {
 
+    /** The egg as a composition food, and a BEDCA food that happens to carry the same id. */
     private static final long EGG = 2127L;
+    private static final long BEDCA_EGG = EGG;
+    private static final CompositionKey EGG_KEY = new CompositionKey(CompositionSource.CIQUAL, "22000");
+    private static final CompositionKey UNLOADED_KEY = new CompositionKey(CompositionSource.BLS, "Z999999");
     private static final String EGG_NAME = "Huevo, entero, crudo";
     private static final String AESAN = "AESAN-2022-007";
     private static final String RANGE_CODE = "AESAN-2022:M-HUEVO-UD";
@@ -67,12 +84,15 @@ class ReferenceServiceCriterionTest {
     private final ReferenceYieldFactorRepository yields = mock(ReferenceYieldFactorRepository.class);
     private final IFoodCategoriser categoriser = mock(IFoodCategoriser.class);
     private final IBedcaFoodService bedcaFoodService = mock(IBedcaFoodService.class);
+    private final ICompositionFoodService compositionFoodService = mock(ICompositionFoodService.class);
     private final IMeasureCriterionService criteria = mock(IMeasureCriterionService.class);
     private final ReferenceMapper mapper = new ReferenceMapper();
 
-    private final ReferenceService service = new ReferenceService(sources, populations, rations,
-            measures, recommendations, shares, exchanges, yields, mapper, new ReferenceMatcher(),
-            categoriser, bedcaFoodService, criteria, "AESAN-2022:ADULTOS");
+    private final ReferenceService service = new ReferenceService(
+            new ReferenceTables(sources, populations, rations, measures, recommendations, shares,
+                    exchanges, yields, mapper, compositionFoodService),
+            mapper, new ReferenceMatcher(), categoriser, compositionFoodService, bedcaFoodService,
+            criteria, "AESAN-2022:ADULTOS");
 
     private final FoodMeasureDto global = globalEgg();
 
@@ -81,12 +101,18 @@ class ReferenceServiceCriterionTest {
         when(categoriser.of(anyString())).thenReturn(FoodCategory.EGG);
         when(measures.findByDietIdIsNullAndGlobalCriterionFalseOrderByIdAsc())
                 .thenReturn(List.of(publishedRange()));
-        when(criteria.globalRows(anyCollection())).thenReturn(List.of(global));
-        when(bedcaFoodService.entitiesByIds(any())).thenReturn(Map.of());
-        BedcaFood egg = new BedcaFood();
+        when(criteria.globalRows(anyCollection()))
+                .thenAnswer(call -> call.<Collection<Long>>getArgument(0).contains(EGG)
+                        ? List.of(global) : List.of());
+        when(compositionFoodService.idsByKey(anyCollection())).thenReturn(Map.of(EGG_KEY, EGG));
+        CompositionFood egg = new CompositionFood();
         egg.setId(EGG);
-        egg.setName(EGG_NAME);
-        when(bedcaFoodService.entityById(EGG)).thenReturn(egg);
+        egg.setNameEs(EGG_NAME);
+        when(compositionFoodService.entityById(EGG)).thenReturn(egg);
+        BedcaFood bedcaEgg = new BedcaFood();
+        bedcaEgg.setId(BEDCA_EGG);
+        bedcaEgg.setName(EGG_NAME);
+        when(bedcaFoodService.entityById(BEDCA_EGG)).thenReturn(bedcaEgg);
     }
 
     /** No diet — an unsaved week, or a library recipe — and the egg still weighs, by her criterion. */
@@ -101,10 +127,73 @@ class ReferenceServiceCriterionTest {
     /** The composer lists it beside the published range, labelled as hers. */
     @Test
     void listsTheGlobalCriterionForAFoodAheadOfThePublishedRange() {
-        List<FoodMeasureDto> listed = service.measuresForFood(EGG, "unidad", null, null);
+        List<FoodMeasureDto> listed = service.measuresForFood(EGG, null, "unidad", null, null);
 
         assertThat(listed).extracting(FoodMeasureDto::globalOwn).containsExactly(true, false);
         assertThat(listed.get(1).code()).isEqualTo(RANGE_CODE);
+    }
+
+    /**
+     * A BEDCA-matched ingredient is weighed by family rows only: her criterion
+     * names a composition food, and the BEDCA id is never compared with it.
+     */
+    @Test
+    void aFoodKnownByNameOnlyIsNeverWeighedByACriterionNamingAFood() {
+        MeasureChoiceDto choice = service.chooseMeasures(List.of(MeasureQueryDto.byNameOnly(EGG_NAME,
+                "unidades", PortionSize.MEDIUM, null)), null, null).get(0);
+
+        assertThat(choice.chosen()).isNull();
+        assertThat(choice.candidates()).extracting(FoodMeasureDto::code).containsExactly(RANGE_CODE);
+    }
+
+    /** The composer may still ask about a BEDCA food until phase D: it is offered the family rows. */
+    @Test
+    void listsOnlyFamilyRowsForABedcaFood() {
+        List<FoodMeasureDto> listed = service.measuresForFood(null, BEDCA_EGG, "unidad", null, null);
+
+        assertThat(listed).extracting(FoodMeasureDto::code).containsExactly(RANGE_CODE);
+        verify(compositionFoodService, never()).entityById(any());
+    }
+
+    @Test
+    void refusesALookupNamingBothKindsOfFood() {
+        assertThatThrownBy(() -> service.measuresForFood(EGG, BEDCA_EGG, "unidad", null, null))
+                .isInstanceOf(InvalidReferenceException.class);
+        assertThatThrownBy(() -> service.yieldFactorsForFood(null, null))
+                .isInstanceOf(InvalidReferenceException.class);
+    }
+
+    /** One batched lookup keys the rows; a row whose food is not loaded is skipped with a reason. */
+    @Test
+    void aSyncKeysRowsByTheirCompositionFoodAndSkipsOneNotLoaded() {
+        stubSaveAll();
+        ReferenceRowsDto rows = syncRows();
+        ReferenceRowsDto.FoodMeasure range = rows.foodMeasures().get(0);
+        ReferenceRowsDto keyed = new ReferenceRowsDto(rows.sources(), List.of(), List.of(),
+                List.of(withFood(range, "M-HUEVO-CIQUAL", EGG_KEY),
+                        withFood(range, "M-HUEVO-UNLOADED", UNLOADED_KEY)),
+                List.of(), List.of(), List.of(), List.of());
+
+        ReferenceSyncSummaryDto summary = service.store(keyed);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ReferenceFoodMeasure>> written = ArgumentCaptor.forClass(List.class);
+        verify(measures).saveAll(written.capture());
+        assertThat(written.getValue()).singleElement().satisfies(row -> {
+            assertThat(row.getCode()).isEqualTo("M-HUEVO-CIQUAL");
+            assertThat(row.getCompositionFoodId()).isEqualTo(EGG);
+        });
+        assertThat(summary.skipped()).singleElement().asString()
+                .contains("M-HUEVO-UNLOADED").contains("BLS Z999999").contains("/api/composition/sync");
+        verify(compositionFoodService).idsByKey(anyCollection());
+    }
+
+    private static ReferenceRowsDto.FoodMeasure withFood(ReferenceRowsDto.FoodMeasure row, String code,
+                                                         CompositionKey food) {
+        return new ReferenceRowsDto.FoodMeasure(row.origin(), code, row.sourceCode(), row.measure(),
+                row.size(), row.count(), food, null, null, row.foodLabel(), new BigDecimal("58"),
+                new BigDecimal("58"), null, null, row.state(), row.weightBasis(), null,
+                row.householdText(), row.pageRef(), null);
     }
 
     /** A re-sync writes the published rows by code; the criterion is neither read nor written. */

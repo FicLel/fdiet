@@ -55,7 +55,7 @@ public class MeasureResolverService implements IMeasureResolverService {
                 continue;
             }
             written.add(ingredient);
-            queries.add(new MeasureQueryDto(food.getId(), food.getName(), ingredient.unit(),
+            queries.add(MeasureQueryDto.byNameOnly(food.getName(), ingredient.unit(),
                     ingredient.size(), ingredient.foodMeasureId()));
         }
         if (queries.isEmpty()) {
@@ -84,8 +84,8 @@ public class MeasureResolverService implements IMeasureResolverService {
         if (food == null || portionScaler.weighsDirectly(unit)) {
             return MeasureChoiceDto.NONE;
         }
-        return referenceService.chooseMeasures(List.of(new MeasureQueryDto(food.getId(),
-                food.getName(), unit, size, preferred)), dietId, profile).get(0);
+        return referenceService.chooseMeasures(List.of(MeasureQueryDto.byNameOnly(food.getName(),
+                unit, size, preferred)), dietId, profile).get(0);
     }
 
     @Override

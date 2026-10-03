@@ -70,6 +70,7 @@ CIQUAL,20087,"Pimiento rojo, crudo",pimiento rojo;pimientos rojos,true,0.82,1701
 CIQUAL,20085,"Pimiento verde, crudo",pimiento verde;pimientos verdes,true,0.82,170427,true,
 CIQUAL,20168,"Pimiento amarillo, crudo",pimiento amarillo,true,0.82,169383,true,
 CIQUAL,13002,"Piña, cruda",piña,true,0.51,169124,true,
+CIQUAL,13716,"Piña, en su jugo, en conserva, escurrida",piña en su jugo;piña en conserva en su jugo,true,1.00,167767,true,"FD-033 phase C prefill for the 5 al día row Piña en su jugo: CIQUAL publishes pineapple in its own juice, drained (13716) and not drained (13717); the drained solids are what a slice weighs. Approved by the project owner on 2026-10-03."
 CIQUAL,13005,"Plátano, crudo",plátano;plátanos;banana,true,0.64,173944,true,
 CIQUAL,36003,"Pollo, carne, cruda",pollo,true,0.48,171052,true,
 CIQUAL,36018,"Pollo, pechuga, plancha",pechuga de pollo a la plancha;pechuga de pollo plancha,true,1.00,171534,true,

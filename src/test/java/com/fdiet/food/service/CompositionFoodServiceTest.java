@@ -86,11 +86,24 @@ class CompositionFoodServiceTest {
                 .isEqualTo(3L);
     }
 
+    /** A reference row names a food by (source, code); the id is this database's. Unknown keys are absent. */
+    @Test
+    void resolvesStableKeysToIds() {
+        CompositionKey lettuce = new CompositionKey(CompositionSource.CIQUAL, "20031");
+        CompositionKey blsOil = new CompositionKey(CompositionSource.BLS, "Q120000");
+        CompositionKey sameCodeOtherTable = new CompositionKey(CompositionSource.BLS, "20031");
+
+        assertThat(service.idsByKey(List.of(lettuce, blsOil, sameCodeOtherTable)))
+                .containsExactlyInAnyOrderEntriesOf(Map.of(lettuce, 1L, blsOil, 4L));
+        verify(repository, times(0)).findAllById(anyIterable());
+    }
+
     /** The index is one query, however many lookups and searches follow. */
     @Test
     void buildsTheIndexOnce() {
         service.entitiesByName(List.of("lechuga"));
         service.entitiesByName(List.of("aove"));
+        service.idsByKey(List.of(new CompositionKey(CompositionSource.CIQUAL, "20031")));
         service.search("lechuga", 0, 20);
 
         verify(repository, times(1)).findAllIndexRows();

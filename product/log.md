@@ -43,3 +43,11 @@
 - 2026-10-03 — FD-033 phase B started: handed to backend.
 - 2026-10-03 — FD-033 B decisions: originals via Git LFS (git-lfs now an FD-034 requirement); qualified values null without original text (settles story decision 8); all 122 crosswalk rows approved (USDA as-purchased edible-portion caveat accepted). No-energy count corrected to 145 (143 `-` + 2 `traces`), FD-037 too.
 - 2026-10-03 — FD-033 phase B implemented and tech-lead reviewed (299 tests green); uncommitted; dev DB needs a composition re-sync. FD-038 created (review follow-ups).
+- 2026-10-03 — FD-033 phase B committed (2e999db).
+- 2026-10-03 — FD-033 phase C questions answered (replace the BEDCA key now; prefill + user approval for the 60 5 al día foods; criteria re-keyed via the approved mapping). Phase C started: handed to backend.
+- 2026-10-03 — FD-033 phase C backend done (V16 applied, 313 tests green, reference and composition re-synced, live-checked); mapping list `product/spikes/FD-033-C-rekey-mapping.md` awaits user approval (1 LOW, 4 MEDIUM). Handed to frontend.
+- 2026-10-03 — FD-033 phase C frontend done and tech-lead reviewed; uncommitted. Waiting on mapping approval (1 LOW, 4 MEDIUM) and commit; browser re-check of review fixes running.
+- 2026-10-03 — FD-039 (picked measure dropped on save), FD-040 (reference snapshot race), FD-041 (CIQUAL/BLS footer attribution), FD-042 (diet criterion usage count) created from the FD-033 C review; FD-013 widened (oversized files re-measured); FD-033 D notes added.
+- 2026-10-03 — FD-033 phase C tech-lead UI fixes re-verified live (composer keeps chosen measure and panel open after saving a global criterion; diet criterion edit creates no second row; no console errors; test data cleaned). Remaining: user approval of the mapping list, then commit.
+- 2026-10-03 — FD-033 phase C mapping approved by the user (1 LOW, 4 MEDIUM as proposed). Handed to backend: approve piña row in `links.csv`, add 1167→13716 to V16, tests.
+- 2026-10-03 — FD-033 C piña row done: `links.csv` 13716 reviewed, 1167→13716 in V16 (edited in place, `flywayRepair` on dev DB), composition re-synced, 313 tests green. Uncommitted; awaiting user "commit". Fresh-DB run of edited V16 not verified.

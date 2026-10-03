@@ -188,7 +188,7 @@ watch([chosen, measureWord], async ([food, word]) => {
     return
   }
   try {
-    const rows = await referenceApi.measures(food.bedcaFoodId, {
+    const rows = await referenceApi.measures({ bedcaFoodId: food.bedcaFoodId }, {
       unit: unit.value.trim(),
       dietId: plan.id,
       profile: plan.referenceProfileCode,

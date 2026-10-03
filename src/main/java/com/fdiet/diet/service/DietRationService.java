@@ -171,8 +171,9 @@ public class DietRationService implements IDietRationService {
                 continue;
             }
             BedcaFood food = ingredient.getBedcaFood();
+            // A BEDCA food is counted by its name only: its id is not a composition id.
             RationDto ration = food == null ? null
-                    : referenceService.countingRation(profileCode, food.getId(), food.getName());
+                    : referenceService.countingRation(profileCode, null, food.getName());
             BigDecimal[] weight = ration == null ? null : ration.edibleWeight(food.getEdiblePortion());
             if (ration == null || weight == null) {
                 noRation++;

@@ -1,10 +1,12 @@
 package com.fdiet.reference.service;
 
+import com.fdiet.food.service.CompositionStartupSync;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
@@ -32,7 +34,9 @@ public class ReferenceStartupSync {
         this.importService = importService;
     }
 
+    /** After the composition foods are loaded, so a row naming one can be keyed on a fresh database. */
     @EventListener(ApplicationReadyEvent.class)
+    @Order(CompositionStartupSync.ORDER + 1)
     public void sync() {
         try {
             importService.sync();

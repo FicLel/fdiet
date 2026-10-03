@@ -82,8 +82,9 @@ public class ReferenceFoodMeasure {
     @Column(name = "measure_count", precision = 6, scale = 2, nullable = false)
     private BigDecimal count;
 
-    @Column(name = "bedca_food_id")
-    private Long bedcaFoodId;
+    /** The composition food (CIQUAL 2025 or BLS 4.0) the row names, a plain id; null for a family row. */
+    @Column(name = "composition_food_id")
+    private Long compositionFoodId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "food_category", length = 24)

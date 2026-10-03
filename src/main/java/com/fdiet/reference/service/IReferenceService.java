@@ -62,14 +62,23 @@ public interface IReferenceService {
      * The rations that cover one food: the profile's own first, then any
      * published per-food ration of another source (5 al día), each labelled.
      * Without a food, the profile's rations.
+     *
+     * <p>The food is named by exactly one of a composition food id — which
+     * reaches the rows naming that food and the family rows its Spanish name
+     * fits — and, until FD-033 phase D re-matches ingredients, a BEDCA food id,
+     * which reaches the family rows by the BEDCA name only and never a row
+     * naming a food. Both is a 400.
      */
-    List<RationDto> rationsForFood(String profileCode, Long bedcaFoodId);
+    List<RationDto> rationsForFood(String profileCode, Long compositionFoodId, Long bedcaFoodId);
 
     /**
      * The one ration of the profile a food is counted in, or null when it is in
      * no group of the profile or the choice would be a guess. Answered in memory.
+     *
+     * @param compositionFoodId the composition food, or null for a food known by
+     *                          its name only (a BEDCA match, until FD-033 phase D)
      */
-    RationDto countingRation(String profileCode, Long bedcaFoodId, String foodName);
+    RationDto countingRation(String profileCode, Long compositionFoodId, String foodName);
 
     List<RecommendationDto> recommendations(String profileCode);
 
@@ -89,8 +98,12 @@ public interface IReferenceService {
      */
     List<YieldFactorDto> yieldFactors(String foodName, String methodText);
 
-    /** The same for a composition-database food by id, read by its own name. */
-    List<YieldFactorDto> yieldFactorsForFood(Long bedcaFoodId);
+    /**
+     * The same for one food, read by its own name: a composition food by its
+     * Spanish name (none without one), or a BEDCA food until FD-033 phase D.
+     * Exactly one of the two ids.
+     */
+    List<YieldFactorDto> yieldFactorsForFood(Long compositionFoodId, Long bedcaFoodId);
 
     /** The household-measure vocabulary the parser reads. */
     List<HouseholdMeasureDto> vocabulary();
@@ -99,9 +112,13 @@ public interface IReferenceService {
      * Every measure that could weigh a food — narrowed to one unit when given —
      * the diet's own rows first when a diet is given, then the nutritionist's
      * global criteria, then published rows.
+     *
+     * <p>Exactly one of the two ids, read as in {@link #rationsForFood}: a
+     * BEDCA food reaches the family rows only, and no criterion — every
+     * criterion names a composition food.
      */
-    List<FoodMeasureDto> measuresForFood(Long bedcaFoodId, String unit, Long dietId,
-                                         String profileCode);
+    List<FoodMeasureDto> measuresForFood(Long compositionFoodId, Long bedcaFoodId, String unit,
+                                         Long dietId, String profileCode);
 
     /**
      * The measure each written ingredient may be weighed by, in one pass over

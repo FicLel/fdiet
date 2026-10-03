@@ -163,4 +163,12 @@ public class CompositionFood implements CompositionFigures {
     @AttributeOverride(name = "value", column = @Column(name = "vitamin_c"))
     @AttributeOverride(name = "unit", column = @Column(name = "vitamin_c_unit", length = 16))
     private NutrientValue vitaminC;
+
+    /** The name to show: fdiet's Spanish one once crosswalked, else the English, else the source's own. */
+    public String label() {
+        if (nameEs != null) {
+            return nameEs;
+        }
+        return nameEn != null ? nameEn : nameOriginal;
+    }
 }

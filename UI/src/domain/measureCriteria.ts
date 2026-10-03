@@ -136,7 +136,7 @@ export function criterionValue(measure: FoodMeasure): number | null {
 
 /** The body for a criterion: one weight, in the unit chosen. */
 export function criterionRequest(
-  bedcaFoodId: number,
+  compositionFoodId: number,
   measure: HouseholdMeasure,
   size: PortionSize | null,
   value: number,
@@ -146,7 +146,7 @@ export function criterionRequest(
   return {
     measure,
     size,
-    bedcaFoodId,
+    compositionFoodId,
     grams: unit === 'g' ? value : null,
     ml: unit === 'ml' ? value : null,
     note,

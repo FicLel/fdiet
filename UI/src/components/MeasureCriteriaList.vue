@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { dietsApi } from '@/api/diets'
 import { isRefusal } from '@/api/http'
 import { referenceApi } from '@/api/reference'
 import type { FoodMeasure, MeasureUsage } from '@/api/types'
@@ -12,15 +13,22 @@ import {
 } from '@/domain/measureCriteria'
 
 /**
- * The nutritionist's global criteria for one food, with their weight to change
- * and a way to remove them.
+ * The nutritionist's criteria, with their weight to change and a way to
+ * remove them: her global ones for one food, or (with `dietId`) one diet's.
  *
- * A criterion is linked, like a library recipe: every ingredient and extra it
- * weighs reads it, in every diet, so a change is live everywhere and the usage
- * is shown before the save. A delete the backend refuses (still in use) shows
- * the backend's own reason.
+ * A global criterion is linked, like a library recipe: every ingredient and
+ * extra it weighs reads it, in every diet, so a change is live everywhere and
+ * the usage is shown before the save. A diet's criterion reaches that diet
+ * only, and is rewritten through the diet. A delete the backend refuses (still
+ * in use) shows the backend's own reason.
  */
-const props = defineProps<{ criteria: FoodMeasure[] }>()
+const props = defineProps<{
+  criteria: FoodMeasure[]
+  /** One diet's criteria rather than the global ones. */
+  dietId?: number | null
+  /** Names each row's food, for a list that spans several. */
+  showFood?: boolean
+}>()
 
 const emit = defineEmits<{ changed: [] }>()
 
@@ -30,11 +38,16 @@ const usage = ref<MeasureUsage | null>(null)
 const busy = ref(false)
 const error = ref<string | null>(null)
 
+const forDiet = computed(() => props.dietId != null)
+
 async function startEdit(criterion: FoodMeasure): Promise<void> {
   editingId.value = criterion.id
   value.value = criterionValue(criterion)
   usage.value = null
   error.value = null
+  if (forDiet.value) {
+    return
+  }
   try {
     const found = await referenceApi.criterionUsage(criterion.id)
     if (editingId.value === criterion.id) {
@@ -52,23 +65,23 @@ function cancel(): void {
 }
 
 async function save(criterion: FoodMeasure): Promise<void> {
-  if (busy.value || value.value === null || value.value <= 0 || criterion.bedcaFoodId === null) {
+  if (busy.value || value.value === null || value.value <= 0 || criterion.compositionFoodId === null) {
     return
   }
   busy.value = true
   error.value = null
   try {
-    await referenceApi.updateCriterion(
-      criterion.id,
-      criterionRequest(
-        criterion.bedcaFoodId,
-        criterion.measure,
-        criterion.size,
-        value.value,
-        unitOf(criterion),
-        criterion.note,
-      ),
+    const request = criterionRequest(
+      criterion.compositionFoodId,
+      criterion.measure,
+      criterion.size,
+      value.value,
+      unitOf(criterion),
+      criterion.note,
     )
+    await (props.dietId != null
+      ? dietsApi.saveMeasure(props.dietId, request)
+      : referenceApi.updateCriterion(criterion.id, request))
     editingId.value = null
     emit('changed')
   } catch (cause) {
@@ -85,7 +98,9 @@ async function remove(criterion: FoodMeasure): Promise<void> {
   busy.value = true
   error.value = null
   try {
-    await referenceApi.deleteCriterion(criterion.id)
+    await (props.dietId != null
+      ? dietsApi.deleteMeasure(props.dietId, criterion.id)
+      : referenceApi.deleteCriterion(criterion.id))
     if (editingId.value === criterion.id) {
       editingId.value = null
     }
@@ -102,11 +117,14 @@ async function remove(criterion: FoodMeasure): Promise<void> {
 
 <template>
   <div class="criteria">
-    <span class="title">Tus criterios para este alimento</span>
+    <span class="title">{{ forDiet ? 'Criterios de esta dieta' : 'Tus criterios para este alimento' }}</span>
     <ul class="rows">
       <li v-for="criterion in props.criteria" :key="criterion.id" class="row">
         <div class="row-head">
-          <span class="weight">{{ criterionWeight(criterion) }}</span>
+          <span class="weight">
+            {{ criterionWeight(criterion) }}
+            <span v-if="showFood && criterion.foodLabel" class="food">· {{ criterion.foodLabel }}</span>
+          </span>
           <template v-if="editingId !== criterion.id">
             <button class="link" type="button" :disabled="busy" @click="startEdit(criterion)">
               Cambiar peso
@@ -122,7 +140,8 @@ async function remove(criterion: FoodMeasure): Promise<void> {
             <input v-model.number="value" class="input num" type="number" min="0.1" step="0.1" />
           </label>
           <p class="usage">
-            <template v-if="usage">{{ usageText(usage) }}</template>
+            <template v-if="forDiet">Afecta sólo a esta dieta.</template>
+            <template v-else-if="usage">{{ usageText(usage) }}</template>
             <template v-else>Comprobando a qué afecta…</template>
           </p>
           <div class="actions">
@@ -130,10 +149,10 @@ async function remove(criterion: FoodMeasure): Promise<void> {
             <button
               class="primary"
               type="button"
-              :disabled="busy || usage === null || value === null || value <= 0"
+              :disabled="busy || (!forDiet && usage === null) || value === null || value <= 0"
               @click="save(criterion)"
             >
-              Guardar en todas las dietas
+              {{ forDiet ? 'Guardar en esta dieta' : 'Guardar en todas las dietas' }}
             </button>
           </div>
         </div>
@@ -180,6 +199,10 @@ async function remove(criterion: FoodMeasure): Promise<void> {
 .weight {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.food {
+  color: var(--ink-muted);
 }
 
 .link {

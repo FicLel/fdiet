@@ -1,7 +1,9 @@
 package com.fdiet.reference.service;
 
 import com.fdiet.alternative.helpers.FoodCategoriser;
+import com.fdiet.food.dto.CompositionKey;
 import com.fdiet.food.helpers.DataReader;
+import com.fdiet.food.model.CompositionSource;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.HouseholdMeasure;
 import com.fdiet.reference.domain.PortionSize;
@@ -147,7 +149,8 @@ class ReferenceDataFilesTest {
     @Test
     void fiveADayPortionsAsPublished() {
         assertThat(ration("5ALDIA-2019:KIWI")).satisfies(row -> {
-            assertThat(row.bedcaFoodId()).isEqualTo(2228L);
+            assertThat(row.compositionFood())
+                    .isEqualTo(new CompositionKey(CompositionSource.CIQUAL, "13021"));
             assertThat(row.gramsMin()).isEqualByComparingTo("80");
             assertThat(row.grossGrams()).isEqualByComparingTo("100");
             assertThat(row.weightBasis()).isEqualTo(WeightBasis.NET_EDIBLE);

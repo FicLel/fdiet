@@ -3,7 +3,9 @@ package com.fdiet.reference.service;
 import com.fdiet.alternative.domain.FoodCategory;
 import com.fdiet.common.helper.Numbers;
 import com.fdiet.common.helper.Texts;
+import com.fdiet.food.dto.CompositionKey;
 import com.fdiet.food.helpers.DataReader;
+import com.fdiet.food.model.CompositionSource;
 import com.fdiet.reference.domain.ExchangeNutrient;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.HouseholdMeasure;
@@ -65,6 +67,10 @@ public class ReferenceImportService implements IReferenceImportService {
     private static final String RECOMMENDATIONS = "recommendations.csv";
     private static final String MEAL_SHARES = "meal_shares.csv";
     private static final String YIELD_FACTORS = "yield_factors.csv";
+
+    /** The two columns a row names a composition food by: its table and that table's code. */
+    private static final String COMPOSITION_SOURCE = "composition_source";
+    private static final String COMPOSITION_CODE = "composition_code";
 
     private final DataReader dataReader;
     private final IReferenceService referenceService;
@@ -165,7 +171,7 @@ public class ReferenceImportService implements IReferenceImportService {
                 row.required("code"), row.required("population_code"), row.required("group_code"),
                 row.required("group_label"),
                 row.enumeration("food_category", FoodCategory.class, false), row.text("keywords"),
-                row.id("bedca_food_id"), row.text("food_label"),
+                row.compositionFood(), row.text("food_label"),
                 row.enumeration("role", RationRole.class, false),
                 row.decimal("grams_min"), row.decimal("grams_max"), row.decimal("ml_min"),
                 row.decimal("ml_max"), row.decimal("units_min"), row.decimal("units_max"),
@@ -176,8 +182,8 @@ public class ReferenceImportService implements IReferenceImportService {
         if (ration.gramsMin() == null && ration.mlMin() == null && ration.unitsMin() == null) {
             throw row.invalid("a ration needs grams, millilitres or units");
         }
-        if (ration.bedcaFoodId() == null && ration.foodCategory() == null) {
-            throw row.invalid("a ration names a composition-database food or a food family");
+        if (ration.compositionFood() == null && ration.foodCategory() == null) {
+            throw row.invalid("a ration names a composition food or a food family");
         }
         return ration;
     }
@@ -188,7 +194,7 @@ public class ReferenceImportService implements IReferenceImportService {
                 row.required("code"), row.required("source_code"),
                 row.enumeration("measure", HouseholdMeasure.class, true),
                 row.enumeration("size", PortionSize.class, false),
-                count == null ? BigDecimal.ONE : count, row.id("bedca_food_id"),
+                count == null ? BigDecimal.ONE : count, row.compositionFood(),
                 row.enumeration("food_category", FoodCategory.class, false), row.text("keywords"),
                 row.required("food_label"), row.decimal("grams_min"), row.decimal("grams_max"),
                 row.decimal("ml_min"), row.decimal("ml_max"),
@@ -199,8 +205,8 @@ public class ReferenceImportService implements IReferenceImportService {
         if (measure.gramsMin() == null && measure.mlMin() == null) {
             throw row.invalid("a measure needs grams or millilitres");
         }
-        if (measure.bedcaFoodId() == null && measure.foodCategory() == null) {
-            throw row.invalid("a measure names a composition-database food or a food family");
+        if (measure.compositionFood() == null && measure.foodCategory() == null) {
+            throw row.invalid("a measure names a composition food or a food family");
         }
         return measure;
     }
@@ -282,9 +288,19 @@ public class ReferenceImportService implements IReferenceImportService {
             return number == null ? null : number.intValueExact();
         }
 
-        Long id(String column) {
-            BigDecimal number = decimal(column);
-            return number == null ? null : number.longValueExact();
+        /**
+         * The composition food a row names, by {@code (source, source_code)} — the
+         * key that is the same in every database, where the id is not — or null
+         * when the row names a family instead. One column without the other is a
+         * mistake in the file.
+         */
+        CompositionKey compositionFood() {
+            CompositionSource source = enumeration(COMPOSITION_SOURCE, CompositionSource.class, false);
+            String code = text(COMPOSITION_CODE);
+            if ((source == null) != (code == null)) {
+                throw invalid(COMPOSITION_SOURCE + " and " + COMPOSITION_CODE + " go together");
+            }
+            return source == null ? null : new CompositionKey(source, code);
         }
 
         boolean bool(String column) {

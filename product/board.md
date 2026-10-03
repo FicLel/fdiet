@@ -3,16 +3,16 @@
 Updated 2026-10-03.
 
 ## In progress
-- FD-033 phase B — implemented + tech-lead reviewed 2026-10-03 (299 tests green), **uncommitted**. Crosswalk 122/122 approved; originals in Git LFS. Follow-ups → FD-038.
+- FD-033 phase C — re-key reference data. Backend (V16) + frontend + tech-lead review done 2026-10-03, uncommitted; review UI fixes re-verified live. Mapping approved 2026-10-03; piña row wired (V16 edited, flywayRepair, 313 tests green). Ready to commit.
 
 ## Next up
-- FD-033 phases C–E (BEDCA removed last).
+- FD-033 phases D–E (BEDCA removed last).
 - FD-034 phase A (manifest + provenance) — no dependency, can go any time.
 
 ## Blocked
 _Nothing._
 
 ## Waiting on the user
-- Prioritise the rest of the backlog (FD-010…FD-032, FD-036, FD-037).
+- FD-033 C — say "commit" (phase C is ready).
+- Prioritise the rest of the backlog (FD-010…FD-032, FD-036…FD-042).
 - FD-008 — `DROP DATABASE fdiet_ui_verify;`
-- FD-033 B — commit; re-sync the dev DB (`POST /api/composition/sync`) so `name_reviewed` turns true.

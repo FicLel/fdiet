@@ -137,9 +137,9 @@ and the mappers serve BEDCA, CIQUAL and BLS alike.
 ### `composition_foods` — the open composition tables (FD-033 phase B, `V15`)
 
 **CIQUAL 2025 (ANSES) and BLS 4.0 (Max Rubner-Institut), both CC BY 4.0, in one table beside
-`bedca_foods`.** It is BEDCA's open replacement in waiting: BEDCA keeps running, nothing points at
-the new table yet (re-keying references is phase C, resetting matches phase D), and nothing here
-touches a diet. One table rather than two so that, when consumers move, they point at one id column.
+`bedca_foods`.** It is BEDCA's open replacement in waiting: BEDCA keeps running, the reference rows
+point at the new table since phase C (`V16`, below), ingredients and extras move in phase D (resetting
+matches), and nothing here touches a diet. One table rather than two so that, when consumers move, they point at one id column.
 
 - `source` (`CIQUAL` | `BLS`, `model/CompositionSource`, which also carries each licence's
   attribution) + `source_code` as published (CIQUAL `alim_code`, BLS `C131000`);
@@ -158,15 +158,16 @@ touches a diet. One table rather than two so that, when consumers move, they poi
 - **fdiet's crosswalk columns** — `name_es`, `name_aliases`, `name_preferred`, `name_reviewed`,
   `edible_portion`, `edible_portion_fdc_id` — come from `composition-es/links.csv`, not from either
   source, and are NULL on every food it does not name. `name_es` is written **head first, BEDCA
-  style** (`Pollo, pechuga, plancha`), so `FoodCategoriser` (120 of the 122 names) and the
+  style** (`Pollo, pechuga, plancha`), so `FoodCategoriser` (121 of the 123 names) and the
   `FoodState` reader read it. **CIQUAL answers first; a BLS row is used where CIQUAL has no
   same-food equivalent, or only BLS has the state written or an energy figure.** A name two rows
   claim goes to the one marked preferred; a name shared without exactly one preferred stops the
   sync before anything is written (`helpers/NameIndex`, the same index the lookup uses).
 - **Every crosswalk row starts as a machine prefill (`reviewed = false`)** and a person approves it; the
-  122 rows of FD-033 phase B were approved by the project owner on 2026-10-03.
+  122 rows of FD-033 phase B were approved by the project owner on 2026-10-03; the one row phase C
+  added (CIQUAL 13716, piña en su jugo) was approved by the project owner on 2026-10-03.
   Scope today: the "Dieta 1" foods of example-ui.xlsx and the BEDCA foods referenced on 2026-10-03
-  (122 rows); the rest is FD-036.
+  (123 rows); the rest is FD-036.
 - **`edible_portion` = 1 − refuse/100 of the USDA SR Legacy food in `edible_portion_fdc_id`**
   (CC0; `usda-sr-legacy/refuse.csv` is the extract, and a test checks every row against it). NULL
   where no SR Legacy food fits (5 rows) — and NULL still refuses a gross weight, as with BEDCA.
@@ -188,7 +189,15 @@ batches of `fdiet.composition.batch-size`, because Hibernate cannot batch identi
 
 **Loading.** At startup, only when the table is empty (`fdiet.composition.sync-on-startup`, on by
 default): ten thousand rows out of 15 MB of spreadsheets is too slow to repeat on every start, unlike
-the reference CSVs. After changing a snapshot or the crosswalk, `POST /api/composition/sync`.
+the reference CSVs. After changing a snapshot or the crosswalk, `POST /api/composition/sync`. The
+composition startup sync runs before the reference one (`@Order`), because reference rows name
+composition foods and a fresh database can only key them once the foods are in.
+
+**Who points at it (FD-033 phase C, `V16`).** The reference rows: `ref_rations` and
+`ref_food_measures` (published rows, diet criteria, global criteria) name a food by
+`composition_food_id`, and the reference CSVs by `composition_source,composition_code`. Ingredients
+and extras still point at BEDCA until phase D; `ICompositionFoodService.idsByKey` resolves the stable
+keys from the same in-memory index (no query once it is built).
 
 ### Importing
 
@@ -464,7 +473,7 @@ diet is addressed by its own id:
   `IDietService` for the diet's profile.
 - `GET /api/diets/{id}/rations?profile=` — the week counted in rations (see `reference`).
 - `GET /api/diets/{id}/measures`, `PUT /api/diets/{id}/measures`, `DELETE /api/diets/{id}/measures/{measureId}`
-  — the diet's own measure criteria (`{measure, size?, bedcaFoodId, grams | ml, note?}`). A PUT
+  — the diet's own measure criteria (`{measure, size?, compositionFoodId, grams | ml, note?}`). A PUT
   attaches the criterion wherever it is now the chosen measure (private recipes only) and answers
   how many.
 
@@ -598,8 +607,18 @@ with the document and page it was read from.** It owns the eight `ref_*` tables 
 from `reference-data/` (one folder per source, so a licence stays with its figures; see its
 `README.md`) by `ReferenceStartupSync` at startup (`fdiet.reference.sync-on-startup`) and by
 `POST /api/reference/sync`. Codes are stable keys, so a re-sync updates in place and a diet pointing
-at a measure keeps pointing at it. A row naming a BEDCA food that is not loaded is skipped with a
+at a measure keeps pointing at it. A row names a food of `composition_foods` (CIQUAL 2025 / BLS 4.0,
+FD-033 phase C) by `composition_source,composition_code` — the source's own key, since ids differ per
+installation — resolved in one batched lookup; a row whose food is not loaded is skipped with a
 reason, not failed.
+
+**Composition ids and BEDCA ids are never compared.** Until FD-033 phase D re-matches ingredients and
+extras, they point at BEDCA foods, and a rule naming a composition food — the 60 5 al día rations and
+62 measures that name one, and every diet or global criterion — weighs and counts none of them
+(accepted, decision 15). They are looked up by name only (`MeasureQueryDto.byNameOnly`,
+`countingRation(profile, null, name)`), which reaches family + keyword rows exactly as before. Phase D
+replaces those calls with the matched composition food, and `RecipeIngredient.compositionFoodId()`
+(null today) with the ingredient's own column.
 
 Only openly reusable sources are seeded: **AESAN 2022** (the default adult profile,
 `fdiet.reference.default-adult-profile`), the **AESAN/MEC 2010** school consensus (four age bands, and
@@ -618,7 +637,7 @@ family + keywords like rations; `method_keywords` rank a row whose method the co
 and `methodNamed: false` says the source publishes no row for the method written. Nothing converts a
 quantity by it.
 
-- `domain/` — `FoodState` (read off BEDCA names, since LanguaL codes proved inconsistent),
+- `domain/` — `FoodState` (read off head-first Spanish names, since LanguaL codes proved inconsistent),
   `PortionSize`, `HouseholdMeasure` (the kitchen words and every spelling of them, in code; an alias
   claimed twice is a startup failure), `WeightBasis`, `FoodKeywords`.
 - `helpers/ReferenceMatcher` — pure. Which measure weighs an ingredient: the one a person picked;
@@ -626,10 +645,13 @@ quantity by it.
   exactly one weighs; else the only weighing row from the profile's source; else published rows that
   agree to the gram. **A range, a raw-state row for a cooked food and
   a size the text did not name never attach on their own** — they are offered as candidates. Which
-  ration counts a food: a BEDCA id, or a `FoodCategory` narrowed by `;`-separated keywords (plurals
-  allowed, longest phrase wins, `!` excludes).
+  ration counts a food: a composition food id, or a `FoodCategory` narrowed by `;`-separated keywords
+  (plurals allowed, longest phrase wins, `!` excludes). A row naming a food covers that composition
+  food only, never a food known by its name alone.
 - `service/ReferenceService` — owns every `ref_*` table except the nutritionist's rows of
-  `ref_food_measures`; an in-memory snapshot of DTOs of the published rows, reset on sync.
+  `ref_food_measures`; an in-memory snapshot of DTOs of the published rows, reset on sync. Its
+  repository half is the package-private `ReferenceTables` (reads the snapshot, hands measure
+  entities out, stores a sync's rows), split off by job, not by table; nothing else calls it.
   `ReferenceImportService` owns no repository and reads the CSVs by header.
 - `service/MeasureCriterionService` (`IMeasureCriterionService`) — owns the nutritionist's rows of
   `ref_food_measures`, split from the published ones by who writes them: one diet's criteria and her
@@ -648,18 +670,23 @@ quantity by it.
   exchanges on every diet, per day, per meal and per dish (`DishUnits`, addressed by slot like a score).
 
 `ReferenceController` at `/api/reference`: `GET sources`, `GET profiles?ageMonths=` (the suggested one
-is marked, never applied), `GET profiles/{code}`, `GET rations?profile=&bedcaFoodId=`,
-`GET measures?bedcaFoodId=&unit=&dietId=&profile=` (the diet's criteria, then the global ones, then
-published rows), `GET vocabulary`,
-`GET exchange-systems?clinical=`, `GET yields?bedcaFoodId=`, `POST sync` (answers with every source's
-attribution).
+is marked, never applied), `GET profiles/{code}`, `GET rations?profile=&compositionFoodId=`,
+`GET measures?compositionFoodId=&unit=&dietId=&profile=` (the diet's criteria, then the global ones,
+then published rows), `GET vocabulary`,
+`GET exchange-systems?clinical=`, `GET yields?compositionFoodId=`, `POST sync` (answers with every
+source's attribution). Until FD-033 phase D, `rations`, `measures` and `yields` take `bedcaFoodId`
+**instead** (exactly one of the two; both is a 400): the BEDCA food is read by its name only, so it
+reaches family + keyword rows and no row or criterion naming a food — what the composer and the
+fix-up panel need while ingredients are BEDCA matches. A composition food without a Spanish name
+reaches only the rows naming it (no family). `RationDto` and `FoodMeasureDto` carry
+`compositionFoodId` (was `bedcaFoodId`).
 
 **The machine offers, the nutritionist decides**, here as in food matching: a nutritionist may give a
 measure their own weight for one diet (`ref_food_measures.diet_id`, deleted with the diet and copied
 with it), and that criterion is labelled as theirs, never as published data.
 
 **Her global criterion** (`V14`, `ref_food_measures.global_criterion`) is the same idea for every diet
-of every patient: one BEDCA food, one household measure (+ optional size), a point weight per unit
+of every patient: one composition food (CIQUAL / BLS), one household measure (+ optional size), a point weight per unit
 (`huevo mediano = 58 g` where AESAN publishes only `53–63 g`; `rebanada de pan de molde = 30 g` where no
 source publishes anything). It belongs to no diet and no source, so it weighs library recipes, an unsaved
 week (`compose`/`parse` without `dietId`) and logged extras alike; `FoodMeasureDto.globalOwn` labels it.
@@ -683,11 +710,11 @@ week (`compose`/`parse` without `dietId`) and logged extras alike; `FoodMeasureD
 `MeasureCriterionController` at `/api/reference/criteria` — not paged: one person's criteria, and every
 weighing reads them anyway:
 
-- `GET /api/reference/criteria?bedcaFoodId=` — every global criterion by food, or one food's.
+- `GET /api/reference/criteria?compositionFoodId=` — every global criterion by food, or one food's.
 - `GET /api/reference/criteria/{id}`, `GET /api/reference/criteria/{id}/usage` —
   `{measureId, ingredients, extraFoods}`.
 - `POST /api/reference/criteria` (201), `PUT /api/reference/criteria/{id}` —
-  `{measure, size?, bedcaFoodId, grams | ml, note?}` (the same body as a diet's criterion). A second
+  `{measure, size?, compositionFoodId, grams | ml, note?}` (the same body as a diet's criterion). A second
   criterion for the same food, measure and size is a 400.
 - `DELETE /api/reference/criteria/{id}` (204) — one nothing is weighed by; otherwise a 400.
 
@@ -770,6 +797,7 @@ changing an entity, add a migration to match or startup fails.
 | `V13__create_recipes.sql` | `recipes`; `diet_dishes.recipe_id`, `servings`; `diet_ingredients` becomes `recipe_ingredients`; `raw_text` moves to the recipe |
 | `V14__global_measure_criteria.sql` | `ref_food_measures.global_criterion` + generated `criterion_key` (unique): the nutritionist's measure criteria for every diet |
 | `V15__create_composition_foods.sql` | `composition_foods`: CIQUAL 2025 + BLS 4.0 as published (`uk (source, source_code)`), plus fdiet's crosswalk columns (Spanish name, aliases, preferred, reviewed, SR Legacy edible portion) |
+| `V16__rekey_reference_foods_to_composition.sql` | `ref_rations` / `ref_food_measures`: `bedca_food_id` replaced by `composition_food_id` (FK, indexed), re-keyed through the approved BEDCA→CIQUAL/BLS mapping seeded in the migration; `criterion_key`, `ck_ref_food_measures_global` and `idx_ref_food_measures_global` rebuilt on it. A diet or global criterion without an equivalent stops the migration by name (`SIGNAL`), before anything changes; a published row without one is made inert until the next sync |
 
 ## Data files and licensing
 

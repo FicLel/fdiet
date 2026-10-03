@@ -60,3 +60,10 @@ Append-only. Newest at the bottom. A reversed decision gets a new entry naming t
 - **2026-10-03** — Qualified values (traces, <LOQ, -, TR…) are stored as **null without keeping the original text**; the committed upstream file is the record. Replaces the 2026-10-03 design default "original text kept beside it".
 - **2026-10-03** — All 122 crosswalk rows (`reference-data/composition/composition-es/links.csv`) approved by the user. Caveat accepted: some USDA SR Legacy edible portions describe US as-purchased forms (nuts in shell 0.40–0.45, chicken bone-in 0.48), approved as-is.
 - **2026-10-03** — Correction to the 2026-10-03 entry on foods without energy: **145** CIQUAL foods, not 143 (143 publish `-`, 2 publish `traces`).
+
+## 2026-10-03 — FD-033 phase C (re-key reference data)
+
+- **2026-10-03** — Reference rows are re-keyed by **replacing** `bedca_food_id` with a composition-food key on `ref_rations` / `ref_food_measures` (published rows, diet criteria, global criteria) and in the reference CSVs; no BEDCA column kept beside it. Reason: user's call — simpler schema. Accepted cost: until phase D points ingredients at composition foods, id-keyed rations and measures match no BEDCA-matched ingredient (category + keyword rows still work).
+- **2026-10-03** — Each BEDCA→CIQUAL/BLS pick for a reference row is a **machine prefill the user approves**, like the phase B crosswalk; foods missing from `links.csv` are added there with Spanish head-first names, `reviewed=false` until approved.
+- **2026-10-03** — Nutritionist criteria (diet and global) keyed on a BEDCA food are **re-keyed through the same approved mapping**; one without an equivalent is reported, never re-pointed by guess. (Dev DB holds none today.)
+- **2026-10-03** — FD-033 C mapping list approved as proposed: all 60 picks, incl. piña en su jugo → CIQUAL 13716 (crosswalk row now approved), melón → CIQUAL 13742 (honeydew), nectarina → CIQUAL 13148 (yellow), pomelo → BLS F604100 (kept over CIQUAL 13040), tomate triturado → CIQUAL 20169. Reason: user's call.

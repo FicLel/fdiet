@@ -17,8 +17,7 @@ import { criterionFor, unitsWeight, weighs } from '@/domain/measureCriteria'
 import { amount, stateWord } from '@/domain/rations'
 import BedcaFoodSearch from './BedcaFoodSearch.vue'
 import ComposerChoices from './ComposerChoices.vue'
-import MeasureCriteriaList from './MeasureCriteriaList.vue'
-import MeasureCriterionForm from './MeasureCriterionForm.vue'
+import GlobalCriteriaPanel from './GlobalCriteriaPanel.vue'
 
 /**
  * Writes a food into the cell from a ration or a household measure instead of
@@ -34,7 +33,10 @@ import MeasureCriterionForm from './MeasureCriterionForm.vue'
  * per unit, kept as her criterion; from then on it is written in units.
  *
  * `dietId` is null for a diet not yet saved and in the recipe library: the
- * global criteria weigh there too.
+ * global criteria weigh there too. A criterion names a CIQUAL / BLS food while
+ * this food is still BEDCA's (FD-033 phase C), so the criteria panel picks its
+ * own food, and a criterion saved now is listed there but not offered here
+ * until the foods are re-matched.
  */
 
 const props = defineProps<{
@@ -72,10 +74,8 @@ const STATES: { value: FoodState | ''; label: string }[] = [
   { value: 'DRAINED', label: 'Escurrido' },
 ]
 
-const globalCriteria = computed(() => measures.value.filter((measure) => measure.globalOwn))
-
 function loadMeasures(chosen: BedcaFood): Promise<FoodMeasure[]> {
-  return referenceApi.measures(chosen.id, {
+  return referenceApi.measures({ bedcaFoodId: chosen.id }, {
     dietId: props.dietId ?? undefined,
     profile: props.profileCode,
   })
@@ -92,7 +92,7 @@ async function pick(chosen: BedcaFood): Promise<void> {
   loadingOptions.value = true
   try {
     const [rationRows, measureRows] = await Promise.all([
-      referenceApi.rations(chosen.id, props.profileCode),
+      referenceApi.rations({ bedcaFoodId: chosen.id }, props.profileCode),
       loadMeasures(chosen),
     ])
     // Another food was picked, or the composer reset, while this one loaded.
@@ -170,21 +170,21 @@ async function refreshMeasures(selectId: number | null): Promise<void> {
     error.value = `No se pudieron leer sus medidas${cause instanceof Error ? `: ${cause.message}` : ''}`
     return
   }
-  const current = choice.value
-  const wanted = selectId ?? (current.kind === 'measure' ? current.measure.id : null)
-  if (wanted === null) {
-    return
-  }
-  const found = measures.value.find((measure) => measure.id === wanted)
+  const found = selectId === null ? undefined : measures.value.find((measure) => measure.id === selectId)
   if (found) {
     select({ kind: 'measure', measure: found })
-  } else if (current.kind === 'measure') {
+    return
+  }
+  // Not listed (a CIQUAL / BLS criterion, while this food is BEDCA's): the
+  // choice already made stands unless its own measure is gone.
+  const current = choice.value
+  if (current.kind === 'measure' && !measures.value.some((measure) => measure.id === current.measure.id)) {
     select(GRAMS_CHOICE)
   }
 }
 
+/** Selected here once the measures list it; until then the panel stays open, listing it. */
 function onCriterionSaved(criterion: FoodMeasure): void {
-  asking.value = null
   void refreshMeasures(criterion.id)
 }
 
@@ -294,13 +294,13 @@ async function add(): Promise<void> {
           tu propia unidad.
         </p>
 
-        <MeasureCriterionForm
+        <GlobalCriteriaPanel
           v-if="asking"
           :key="asking.from?.id ?? 'new'"
-          :bedca-food-id="food.id"
+          :hint="food.name"
           :from="asking.from"
           @saved="onCriterionSaved"
-          @cancel="asking = null"
+          @close="asking = null"
         />
 
         <template v-else>
@@ -348,11 +348,6 @@ async function add(): Promise<void> {
           </button>
         </template>
 
-        <MeasureCriteriaList
-          v-if="globalCriteria.length > 0"
-          :criteria="globalCriteria"
-          @changed="refreshMeasures(null)"
-        />
       </template>
 
       <p v-if="added" class="done">Añadido: {{ added }}</p>

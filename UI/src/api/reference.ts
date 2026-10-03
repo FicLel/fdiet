@@ -13,6 +13,16 @@ import type {
 const CRITERIA = '/reference/criteria'
 
 /**
+ * Which food a reference question is about: exactly one of the two keys (both
+ * is a 400). The reference rows and criteria name composition foods (CIQUAL /
+ * BLS); `bedcaFoodId` is the transitional key for the callers still holding a
+ * BEDCA match (ingredients, extras, the composer) until those are re-matched.
+ * Asked by a BEDCA food, only family + keyword rows answer: no per-food row and
+ * no criterion.
+ */
+export type ReferenceFoodKey = { compositionFoodId: number } | { bedcaFoodId: number }
+
+/**
  * The reference layer: which populations a diet can be read against, the
  * rations and household measures each source publishes, and the attribution
  * every one of those figures has to be shown with.
@@ -33,8 +43,8 @@ export const referenceApi = {
     ),
 
   /** The rations covering one food: the profile's own first, then per-food rations of other sources. */
-  rations: (bedcaFoodId: number, profile?: string | null) =>
-    http.get<Ration[]>(`/reference/rations${query({ bedcaFoodId, profile: profile ?? undefined })}`),
+  rations: (food: ReferenceFoodKey, profile?: string | null) =>
+    http.get<Ration[]>(`/reference/rations${query({ ...food, profile: profile ?? undefined })}`),
 
   /**
    * The household measures that can weigh a food, narrowed to one written unit
@@ -42,12 +52,12 @@ export const referenceApi = {
    * then the published rows — ranges included.
    */
   measures: (
-    bedcaFoodId: number,
+    food: ReferenceFoodKey,
     options: { unit?: string; dietId?: number; profile?: string | null } = {},
   ) =>
     http.get<FoodMeasure[]>(
       `/reference/measures${query({
-        bedcaFoodId,
+        ...food,
         unit: options.unit,
         dietId: options.dietId,
         profile: options.profile ?? undefined,
@@ -60,8 +70,8 @@ export const referenceApi = {
     http.get<ExchangeSystem[]>(`/reference/exchange-systems${query({ clinical })}`),
 
   /** The nutritionist's global criteria, every one or one food's. Not paged. */
-  criteria: (bedcaFoodId?: number) =>
-    http.get<FoodMeasure[]>(`${CRITERIA}${query({ bedcaFoodId })}`),
+  criteria: (compositionFoodId?: number) =>
+    http.get<FoodMeasure[]>(`${CRITERIA}${query({ compositionFoodId })}`),
 
   /** What a change to the criterion would reach now, in every diet. */
   criterionUsage: (id: number) => http.get<MeasureUsage>(`${CRITERIA}/${id}/usage`),

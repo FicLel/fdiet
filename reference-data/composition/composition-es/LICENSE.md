@@ -22,7 +22,7 @@ One row per food a Spanish name points at.
 | `preferred` | when two rows claim the same name or alias, the one that answers it; exactly one of them may be preferred |
 | `edible_portion` | the edible fraction of the food as purchased, `1 − refuse/100` of the SR Legacy food below; blank when none fits |
 | `edible_portion_fdc_id` | the SR Legacy food (FoodData Central id) the edible portion was taken from |
-| `reviewed` | `true` once a person has approved the row; all 122 rows were approved by the project owner on 2026-10-03 |
+| `reviewed` | `true` once a person has approved the row; the 122 rows of phase B were approved by the project owner on 2026-10-03, and the one added in phase C (CIQUAL 13716) awaits approval |
 | `note` | why a choice was made |
 
 Matching on these names is exact (case and accents ignored): a name or alias either names a food or
@@ -37,8 +37,13 @@ it describes the purchase the row means. A blank edible portion still refuses a 
 
 Scope today: the foods of `example-ui.xlsx` "Dieta 1" and the BEDCA foods fdiet referenced on
 2026-10-03 (FD-033 phase B). Not linked on purpose, because neither source has a defensible
-equivalent: néctar de ciruela, piña en su jugo, queso fresco de Burgos, hummus casero, bacalao
-desalado, salsa de soja baja en sodio. The rest of both tables is FD-036.
+equivalent: néctar de ciruela, queso fresco de Burgos, hummus casero, bacalao desalado, salsa de soja
+baja en sodio. The rest of both tables is FD-036.
+
+Phase C (2026-10-03) added one row, `reviewed=false` until approved: piña en su jugo, which phase B
+had listed as without an equivalent, is CIQUAL 13716 (pineapple in its own juice, canned, drained). It
+is the food the 5 al día row of that name now names; see `product/spikes/FD-033-C-rekey-mapping.md`.
+Every food a reference CSV names (`composition_source`, `composition_code`) is a row of this file.
 
 ## `ciqual_no_energy.csv`
 

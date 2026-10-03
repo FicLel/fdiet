@@ -169,7 +169,7 @@ class CompositionDataFilesTest {
     @Test
     void linksEveryCrosswalkRowToAFoodThatExists() {
         assertThat(summary.linksUnmatched()).isEmpty();
-        assertThat(summary.linked()).isEqualTo(122);
+        assertThat(summary.linked()).isEqualTo(123);
     }
 
     /**
@@ -185,7 +185,7 @@ class CompositionDataFilesTest {
         assertThat(refuse).hasSize(7751);
         List<CompositionLinkDto> links = new CompositionLinkReader(new DataReader("fooddata.csv")).read(LINKS);
 
-        assertThat(links).filteredOn(link -> link.ediblePortion() != null).hasSize(117)
+        assertThat(links).filteredOn(link -> link.ediblePortion() != null).hasSize(118)
                 .allSatisfy(link -> assertThat(link.ediblePortion()).isEqualByComparingTo(
                         BigDecimal.ONE.subtract(refuse.get(link.ediblePortionFdcId())
                                 .movePointLeft(2))));
@@ -195,7 +195,7 @@ class CompositionDataFilesTest {
 
     /**
      * The Spanish names are written head first, BEDCA style, so the categoriser
-     * tuned to BEDCA reads them: 120 of the 122. The two it leaves are a herb mix
+     * tuned to BEDCA reads them: 121 of the 123. The two it leaves are a herb mix
      * and a dip, which no categoriser rule claims yet.
      */
     @Test

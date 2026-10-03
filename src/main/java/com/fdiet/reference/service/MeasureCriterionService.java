@@ -2,8 +2,8 @@ package com.fdiet.reference.service;
 
 import com.fdiet.alternative.helpers.IFoodCategoriser;
 import com.fdiet.common.helper.Texts;
-import com.fdiet.food.model.BedcaFood;
-import com.fdiet.food.service.IBedcaFoodService;
+import com.fdiet.food.model.CompositionFood;
+import com.fdiet.food.service.ICompositionFoodService;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.MeasureUser;
 import com.fdiet.reference.domain.WeightBasis;
@@ -48,7 +48,7 @@ public class MeasureCriterionService implements IMeasureCriterionService {
     private final ReferenceFoodMeasureRepository measureRepository;
     private final IReferenceMapper mapper;
     private final IFoodCategoriser categoriser;
-    private final IBedcaFoodService bedcaFoodService;
+    private final ICompositionFoodService compositionFoodService;
 
     /**
      * Looked up when counted, not at construction: the counters are the recipe
@@ -60,12 +60,12 @@ public class MeasureCriterionService implements IMeasureCriterionService {
     public MeasureCriterionService(ReferenceFoodMeasureRepository measureRepository,
                                    IReferenceMapper mapper,
                                    IFoodCategoriser categoriser,
-                                   IBedcaFoodService bedcaFoodService,
+                                   ICompositionFoodService compositionFoodService,
                                    ObjectProvider<IMeasureUsageCounter> counters) {
         this.measureRepository = measureRepository;
         this.mapper = mapper;
         this.categoriser = categoriser;
-        this.bedcaFoodService = bedcaFoodService;
+        this.compositionFoodService = compositionFoodService;
         this.counters = counters;
     }
 
@@ -79,11 +79,12 @@ public class MeasureCriterionService implements IMeasureCriterionService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<FoodMeasureDto> globalRows(Collection<Long> bedcaFoodIds) {
-        if (bedcaFoodIds.isEmpty()) {
+    public List<FoodMeasureDto> globalRows(Collection<Long> compositionFoodIds) {
+        if (compositionFoodIds.isEmpty()) {
             return List.of();
         }
-        return measureRepository.findByGlobalCriterionTrueAndBedcaFoodIdInOrderByIdAsc(bedcaFoodIds)
+        return measureRepository
+                .findByGlobalCriterionTrueAndCompositionFoodIdInOrderByIdAsc(compositionFoodIds)
                 .stream()
                 .map(mapper::toDto)
                 .toList();
@@ -93,7 +94,7 @@ public class MeasureCriterionService implements IMeasureCriterionService {
     @Transactional
     public FoodMeasureDto saveDietMeasure(Long dietId, MeasureCriterionRequestDto request) {
         requireOneWeight(request);
-        BedcaFood food = bedcaFoodService.entityById(request.bedcaFoodId());
+        CompositionFood food = compositionFoodService.entityById(request.compositionFoodId());
         ReferenceFoodMeasure measure = measureRepository.findByDietIdOrderByIdAsc(dietId).stream()
                 .filter(row -> sameSlot(row, request))
                 .findFirst()
@@ -124,7 +125,7 @@ public class MeasureCriterionService implements IMeasureCriterionService {
             copy.setMeasure(row.getMeasure());
             copy.setSize(row.getSize());
             copy.setCount(row.getCount());
-            copy.setBedcaFoodId(row.getBedcaFoodId());
+            copy.setCompositionFoodId(row.getCompositionFoodId());
             copy.setFoodCategory(row.getFoodCategory());
             copy.setKeywords(row.getKeywords());
             copy.setFoodLabel(row.getFoodLabel());
@@ -150,9 +151,9 @@ public class MeasureCriterionService implements IMeasureCriterionService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<FoodMeasureDto> globalCriteria(Long bedcaFoodId) {
-        if (bedcaFoodId != null) {
-            return globalRows(List.of(bedcaFoodId));
+    public List<FoodMeasureDto> globalCriteria(Long compositionFoodId) {
+        if (compositionFoodId != null) {
+            return globalRows(List.of(compositionFoodId));
         }
         return measureRepository.findByGlobalCriterionTrueOrderByFoodLabelAscIdAsc().stream()
                 .map(mapper::toDto)
@@ -169,7 +170,7 @@ public class MeasureCriterionService implements IMeasureCriterionService {
     @Transactional
     public FoodMeasureDto createGlobal(MeasureCriterionRequestDto request) {
         requireOneWeight(request);
-        BedcaFood food = bedcaFoodService.entityById(request.bedcaFoodId());
+        CompositionFood food = compositionFoodService.entityById(request.compositionFoodId());
         requireSlotFree(request, null);
         ReferenceFoodMeasure measure = new ReferenceFoodMeasure();
         measure.setDietId(null);
@@ -192,7 +193,7 @@ public class MeasureCriterionService implements IMeasureCriterionService {
             }
             requireSlotFree(request, id);
         }
-        BedcaFood food = bedcaFoodService.entityById(request.bedcaFoodId());
+        CompositionFood food = compositionFoodService.entityById(request.compositionFoodId());
         write(measure, food, request);
         return mapper.toDto(save(measure));
     }
@@ -235,8 +236,8 @@ public class MeasureCriterionService implements IMeasureCriterionService {
 
     /** The unique index on {@code criterion_key} is underneath for the write this check races with. */
     private void requireSlotFree(MeasureCriterionRequestDto request, Long self) {
-        measureRepository.findByGlobalCriterionTrueAndBedcaFoodIdInOrderByIdAsc(
-                        List.of(request.bedcaFoodId())).stream()
+        measureRepository.findByGlobalCriterionTrueAndCompositionFoodIdInOrderByIdAsc(
+                        List.of(request.compositionFoodId())).stream()
                 .filter(row -> sameSlot(row, request) && !row.getId().equals(self))
                 .findFirst()
                 .ifPresent(holder -> {
@@ -258,17 +259,22 @@ public class MeasureCriterionService implements IMeasureCriterionService {
                 + ". Change that one instead");
     }
 
-    /** The row as a person filled it in: one measure, one point weight, the edible part. */
-    private void write(ReferenceFoodMeasure measure, BedcaFood food, MeasureCriterionRequestDto request) {
+    /**
+     * The row as a person filled it in: one measure, one point weight, the edible
+     * part. Its family is read off the food's Spanish name, and is null for a
+     * food the crosswalk has not named yet — the row still weighs that food, by id.
+     */
+    private void write(ReferenceFoodMeasure measure, CompositionFood food,
+                       MeasureCriterionRequestDto request) {
         measure.setSource(null);
         measure.setCode(null);
         measure.setMeasure(request.measure());
         measure.setSize(request.size());
         measure.setCount(BigDecimal.ONE);
-        measure.setBedcaFoodId(food.getId());
-        measure.setFoodCategory(categoriser.of(food.getName()));
+        measure.setCompositionFoodId(food.getId());
+        measure.setFoodCategory(food.getNameEs() == null ? null : categoriser.of(food.getNameEs()));
         measure.setKeywords(null);
-        measure.setFoodLabel(Texts.truncate(food.getName(), LABEL_MAX));
+        measure.setFoodLabel(Texts.truncate(food.label(), LABEL_MAX));
         measure.setGramsMin(request.grams());
         measure.setGramsMax(request.grams());
         measure.setMlMin(request.ml());
@@ -290,7 +296,7 @@ public class MeasureCriterionService implements IMeasureCriterionService {
 
     private static boolean sameSlot(ReferenceFoodMeasure row, MeasureCriterionRequestDto request) {
         return row.getMeasure() == request.measure()
-                && Objects.equals(row.getBedcaFoodId(), request.bedcaFoodId())
+                && Objects.equals(row.getCompositionFoodId(), request.compositionFoodId())
                 && row.getSize() == request.size();
     }
 

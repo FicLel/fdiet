@@ -14,13 +14,14 @@ import java.math.BigDecimal;
  * {@code /api/reference/criteria}, for every diet ("1 huevo mediano son 58 g").
  *
  * <p>Exactly one of {@code grams} and {@code ml}. It weighs one measure of one
- * composition-database food; a size narrows it to the pieces written with that
- * size. The weight is what one measure puts on the plate, the edible part.
+ * composition food (CIQUAL 2025 or BLS 4.0, as {@code /api/composition} lists
+ * them); a size narrows it to the pieces written with that size. The weight is
+ * what one measure puts on the plate, the edible part.
  */
 public record MeasureCriterionRequestDto(
         @NotNull HouseholdMeasure measure,
         PortionSize size,
-        @NotNull Long bedcaFoodId,
+        @NotNull Long compositionFoodId,
         @Positive BigDecimal grams,
         @Positive BigDecimal ml,
         @Size(max = 500) String note) {

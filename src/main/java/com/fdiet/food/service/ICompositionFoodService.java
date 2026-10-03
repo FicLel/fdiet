@@ -3,6 +3,7 @@ package com.fdiet.food.service;
 import com.fdiet.common.dto.PageDto;
 import com.fdiet.food.dto.CompositionFoodDto;
 import com.fdiet.food.dto.CompositionFoodRowDto;
+import com.fdiet.food.dto.CompositionKey;
 import com.fdiet.food.dto.CompositionStoreResultDto;
 import com.fdiet.food.model.CompositionFood;
 
@@ -44,6 +45,13 @@ public interface ICompositionFoodService {
 
     /** The foods with those ids, keyed by id. A single {@code findAllById}. */
     Map<Long, CompositionFood> entitiesByIds(Collection<Long> ids);
+
+    /**
+     * The ids of the foods those stable keys name — {@code (source, source_code)},
+     * which survive every sync while an id differs per installation. A key
+     * nothing answers is absent. At most one query (the index), however many keys.
+     */
+    Map<CompositionKey, Long> idsByKey(Collection<CompositionKey> keys);
 
     /** Whether nothing has been synced yet. */
     boolean isEmpty();

@@ -28,8 +28,8 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -256,7 +256,7 @@ class AlternativeServiceTest {
     @Test
     void readsTheEquivalentWeightInTheProfilesRations() {
         when(reference.profileExists("AESAN-2022:ADULTOS")).thenReturn(true);
-        when(reference.countingRation(eq("AESAN-2022:ADULTOS"), anyLong(), anyString()))
+        when(reference.countingRation(eq("AESAN-2022:ADULTOS"), isNull(), anyString()))
                 .thenReturn(meatRation(FoodState.UNSPECIFIED));
 
         FoodAlternativesDto alternatives = service.forFoodId(CHICKEN_BREAST,
@@ -274,7 +274,7 @@ class AlternativeServiceTest {
     @Test
     void countsNoRationDefinedInAnotherState() {
         when(reference.profileExists("AESAN-2022:ADULTOS")).thenReturn(true);
-        when(reference.countingRation(eq("AESAN-2022:ADULTOS"), anyLong(), anyString()))
+        when(reference.countingRation(eq("AESAN-2022:ADULTOS"), isNull(), anyString()))
                 .thenReturn(meatRation(FoodState.RAW));
 
         FoodAlternativesDto alternatives = service.forFoodId(CHICKEN_BREAST,

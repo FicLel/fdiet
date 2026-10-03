@@ -274,7 +274,7 @@ async function loadMeasures(): Promise<void> {
   }
   loadingMeasures.value = true
   try {
-    const rows = await referenceApi.measures(at.bedcaFoodId, {
+    const rows = await referenceApi.measures({ bedcaFoodId: at.bedcaFoodId }, {
       unit: at.unit,
       dietId: draft.diet.value?.id,
       profile: draft.diet.value?.referenceProfileCode,
@@ -344,45 +344,6 @@ async function confirmQuantity(value: number): Promise<void> {
     target.value = locate(at.row, at.day, updated)
   } catch (cause) {
     error.value = `No se pudo fijar la cantidad${cause instanceof Error ? `: ${cause.message}` : ''}`
-  } finally {
-    savingMeasure.value = false
-  }
-}
-
-/**
- * The nutritionist's own weight for this measure of this food, for this diet
- * only. It is attached to every ingredient of the week it now weighs, so the
- * week is read again rather than patched one row at a time.
- */
-async function saveOwnMeasure(value: number, unit: 'g' | 'ml', note: string): Promise<number | null> {
-  const at = target.value
-  const plan = draft.diet.value
-  const word = measureWord.value
-  if (!at || !plan || !word || at.bedcaFoodId === null || savingMeasure.value || !(value > 0)) {
-    return null
-  }
-  savingMeasure.value = true
-  error.value = null
-  try {
-    const saved = await dietsApi.saveMeasure(plan.id, {
-      measure: word,
-      size: at.size,
-      bedcaFoodId: at.bedcaFoodId,
-      grams: unit === 'g' ? value : null,
-      ml: unit === 'ml' ? value : null,
-      note: note.trim() || null,
-    })
-    const id = at.id
-    await draft.refresh()
-    const fresh = draft.findIngredient(id)
-    if (fresh) {
-      target.value = fresh
-    }
-    await loadMeasures()
-    return saved.attached
-  } catch (cause) {
-    error.value = `No se pudo guardar el criterio${cause instanceof Error ? `: ${cause.message}` : ''}`
-    return null
   } finally {
     savingMeasure.value = false
   }
@@ -507,7 +468,7 @@ export function useFoodLink() {
     focus,
     pickMeasure,
     confirmQuantity,
-    saveOwnMeasure,
+    loadMeasures,
     review,
     close,
     skip,

@@ -41,9 +41,9 @@ public class MeasureCriterionController {
     }
 
     @GetMapping
-    @Operation(summary = "Every global criterion, by food; with bedcaFoodId, that food's")
-    public List<FoodMeasureDto> list(@RequestParam(required = false) Long bedcaFoodId) {
-        return criterionService.globalCriteria(bedcaFoodId);
+    @Operation(summary = "Every global criterion, by food; with compositionFoodId, that food's")
+    public List<FoodMeasureDto> list(@RequestParam(required = false) Long compositionFoodId) {
+        return criterionService.globalCriteria(compositionFoodId);
     }
 
     @GetMapping("/{id}")
@@ -61,7 +61,7 @@ public class MeasureCriterionController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "A new global criterion: {measure, size?, bedcaFoodId, grams | ml, note?}. "
+    @Operation(summary = "A new global criterion: {measure, size?, compositionFoodId, grams | ml, note?}. "
             + "One per food, measure and size")
     public FoodMeasureDto create(@Valid @RequestBody MeasureCriterionRequestDto request) {
         return criterionService.createGlobal(request);

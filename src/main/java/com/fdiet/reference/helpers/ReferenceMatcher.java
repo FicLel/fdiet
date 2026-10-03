@@ -61,7 +61,7 @@ public class ReferenceMatcher {
                                           List<FoodMeasureDto> global, MeasureQueryDto query,
                                           FoodCategory category, String profileSourceCode) {
         HouseholdMeasure measure = HouseholdMeasure.ofUnit(query.unit()).orElse(null);
-        if (measure == null || query.bedcaFoodId() == null) {
+        if (measure == null || !query.namesAFood()) {
             return MeasureChoiceDto.NONE;
         }
         FoodState foodState = FoodState.ofFoodName(query.foodName());
@@ -120,12 +120,13 @@ public class ReferenceMatcher {
      * The rations that cover a food, most specific first: the rows naming it
      * outright, then the family rows whose keywords fit its name best.
      */
-    public List<RationDto> rationsCovering(List<RationDto> rations, Long bedcaFoodId,
+    public List<RationDto> rationsCovering(List<RationDto> rations, Long compositionFoodId,
                                            String foodName, FoodCategory category) {
         return narrowest(rations.stream()
-                .filter(ration -> covers(ration.bedcaFoodId(), ration.foodCategory(),
-                        ration.keywords(), bedcaFoodId, foodName, category))
-                .toList(), RationDto::bedcaFoodId, RationDto::keywords, bedcaFoodId, foodName);
+                .filter(ration -> covers(ration.compositionFoodId(), ration.foodCategory(),
+                        ration.keywords(), compositionFoodId, foodName, category))
+                .toList(), RationDto::compositionFoodId, RationDto::keywords, compositionFoodId,
+                foodName);
     }
 
     /**
@@ -136,9 +137,10 @@ public class ReferenceMatcher {
      * course against a side) has several rows for it; the main-course one is the
      * ration, and a role any narrower is not assumed.
      */
-    public RationDto countingRation(List<RationDto> profileRations, Long bedcaFoodId,
+    public RationDto countingRation(List<RationDto> profileRations, Long compositionFoodId,
                                     String foodName, FoodCategory category) {
-        List<RationDto> covering = rationsCovering(profileRations, bedcaFoodId, foodName, category);
+        List<RationDto> covering = rationsCovering(profileRations, compositionFoodId, foodName,
+                category);
         if (covering.size() == 1) {
             return covering.get(0);
         }
@@ -185,13 +187,13 @@ public class ReferenceMatcher {
                                                    FoodState foodState) {
         List<FoodMeasureDto> covering = rows.stream()
                 .filter(row -> row.measure() == measure)
-                .filter(row -> covers(row.bedcaFoodId(), row.foodCategory(), row.keywords(),
-                        query.bedcaFoodId(), query.foodName(), category))
+                .filter(row -> covers(row.compositionFoodId(), row.foodCategory(), row.keywords(),
+                        query.compositionFoodId(), query.foodName(), category))
                 .filter(row -> query.size() == null || row.size() == null || row.size() == query.size())
                 .filter(row -> !FoodState.disagree(row.state(), foodState))
                 .toList();
-        covering = narrowest(covering, FoodMeasureDto::bedcaFoodId, FoodMeasureDto::keywords,
-                query.bedcaFoodId(), query.foodName());
+        covering = narrowest(covering, FoodMeasureDto::compositionFoodId, FoodMeasureDto::keywords,
+                query.compositionFoodId(), query.foodName());
         PortionSize size = query.size();
         if (size != null && covering.stream().anyMatch(row -> row.size() == size)) {
             covering = covering.stream().filter(row -> row.size() == size).toList();
@@ -204,10 +206,11 @@ public class ReferenceMatcher {
      * family; among family rows, the most specific keywords win.
      */
     private static <T> List<T> narrowest(List<T> rows, Function<T, Long> foodIdOf,
-                                         Function<T, String> keywordsOf, Long bedcaFoodId,
+                                         Function<T, String> keywordsOf, Long compositionFoodId,
                                          String foodName) {
         List<T> named = rows.stream()
-                .filter(row -> foodIdOf.apply(row) != null && foodIdOf.apply(row).equals(bedcaFoodId))
+                .filter(row -> foodIdOf.apply(row) != null
+                        && foodIdOf.apply(row).equals(compositionFoodId))
                 .toList();
         if (!named.isEmpty()) {
             return named;
@@ -220,10 +223,15 @@ public class ReferenceMatcher {
                 .toList();
     }
 
+    /**
+     * A row naming a food covers that composition food and nothing else — never
+     * a food known only by its name, whose id (a BEDCA one, until FD-033 phase D)
+     * is not a composition id. A family row covers the names its keywords fit.
+     */
     private static boolean covers(Long rowFoodId, FoodCategory rowCategory, String rowKeywords,
-                                  Long bedcaFoodId, String foodName, FoodCategory category) {
+                                  Long compositionFoodId, String foodName, FoodCategory category) {
         if (rowFoodId != null) {
-            return rowFoodId.equals(bedcaFoodId);
+            return rowFoodId.equals(compositionFoodId);
         }
         if (rowCategory == null || rowCategory != category) {
             return false;

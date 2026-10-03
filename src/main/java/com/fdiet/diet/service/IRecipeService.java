@@ -83,8 +83,9 @@ public interface IRecipeService {
 
     /**
      * Attaches the diet's own measure to every ingredient of its private recipes
-     * that it now weighs. Answers how many.
+     * that it now weighs — those matched to its composition food, none until
+     * FD-033 phase D gives ingredients one. Answers how many.
      */
-    int attachDietMeasure(Collection<Long> recipeIds, Long bedcaFoodId, HouseholdMeasure measure,
+    int attachDietMeasure(Collection<Long> recipeIds, Long compositionFoodId, HouseholdMeasure measure,
                           Long dietId, String profile);
 }

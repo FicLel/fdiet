@@ -1,27 +1,36 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { catalogueApi } from '@/api/catalogue'
-import type { BedcaFood } from '@/api/types'
+import type { CompositionFood } from '@/api/compositionTypes'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+import { compositionFoodName } from '@/domain/compositionFood'
 
 /**
- * A search box over the composition database: type, wait a beat, pick one of
- * the few best names. Only the last search typed is ever shown.
+ * A search box over the open composition tables (CIQUAL 2025, BLS 4.0): type,
+ * wait a beat, pick one. Each food says which table it comes from, since the
+ * two measure protein and energy differently.
  *
- * The backend matches the term word by word (accents, case and plurals
- * ignored) and answers best first, so `pan de molde` finds
- * `Pan blanco, de molde, tostado`. The order is shown as it comes: no ranking
- * happens here.
+ * `initialTerm` starts the box with a word — the name of the food already on
+ * screen — and searches it, so the likely answer is one click away. Nothing is
+ * picked on its own: the list is an offer.
  */
+const props = defineProps<{ initialTerm?: string }>()
 
-const emit = defineEmits<{ pick: [food: BedcaFood] }>()
+const emit = defineEmits<{ pick: [food: CompositionFood] }>()
 
 const SEARCH_SIZE = 8
 
 const { term, results, searching, failed, search, clear } = useDebouncedSearch((name) =>
-  catalogueApi.bedca(name, 0, SEARCH_SIZE).then((page) => page.content),
+  catalogueApi.composition(name, 0, SEARCH_SIZE).then((page) => page.content),
 )
 
-function pick(food: BedcaFood): void {
+onMounted(() => {
+  if (props.initialTerm) {
+    search(props.initialTerm)
+  }
+})
+
+function pick(food: CompositionFood): void {
   clear()
   emit('pick', food)
 }
@@ -32,20 +41,26 @@ function pick(food: BedcaFood): void {
     <input
       class="input"
       :value="term"
-      placeholder="Buscar un alimento genérico"
-      aria-label="Buscar un alimento genérico"
+      placeholder="Buscar en CIQUAL o BLS"
+      aria-label="Buscar un alimento en CIQUAL o BLS"
       @input="search(($event.target as HTMLInputElement).value)"
     />
     <p v-if="searching" class="hint">Buscando…</p>
     <p v-else-if="failed" class="hint">No se pudo buscar. Comprueba la conexión con el servidor.</p>
     <ul v-if="!searching && results.length > 0" class="results">
       <li v-for="result in results" :key="result.id">
-        <button class="result" type="button" @click="pick(result)">{{ result.name }}</button>
+        <button class="result" type="button" :title="result.attribution" @click="pick(result)">
+          <span class="name">{{ compositionFoodName(result) }}</span>
+          <span class="meta">
+            {{ result.sourceLabel }}
+            <template v-if="result.nameEs === null"> · sin nombre en español</template>
+          </span>
+        </button>
       </li>
     </ul>
     <p v-else-if="!searching && !failed && term.trim() !== ''" class="hint">
-      Ningún alimento genérico comparte una palabra con esa búsqueda. Los nombres siguen BEDCA, de lo general a
-      lo particular: «huevo», «pan blanco», «jamón serrano».
+      Ningún alimento de CIQUAL o BLS se llama así. Prueba con su nombre en español, en inglés o en
+      francés.
     </p>
   </div>
 </template>
@@ -78,6 +93,9 @@ function pick(food: BedcaFood): void {
 }
 
 .result {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   width: 100%;
   padding: 6px 8px;
   border: 1px solid var(--line-soft);
@@ -91,6 +109,17 @@ function pick(food: BedcaFood): void {
 .result:hover {
   border-color: var(--sage-200);
   background: var(--sage-50);
+}
+
+.name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.meta {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--ink-muted);
 }
 
 .hint {

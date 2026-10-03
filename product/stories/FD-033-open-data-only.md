@@ -1,6 +1,6 @@
 # FD-033 Open data only — replace and remove BEDCA and every non-open source
 
-Status: in progress (phase A done 2026-10-03; B implemented + tech-lead reviewed 2026-10-03, 299 tests green, uncommitted) · Size: L (epic — phases below become their own ids when refined) · Created: 2026-10-02
+Status: in progress (A done; B done, committed 2e999db; C mapping approved 2026-10-03, piña row wired, 313 tests green, ready to commit) · Size: L (epic — phases below become their own ids when refined) · Created: 2026-10-02
 For: nutritionist (and anyone who installs or reuses fdiet)
 
 ## Problem
@@ -68,10 +68,17 @@ suggestion index (`NameMatcher`), `FoodCategoriser` (956/957 names), `FoodState`
 - **C — Re-key reference data (M):** every `bedca_food_id` in `reference-data/*/rations.csv`,
   `food_measures.csv` and the `ref_*` rows (incl. diet and global criteria) pointing at the new food;
   5 al día stays CC BY-SA with the change listed in its `LICENSE.md`.
+  **Status 2026-10-03:** backend (V16) + frontend + tech-lead review done, **uncommitted**. Mapping approved by the
+  user 2026-10-03 (decision 18). Left: backend marks CIQUAL 13716 `reviewed=true` and adds 1167→13716 to V16's
+  mapping, tests green; then commit. Was waiting on approval of `product/spikes/FD-033-C-rekey-mapping.md` (1 LOW: CIQUAL 13716 piña en su jugo `reviewed=false`;
+  4 MEDIUM: melón, nectarina, pomelo, tomate triturado) and it is committed. Follow-ups: FD-039–FD-042, FD-013.
 - **D — Reset existing matches (S–M):** every `recipe_ingredients` / `extra_foods` `bedca_food_id` set to null
   (`raw_name` kept), re-matched by the nutritionist through the fix-up list with suggestions; before/after report of totals and match counts per diet.
+  Notes from C review: `attachDietMeasure` must pass the ingredient's Spanish name (`foodName` null today);
+  drop the wasted `criteria.dietRows` query for BEDCA foods; the composer's range measure becomes writable in
+  units once ingredients carry composition ids. FD-039 (picked measure dropped on save) may be folded in here.
 - **E — Remove (M):** `bedca_foods.csv`, `BEDCA-ATTRIBUTION.txt`, the table, columns, FKs, `/api/bedca`,
-  the BEDCA footer line; migration drops them. Verify no gated source anywhere; licence audit table.
+  the BEDCA footer line; migration drops them. FD-041 (footer credits CIQUAL / BLS) may be done here. Verify no gated source anywhere; licence audit table.
 
 ## Acceptance criteria
 - [ ] `reference-data/sources.csv` (or the FD-034 manifest) has a licence-audit view: every remaining
@@ -150,6 +157,15 @@ suggestion index (`NameMatcher`), `FoodCategoriser` (956/957 names), `FoodState`
     Settles decision 8.
 14. All **122 crosswalk rows approved** (`reviewed=true`). Caveat accepted: some USDA SR Legacy edible portions
     describe US as-purchased forms (nuts in shell 0.40–0.45, chicken bone-in 0.48) and were approved as-is.
+
+## Decisions (user, 2026-10-03 — phase C)
+15. **Replace** `bedca_food_id` with a composition-food key on `ref_rations` / `ref_food_measures` and the reference CSVs now;
+    no BEDCA column beside it. Accepted: id-keyed rows match no BEDCA-matched ingredient until D.
+16. BEDCA→CIQUAL/BLS pick per reference row: **machine prefill, user approves**; missing foods added to `links.csv`
+    head-first, `reviewed=false` until approved.
+17. Diet and global criteria re-keyed through the same approved mapping; no equivalent → reported, not guessed.
+18. Mapping list `product/spikes/FD-033-C-rekey-mapping.md` approved as proposed (2026-10-03): piña en su jugo → CIQUAL 13716
+    (row `reviewed=true`), melón → CIQUAL 13742, nectarina → CIQUAL 13148, pomelo → BLS F604100, tomate triturado → CIQUAL 20169.
 
 ## Open questions
 _None blocking. (Edible portion closed 2026-10-03 — decision 11.)_

@@ -65,29 +65,36 @@ public class ReferenceController {
     }
 
     @GetMapping("/rations")
-    @Operation(summary = "Rations. With bedcaFoodId, the ones covering that food: the profile's "
-            + "own first, then published per-food rations of other sources")
+    @Operation(summary = "Rations. With compositionFoodId, the ones covering that food: the "
+            + "profile's own first, then published per-food rations of other sources. "
+            + "bedcaFoodId instead, until FD-033 phase D: only the family rows its name fits")
     public List<RationDto> rations(@RequestParam(required = false) String profile,
+                                   @RequestParam(required = false) Long compositionFoodId,
                                    @RequestParam(required = false) Long bedcaFoodId) {
-        return referenceService.rationsForFood(profile, bedcaFoodId);
+        return referenceService.rationsForFood(profile, compositionFoodId, bedcaFoodId);
     }
 
     @GetMapping("/measures")
     @Operation(summary = "The household measures that can weigh a food, narrowed to one written "
-            + "unit when given. With dietId, that diet's own criteria come first")
-    public List<FoodMeasureDto> measures(@RequestParam Long bedcaFoodId,
+            + "unit when given. With dietId, that diet's own criteria come first. The food is "
+            + "compositionFoodId or, until FD-033 phase D, bedcaFoodId (family rows only)")
+    public List<FoodMeasureDto> measures(@RequestParam(required = false) Long compositionFoodId,
+                                         @RequestParam(required = false) Long bedcaFoodId,
                                          @RequestParam(required = false) String unit,
                                          @RequestParam(required = false) Long dietId,
                                          @RequestParam(required = false) String profile) {
-        return referenceService.measuresForFood(bedcaFoodId, unit, dietId, profile);
+        return referenceService.measuresForFood(compositionFoodId, bedcaFoodId, unit, dietId,
+                profile);
     }
 
     @GetMapping("/yields")
-    @Operation(summary = "Published cooking yields that could say what a composition-database "
-            + "food weighs raw or cooked, most specific first and those whose method the food's "
-            + "name states ahead of the rest. Offers only: nothing converts a quantity by them")
-    public List<YieldFactorDto> yields(@RequestParam Long bedcaFoodId) {
-        return referenceService.yieldFactorsForFood(bedcaFoodId);
+    @Operation(summary = "Published cooking yields that could say what a food weighs raw or "
+            + "cooked, most specific first and those whose method the food's name states ahead "
+            + "of the rest. Offers only: nothing converts a quantity by them. The food is "
+            + "compositionFoodId or, until FD-033 phase D, bedcaFoodId")
+    public List<YieldFactorDto> yields(@RequestParam(required = false) Long compositionFoodId,
+                                       @RequestParam(required = false) Long bedcaFoodId) {
+        return referenceService.yieldFactorsForFood(compositionFoodId, bedcaFoodId);
     }
 
     @GetMapping("/vocabulary")

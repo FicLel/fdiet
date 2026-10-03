@@ -360,7 +360,7 @@ export interface FoodMeasure {
   size: PortionSize | null
   count: number
   foodLabel: string | null
-  bedcaFoodId: number | null
+  compositionFoodId: number | null
   foodCategory: string | null
   keywords: string | null
   gramsMin: number | null
@@ -393,7 +393,7 @@ export interface FoodMeasure {
 export interface MeasureCriterionRequest {
   measure: HouseholdMeasure
   size?: PortionSize | null
-  bedcaFoodId: number
+  compositionFoodId: number
   grams?: number | null
   ml?: number | null
   note?: string | null
@@ -418,7 +418,7 @@ export interface Ration {
   foodCategory: string | null
   keywords: string | null
   foodLabel: string | null
-  bedcaFoodId: number | null
+  compositionFoodId: number | null
   role: string | null
   gramsMin: number | null
   gramsMax: number | null

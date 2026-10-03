@@ -206,7 +206,8 @@ public class AlternativeService implements IAlternativeService {
         if (profile == null || grams == null || grams.signum() <= 0) {
             return null;
         }
-        RationDto ration = referenceService.countingRation(profile, food.getId(), food.getName());
+        // A BEDCA food is counted by its name only: its id is not a composition id.
+        RationDto ration = referenceService.countingRation(profile, null, food.getName());
         if (ration == null
                 || FoodState.disagree(FoodState.ofFoodName(food.getName()), ration.state())) {
             return null;

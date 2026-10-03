@@ -26,7 +26,8 @@ import { useReference } from '@/stores/reference'
  * unidad"): the measure word comes from the backend's vocabulary.
  */
 const props = defineProps<{
-  bedcaFoodId: number
+  /** The CIQUAL / BLS food the criterion weighs. */
+  compositionFoodId: number
   from: FoodMeasure | null
 }>()
 
@@ -64,7 +65,7 @@ async function save(): Promise<void> {
   error.value = null
   try {
     const saved = await referenceApi.createCriterion(
-      criterionRequest(props.bedcaFoodId, measure.value, size.value, value.value!, unit.value),
+      criterionRequest(props.compositionFoodId, measure.value, size.value, value.value!, unit.value),
     )
     emit('saved', saved)
   } catch (cause) {
