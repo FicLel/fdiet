@@ -26,12 +26,15 @@ import java.time.LocalDateTime;
 
 /**
  * What a household measure of a food weighs, according to one source — or
- * according to one nutritionist, for one diet.
+ * according to the nutritionist, for one diet or for every diet.
  *
- * <p>Exactly one of {@link #source} and {@link #dietId} is set. A published row
- * is what a document says; a diet's row is the professional's criterion for that
- * diet ("en esta dieta, 1 cucharadita de AOVE son 5 ml") and is always shown as
- * such, never as a published figure.
+ * <p>A row is one of three kinds. A published row has a {@link #source} and a
+ * code: it is what a document says. A diet's row has a {@link #dietId}: the
+ * professional's criterion for that diet ("en esta dieta, 1 cucharadita de AOVE
+ * son 5 ml"). A {@linkplain #globalCriterion global criterion} has neither: her
+ * criterion for every diet ("1 huevo mediano son 58 g"). Both of hers are always
+ * shown as such, never as a published figure, and the reference sync — which
+ * addresses rows by code — never reaches them.
  *
  * <p>The published figure is kept as it was printed: "3 Uds. medianas, 180 g"
  * is a count of 3 and 180 g. One unit is divided out when it is read.
@@ -59,6 +62,14 @@ public class ReferenceFoodMeasure {
     /** The diet this row belongs to, when it is a nutritionist's own. A plain id: see the class note. */
     @Column(name = "diet_id")
     private Long dietId;
+
+    /**
+     * The nutritionist's criterion for every diet, belonging to no diet and no
+     * source. The generated {@code criterion_key} column beside it, not mapped
+     * here, keeps one per food, measure and size.
+     */
+    @Column(name = "global_criterion", nullable = false)
+    private boolean globalCriterion;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "measure", length = 32, nullable = false)

@@ -20,4 +20,11 @@ public interface INameMatcher {
      * Zero when they share nothing, so the caller can drop it.
      */
     int score(Set<String> ingredientTokens, List<String> foodTokens);
+
+    /**
+     * How many of {@code foodTokens} appear among the searched words — the
+     * count, where {@link #score} is the share. A search ranks by it first, so
+     * a food carrying two of the words typed goes above one carrying one.
+     */
+    int shared(Set<String> searchTokens, List<String> foodTokens);
 }

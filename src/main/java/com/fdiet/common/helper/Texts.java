@@ -35,6 +35,15 @@ public final class Texts {
     }
 
     /**
+     * {@link #clean}, with every run of whitespace — line breaks included —
+     * collapsed to one space first. For a spreadsheet cell, where a name or a
+     * header is often wrapped onto several lines; case and accents are kept.
+     */
+    public static String cleanLine(String value, int maxLength) {
+        return value == null ? null : clean(value.replaceAll("\\s+", " "), maxLength);
+    }
+
+    /**
      * A name reduced to the form two of them are compared in: lower case, its
      * runs of whitespace collapsed. Accents are left alone on purpose — the
      * columns these are matched against collate case- and accent-insensitively,

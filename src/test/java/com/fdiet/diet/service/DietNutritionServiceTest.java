@@ -175,6 +175,22 @@ class DietNutritionServiceTest {
                 .isEqualTo(summary.ingredients());
     }
 
+    /** "2 unidades medianas" of egg, weighed by the nutritionist's 58 g: counted, and on a measure. */
+    @Test
+    void weighsUnitsThroughTheNutritionistsGlobalCriterion() {
+        RecipeIngredient eggs = ingredient(lechuga(), "2", "unidades");
+        ReferenceFoodMeasure criterion = measure(HouseholdMeasure.UNIDAD, "58", null, "1",
+                WeightBasis.NET_EDIBLE);
+        criterion.setGlobalCriterion(true);
+        eggs.setFoodMeasure(criterion);
+
+        NutritionSummaryDto summary = summarise(List.of(eggs));
+
+        assertThat(nutrition.edibleGrams(eggs)).isEqualByComparingTo("116");
+        assertThat(summary.counted()).isEqualTo(1);
+        assertThat(summary.countedByMeasure()).isEqualTo(1);
+    }
+
     /** A shared recipe served one and a half times: the figures scale, the counts do not. */
     @Test
     void scalesTheFiguresByTheServingsAndLeavesTheCountsAlone() {

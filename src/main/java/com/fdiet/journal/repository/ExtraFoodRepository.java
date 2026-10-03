@@ -22,4 +22,9 @@ public interface ExtraFoodRepository extends JpaRepository<ExtraFood, Long> {
 
     @EntityGraph(attributePaths = {"bedcaFood", "foodItem", "foodMeasure"})
     Optional<ExtraFood> findWithFoodById(Long id);
+
+    long countByDietId(Long dietId);
+
+    /** How many extras a household measure weighs — the reach of a change to it. */
+    long countByFoodMeasureId(Long foodMeasureId);
 }

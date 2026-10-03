@@ -7,7 +7,7 @@ import java.util.Map;
  * One generic food of the Spanish food composition database.
  *
  * <p>{@code nutrients} is keyed by the names in
- * {@link com.fdiet.food.service.Nutrients} — {@code energy}, {@code protein},
+ * {@link com.fdiet.food.model.Nutrient#key()} — {@code energy}, {@code protein},
  * {@code fat} … — and each entry carries the figure exactly as published, with
  * its unit. A component the source published nothing for is absent rather than
  * zero: no data and none of it are different answers.

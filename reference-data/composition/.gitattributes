@@ -1,0 +1,11 @@
+# Upstream snapshots are kept byte for byte as downloaded, so their SHA-256 in
+# manifest.csv stays true on every checkout: no line-ending conversion.
+ciqual-2025/* -text
+bls-4.0/* -text
+# The USDA extract has its SHA-256 in manifest.csv too, so it is kept byte for byte as well.
+usda-sr-legacy/refuse.csv -text
+# The large binaries go through Git LFS so they stay out of the git history. LFS stores them
+# byte for byte, so their SHA-256 in manifest.csv still holds. A clone needs git-lfs installed;
+# without it the files check out as small pointer files and the composition sync fails.
+*.xlsx filter=lfs diff=lfs merge=lfs -text
+*.pdf filter=lfs diff=lfs merge=lfs -text

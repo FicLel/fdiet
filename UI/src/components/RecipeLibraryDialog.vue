@@ -4,9 +4,9 @@ import { dietsApi } from '@/api/diets'
 import { recipesApi } from '@/api/recipes'
 import type { Recipe, RecipeUsage } from '@/api/types'
 import { useRecipes } from '@/stores/recipes'
-import { renderRecipe, quantityText } from '@/domain/dishText'
-import { recipeTotals, complete } from '@/domain/nutrition'
+import { renderRecipe } from '@/domain/dishText'
 import { integer } from '@/domain/format'
+import RecipeIngredientsField from './RecipeIngredientsField.vue'
 
 /**
  * The shared recipe library: browse, write, correct and remove.
@@ -38,7 +38,6 @@ let searchTimer: ReturnType<typeof setTimeout> | undefined
 
 const isNew = computed(() => selectedId.value === null)
 const canSave = computed(() => name.value.trim() !== '' && !busy.value && !reading.value)
-const totals = computed(() => recipeTotals(read.value?.ingredients ?? []))
 const servedIn = computed(() => {
   const found = usage.value
   if (!found || found.dishes === 0) {
@@ -247,39 +246,7 @@ async function recipeById(id: number): Promise<Recipe | null> {
             <input v-model="name" class="input" type="text" maxlength="255" @input="saved = null" />
           </label>
 
-          <label class="field">
-            <span class="label">Ingredientes <span class="optional">(una ración)</span></span>
-            <textarea
-              class="input area"
-              rows="3"
-              :value="text"
-              placeholder="2 huevos + aceite de oliva (5 ml) + sal"
-              @input="onText(($event.target as HTMLTextAreaElement).value)"
-            ></textarea>
-            <span class="hint">
-              Un <code>+</code> separa ingredientes y la cantidad va entre paréntesis. Cada plato
-              que use la receta puede servir más o menos raciones.
-            </span>
-          </label>
-
-          <ul v-if="read && read.ingredients.length > 0" class="read">
-            <li v-for="(ingredient, index) in read.ingredients" :key="index">
-              <span>{{ ingredient.name }}</span>
-              <span class="num qty">{{ quantityText(ingredient) }} {{ ingredient.unit }}</span>
-              <span class="chip" :class="{ linked: ingredient.bedcaFoodId !== null || ingredient.foodItemId !== null }">
-                {{ ingredient.matchedName ?? 'Sin vincular' }}
-              </span>
-            </li>
-          </ul>
-          <p v-if="read && read.ingredients.length > 0" class="hint">
-            <template v-if="reading">Leyendo…</template>
-            <template v-else>
-              Una ración: {{ totals.kcal === null ? 'sin datos' : `${integer(totals.kcal)} kcal` }}{{
-                complete(totals) ? '' : ` sobre ${totals.counted} de ${totals.ingredients} ingredientes`
-              }}. Lo que quede sin vincular se corrige desde «Repasar sin vincular» de una dieta
-              que la use.
-            </template>
-          </p>
+          <RecipeIngredientsField :text="text" :read="read" :reading="reading" @input="onText" />
 
           <label class="field">
             <span class="label">Preparación</span>
@@ -458,13 +425,6 @@ async function recipeById(id: number): Promise<Recipe | null> {
   color: var(--ink-muted);
 }
 
-.optional {
-  font-weight: 400;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--ink-faint);
-}
-
 .input {
   width: 100%;
   min-height: 34px;
@@ -479,58 +439,6 @@ async function recipeById(id: number): Promise<Recipe | null> {
   padding: 8px 9px;
   line-height: 1.45;
   resize: vertical;
-}
-
-.hint {
-  display: block;
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--ink-faint);
-}
-
-.hint code {
-  font-family: inherit;
-  color: var(--ink-muted);
-}
-
-.read {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.read li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--ink-strong);
-}
-
-.qty {
-  color: var(--ink-muted);
-}
-
-.chip {
-  margin-left: auto;
-  max-width: 50%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 1px 7px;
-  border-radius: 10px;
-  font-size: 10.5px;
-  color: var(--amber-700);
-  background: var(--amber-50);
-}
-
-.chip.linked {
-  color: var(--sage-700);
-  background: var(--sage-50);
 }
 
 .warn,

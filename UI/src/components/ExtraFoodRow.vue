@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { ExtraFood } from '@/api/types'
 import { grams, integer, NO_VALUE, quantity } from '@/domain/format'
+import { unitFor } from '@/domain/dishText'
 
 /**
  * One thing eaten off the plan.
@@ -24,7 +25,8 @@ defineEmits<{ remove: [] }>()
 const kcal = computed(() => props.extra.nutrition?.energyKcal ?? null)
 
 const portion = computed(() => {
-  const amount = quantity(props.extra.quantity, props.extra.unit)
+  const { quantity: logged, unit, unitWording } = props.extra
+  const amount = quantity(logged, unitFor({ quantity: logged, quantityMax: null }, unit, unitWording))
   const weighed = props.extra.measure?.gramsPerMeasure
   const measured = weighed == null ? amount : `${amount} · ${grams(weighed)} g cada una`
   return props.extra.brand ? `${measured} · ${props.extra.brand}` : measured

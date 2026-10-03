@@ -16,6 +16,8 @@ public interface DishScoreRepository extends JpaRepository<DishScore, Long> {
 
     List<DishScore> findByDietId(Long dietId);
 
+    long countByDietId(Long dietId);
+
     /** The one score of a slot, which {@code uk_dish_scores_slot} keeps unique. */
     Optional<DishScore> findByDietIdAndDayOfWeekAndMealTypeAndDishIndex(
             Long dietId, DayOfWeek dayOfWeek, MealType mealType, int dishIndex);

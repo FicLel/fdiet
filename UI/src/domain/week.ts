@@ -111,3 +111,9 @@ const SHORT_NAMES: Record<DayOfWeek, string> = {
 export function shortDayName(day: DayOfWeek): string {
   return SHORT_NAMES[day]
 }
+
+/** `24 ago 2026` from `2026-08-24` — a list of diets spans more than one year. */
+export function shortDate(iso: string): string {
+  const date = parseIsoDate(iso)
+  return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`
+}

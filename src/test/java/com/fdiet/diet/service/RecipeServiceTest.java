@@ -9,8 +9,16 @@ import com.fdiet.diet.mapper.DietMapper;
 import com.fdiet.diet.model.Recipe;
 import com.fdiet.diet.repository.RecipeIngredientRepository;
 import com.fdiet.diet.repository.RecipeRepository;
+import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.service.IBedcaFoodService;
 import com.fdiet.food.service.IFoodItemService;
+import com.fdiet.reference.domain.FoodState;
+import com.fdiet.reference.domain.HouseholdMeasure;
+import com.fdiet.reference.domain.PortionSize;
+import com.fdiet.reference.domain.WeightBasis;
+import com.fdiet.reference.dto.FoodMeasureDto;
+import com.fdiet.reference.dto.MeasureChoiceDto;
+import com.fdiet.reference.mapper.ReferenceMapper;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
 import com.fdiet.reference.service.IReferenceService;
 import org.junit.jupiter.api.Test;
@@ -26,6 +34,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -42,6 +52,7 @@ class RecipeServiceTest {
     private final RecipeRepository recipes = mock(RecipeRepository.class);
     private final IReferenceService reference = mock(IReferenceService.class);
     private final IFoodResolverService resolver = mock(IFoodResolverService.class);
+    private final IBedcaFoodService bedcaFoods = mock(IBedcaFoodService.class);
 
     private final RecipeService service = new RecipeService(
             recipes,
@@ -50,9 +61,9 @@ class RecipeServiceTest {
             new MealTextParser(),
             resolver,
             mock(IFoodItemService.class),
-            mock(IBedcaFoodService.class),
+            bedcaFoods,
             reference,
-            new PortionScaler(),
+            new MeasureResolverService(reference, new PortionScaler()),
             5);
 
     @Test
@@ -87,6 +98,32 @@ class RecipeServiceTest {
                 .isInstanceOf(InvalidDietException.class)
                 .hasMessageContaining("[11]");
         verify(recipes, never()).saveAndFlush(any());
+    }
+
+    /** The nutritionist's global criterion belongs to no diet, so a shared recipe may be weighed by it. */
+    @Test
+    void weighsALibraryRecipeByTheNutritionistsGlobalCriterion() {
+        ReferenceFoodMeasure global = new ReferenceFoodMeasure();
+        global.setId(40L);
+        global.setGlobalCriterion(true);
+        BedcaFood egg = new BedcaFood();
+        egg.setId(2127L);
+        egg.setName("Huevo, entero, crudo");
+        FoodMeasureDto chosen = new ReferenceMapper().toDto(globalEgg(global));
+        when(recipes.findFirstByLibraryTrueAndName(any())).thenReturn(Optional.empty());
+        when(recipes.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+        when(reference.measureEntities(anyCollection())).thenReturn(Map.of(40L, global));
+        when(bedcaFoods.entitiesByIds(anyCollection())).thenReturn(Map.of(2127L, egg));
+        when(reference.chooseMeasures(anyList(), isNull(), isNull()))
+                .thenReturn(List.of(new MeasureChoiceDto(chosen, List.of(chosen))));
+        DishIngredient eggs = new DishIngredient(null, "Huevo", new BigDecimal("2"), null, "unidades", null,
+                PortionSize.MEDIUM, null, 2127L, 40L, null, null, false, null, null, null);
+
+        service.create(content("Huevos revueltos", List.of(eggs)));
+
+        verify(recipes).saveAndFlush(org.mockito.ArgumentMatchers.argThat(saved ->
+                saved.getIngredients().size() == 1
+                        && saved.getIngredients().get(0).getFoodMeasure() == global));
     }
 
     @Test
@@ -153,6 +190,19 @@ class RecipeServiceTest {
         service.deletePrivate(List.of(1L, 2L));
 
         verify(recipes).deleteAll(List.of(own));
+    }
+
+    private static ReferenceFoodMeasure globalEgg(ReferenceFoodMeasure row) {
+        row.setMeasure(HouseholdMeasure.UNIDAD);
+        row.setSize(PortionSize.MEDIUM);
+        row.setCount(BigDecimal.ONE);
+        row.setBedcaFoodId(2127L);
+        row.setFoodLabel("Huevo, entero, crudo");
+        row.setGramsMin(new BigDecimal("58"));
+        row.setGramsMax(new BigDecimal("58"));
+        row.setState(FoodState.UNSPECIFIED);
+        row.setWeightBasis(WeightBasis.NET_EDIBLE);
+        return row;
     }
 
     private static RecipeDto content(String name, List<DishIngredient> ingredients) {

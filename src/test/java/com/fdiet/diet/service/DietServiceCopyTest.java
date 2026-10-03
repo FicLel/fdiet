@@ -4,7 +4,6 @@ import com.fdiet.diet.dto.CopyDietRequestDto;
 import com.fdiet.diet.dto.MealType;
 import com.fdiet.diet.exception.DietNotFoundException;
 import com.fdiet.diet.helpers.IMealTextParser;
-import com.fdiet.diet.helpers.PortionScaler;
 import com.fdiet.diet.mapper.IDietMapper;
 import com.fdiet.diet.model.DietPlan;
 import com.fdiet.diet.model.DietStatus;
@@ -67,7 +66,7 @@ class DietServiceCopyTest {
             mock(IFoodItemService.class),
             mock(IBedcaFoodService.class),
             mock(IReferenceService.class),
-            new PortionScaler(),
+            mock(IMeasureResolverService.class),
             5);
 
     private final DietService dietService = new DietService(
@@ -75,10 +74,8 @@ class DietServiceCopyTest {
             mock(PlannedDishRepository.class),
             mock(IDietMapper.class),
             recipeService,
-            mock(IBedcaFoodService.class),
             patientService,
             mock(IReferenceService.class),
-            new PortionScaler(),
             mock(IDietRationService.class));
 
     @Test

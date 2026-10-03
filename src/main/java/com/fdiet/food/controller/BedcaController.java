@@ -37,8 +37,10 @@ public class BedcaController {
     }
 
     @GetMapping
-    @Operation(summary = "List composition-database foods, optionally filtered by name. "
-            + "Each carries its figures as published, with their units, and the same "
+    @Operation(summary = "List composition-database foods. Without a name, alphabetically; "
+            + "with one, every food sharing at least one of its words (case, accents, plurals "
+            + "and quantity words ignored), most words shared first, then as the fix-up "
+            + "suggestions rank; a food only containing the text as typed comes last. Each carries its figures as published, with their units, and the same "
             + "figures converted to kcal/g/mg")
     public PageDto<BedcaFoodDto> list(
             @RequestParam(required = false) String name,

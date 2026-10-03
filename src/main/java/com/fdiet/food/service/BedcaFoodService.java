@@ -1,6 +1,7 @@
 package com.fdiet.food.service;
 
 import com.fdiet.common.dto.PageDto;
+import com.fdiet.common.helper.Texts;
 import com.fdiet.food.dto.BedcaCsvRowDto;
 import com.fdiet.food.dto.BedcaFoodDto;
 import com.fdiet.food.dto.BedcaNameRow;
@@ -12,6 +13,7 @@ import com.fdiet.food.mapper.IBedcaFoodMapper;
 import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.repository.BedcaFoodRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -62,13 +64,30 @@ public class BedcaFoodService implements IBedcaFoodService {
         this.nameMatcher = nameMatcher;
     }
 
+    /**
+     * Without a term, the alphabetical page straight from the table. With one,
+     * the in-memory index is ranked word by word and only the page asked for is
+     * loaded: one {@code findAllById} however many foods match, plus the
+     * index's own one-off load.
+     */
     @Override
     @Transactional(readOnly = true)
     public PageDto<BedcaFoodDto> search(String name, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, BY_NAME);
-        Page<BedcaFood> result = StringUtils.hasText(name)
-                ? bedcaFoodRepository.findByNameContaining(name.trim(), pageable)
-                : bedcaFoodRepository.findAll(pageable);
+        if (!StringUtils.hasText(name)) {
+            return PageDto.of(bedcaFoodRepository.findAll(PageRequest.of(page, size, BY_NAME)),
+                    bedcaFoodMapper::toDto);
+        }
+        // Unsorted: the order is the ranking, not a column.
+        Pageable pageable = PageRequest.of(page, size);
+        List<Long> ranked = rankedIds(name);
+        int from = (int) Math.min(pageable.getOffset(), ranked.size());
+        List<Long> pageIds = ranked.subList(from, Math.min(from + size, ranked.size()));
+        Map<Long, BedcaFood> foods = entitiesByIds(pageIds);
+        List<BedcaFood> content = pageIds.stream()
+                .map(foods::get)
+                .filter(Objects::nonNull)
+                .toList();
+        Page<BedcaFood> result = new PageImpl<>(content, pageable, ranked.size());
         return PageDto.of(result, bedcaFoodMapper::toDto);
     }
 
@@ -148,6 +167,35 @@ public class BedcaFoodService implements IBedcaFoodService {
     }
 
     /**
+     * Every food the term finds, best first: the more of the term's words a
+     * name carries the higher it goes, then the {@link #suggest} order (score,
+     * then name). A food sharing no word but containing the term as typed —
+     * {@code lechu} inside {@code Lechuga} — still shows, last, so a search box
+     * being typed into never goes blank half-way through a word.
+     *
+     * <p>One pass over the index (957 rows, no query), then an O(m log m) sort
+     * of the m foods found.
+     */
+    private List<Long> rankedIds(String term) {
+        Set<String> wanted = nameMatcher.tokens(term);
+        String typed = Texts.key(term);
+        List<SearchHit> hits = new ArrayList<>();
+        for (IndexedFood food : index()) {
+            int shared = nameMatcher.shared(wanted, food.tokens());
+            if (shared > 0 || food.key().contains(typed)) {
+                hits.add(new SearchHit(food.id(), food.name(), shared,
+                        nameMatcher.score(wanted, food.tokens())));
+            }
+        }
+        return hits.stream()
+                .sorted(Comparator.comparingInt(SearchHit::shared).reversed()
+                        .thenComparing(Comparator.comparingInt(SearchHit::score).reversed())
+                        .thenComparing(SearchHit::name))
+                .map(SearchHit::id)
+                .toList();
+    }
+
+    /**
      * One select of everything stored, then the rows are written in place or
      * added. Loading the table first is what makes "inserted" and "updated"
      * true counts rather than guesses, and it costs one query for a table this
@@ -181,19 +229,33 @@ public class BedcaFoodService implements IBedcaFoodService {
         if (current == null) {
             current = bedcaFoodRepository.findAllNames().stream()
                     .map(this::indexed)
-                    .filter(food -> !food.tokens().isEmpty())
                     .toList();
             index = current;
         }
         return current;
     }
 
+    /**
+     * A name with no word {@link INameMatcher#tokens} keeps ({@code Té}) stays
+     * in the index: {@link #suggest} drops it by its zero score, and a search
+     * still finds it as typed.
+     */
     private IndexedFood indexed(BedcaNameRow row) {
-        return new IndexedFood(row.id(), row.name(), row.foodGroup(),
+        String key = Objects.requireNonNullElse(Texts.key(row.name()), "");
+        return new IndexedFood(row.id(), row.name(), row.foodGroup(), key,
                 List.copyOf(nameMatcher.tokens(row.name())));
     }
 
-    /** One row of the suggestion index: its name, already tokenised. */
-    private record IndexedFood(Long id, String name, String foodGroup, List<String> tokens) {
+    /**
+     * One row of the suggestion index: its name, the name as a search compares
+     * it whole ({@link Texts#key}: upper case, no accents), and the name
+     * already tokenised.
+     */
+    private record IndexedFood(Long id, String name, String foodGroup, String key,
+                               List<String> tokens) {
+    }
+
+    /** A food a search found, with what it is ranked by. */
+    private record SearchHit(Long id, String name, int shared, int score) {
     }
 }

@@ -6,11 +6,11 @@ import { useFoodLink } from '@/stores/foodLink'
 import { useRations } from '@/stores/rations'
 import { useRecipes } from '@/stores/recipes'
 import type { DishIngredient, Recipe } from '@/api/types'
-import { grams, integer, NO_VALUE, quantity } from '@/domain/format'
+import { grams, integer, NO_VALUE } from '@/domain/format'
 import { complete, ingredientsOf } from '@/domain/nutrition'
 import { amount, measureSource, perMeasure, stateWord } from '@/domain/rations'
 import { cellKey } from '@/domain/slots'
-import { quantityText } from '@/domain/dishText'
+import { amountText } from '@/domain/dishText'
 
 /**
  * One plate, as the nutritionist writes it: the description the patient reads,
@@ -308,13 +308,6 @@ const dishExchanges = computed(() => {
     return found ? [{ code: system.code, name: system.name, units: found.units, complete: found.complete }] : []
   })
 })
-
-/** A range the text gave, "40-60 g", which counts nowhere until a value in it is chosen. */
-function amountText(ingredient: DishIngredient): string {
-  return ingredient.quantityMax === null
-    ? quantity(ingredient.quantity, ingredient.unit)
-    : `${quantityText(ingredient)} ${ingredient.unit}`
-}
 </script>
 
 <template>

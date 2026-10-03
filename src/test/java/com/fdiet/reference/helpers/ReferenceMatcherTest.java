@@ -25,6 +25,7 @@ class ReferenceMatcherTest {
 
     private static final long KIWI = 2228L;
     private static final long AOVE = 2544L;
+    private static final long EGG = 2127L;
     private static final String AESAN = "AESAN-2022-007";
     private static final String SENC = "SENC-2018";
 
@@ -35,7 +36,7 @@ class ReferenceMatcherTest {
         FoodMeasureDto kiwi = measure(1L, "5ALDIA-2019", HouseholdMeasure.UNIDAD, PortionSize.MEDIUM,
                 KIWI, null, null, "80", "80");
 
-        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(kiwi), List.of(),
+        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(kiwi), List.of(), List.of(),
                 query(KIWI, "Kiwi", "unidad", null, null), FoodCategory.FRUIT, AESAN);
 
         assertThat(choice.chosen()).isEqualTo(kiwi);
@@ -46,7 +47,7 @@ class ReferenceMatcherTest {
         FoodMeasureDto aesan = oil(1L, AESAN, "10");
         FoodMeasureDto senc = oil(2L, SENC, "15");
 
-        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(aesan, senc), List.of(),
+        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(aesan, senc), List.of(), List.of(),
                 query(AOVE, "Aceite de oliva virgen extra", "cda", null, null), FoodCategory.FAT_OIL, AESAN);
 
         assertThat(choice.chosen()).isEqualTo(aesan);
@@ -58,7 +59,7 @@ class ReferenceMatcherTest {
         FoodMeasureDto aesan = oil(1L, AESAN, "10");
         FoodMeasureDto senc = oil(2L, SENC, "15");
 
-        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(aesan, senc), List.of(),
+        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(aesan, senc), List.of(), List.of(),
                 query(AOVE, "Aceite de oliva virgen extra", "cucharada sopera", null, null),
                 FoodCategory.FAT_OIL, null);
 
@@ -71,7 +72,7 @@ class ReferenceMatcherTest {
         FoodMeasureDto egg = measure(1L, AESAN, HouseholdMeasure.UNIDAD, PortionSize.MEDIUM, null,
                 FoodCategory.EGG, "huevo", "53", "63");
 
-        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(egg), List.of(),
+        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(egg), List.of(), List.of(),
                 query(2127L, "Huevo de gallina fresco", "unidad", null, null), FoodCategory.EGG, AESAN);
 
         assertThat(choice.chosen()).isNull();
@@ -85,13 +86,45 @@ class ReferenceMatcherTest {
                 "cucharada sopera", null, BigDecimal.ONE, "Aceite de oliva virgen extra", AOVE,
                 FoodCategory.FAT_OIL, null, null, null, new BigDecimal("12"), new BigDecimal("12"),
                 new BigDecimal("12"), FoodState.UNSPECIFIED, WeightBasis.NET_EDIBLE, null, null, null,
-                null, null, null, null, 5L, true);
+                null, null, null, null, 5L, true, false);
 
-        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(aesan), List.of(own),
+        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(aesan), List.of(own), List.of(),
                 query(AOVE, "Aceite de oliva virgen extra", "cda", null, null), FoodCategory.FAT_OIL, AESAN);
 
         assertThat(choice.chosen()).isEqualTo(own);
         assertThat(choice.candidates()).containsExactly(own, aesan);
+    }
+
+    /** A published range weighs nothing; the nutritionist's global criterion settles it for every diet. */
+    @Test
+    void theGlobalCriterionWeighsWhatAPublishedRangeCannot() {
+        FoodMeasureDto range = measure(1L, AESAN, HouseholdMeasure.UNIDAD, PortionSize.MEDIUM, null,
+                FoodCategory.EGG, "huevo", "53", "63");
+        FoodMeasureDto global = criterion(20L, null, EGG, HouseholdMeasure.UNIDAD, PortionSize.MEDIUM, "58");
+
+        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(range), List.of(), List.of(global),
+                query(EGG, "Huevo, entero, crudo", "unidades", PortionSize.MEDIUM, null),
+                FoodCategory.EGG, AESAN);
+
+        assertThat(choice.chosen()).isEqualTo(global);
+        assertThat(choice.candidates()).containsExactly(global, range);
+    }
+
+    /** Precedence: picked, then the diet's criterion, then the global one, then published. */
+    @Test
+    void theDietsCriterionWinsOverTheGlobalOneAndAPickWinsOverBoth() {
+        FoodMeasureDto published = oil(1L, AESAN, "10");
+        FoodMeasureDto global = criterion(20L, null, AOVE, HouseholdMeasure.CUCHARADA_SOPERA, null, "11");
+        FoodMeasureDto own = criterion(30L, 5L, AOVE, HouseholdMeasure.CUCHARADA_SOPERA, null, "12");
+        MeasureQueryDto spoon = query(AOVE, "Aceite de oliva virgen extra", "cda", null, null);
+
+        assertThat(matcher.chooseMeasure(List.of(published), List.of(own), List.of(global), spoon,
+                FoodCategory.FAT_OIL, AESAN).chosen()).isEqualTo(own);
+        assertThat(matcher.chooseMeasure(List.of(published), List.of(), List.of(global), spoon,
+                FoodCategory.FAT_OIL, AESAN).chosen()).isEqualTo(global);
+        assertThat(matcher.chooseMeasure(List.of(published), List.of(own), List.of(global),
+                query(AOVE, "Aceite de oliva virgen extra", "cda", null, 1L),
+                FoodCategory.FAT_OIL, AESAN).chosen()).isEqualTo(published);
     }
 
     @Test
@@ -99,7 +132,7 @@ class ReferenceMatcherTest {
         FoodMeasureDto aesan = oil(1L, AESAN, "10");
         FoodMeasureDto senc = oil(2L, SENC, "15");
 
-        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(aesan, senc), List.of(),
+        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(aesan, senc), List.of(), List.of(),
                 query(AOVE, "Aceite de oliva virgen extra", "cda", null, 2L), FoodCategory.FAT_OIL, AESAN);
 
         assertThat(choice.chosen()).isEqualTo(senc);
@@ -112,9 +145,9 @@ class ReferenceMatcherTest {
         FoodMeasureDto large = measure(2L, "5ALDIA-2019", HouseholdMeasure.UNIDAD, PortionSize.LARGE,
                 2229L, null, null, "120", "120", "1");
 
-        assertThat(matcher.chooseMeasure(List.of(small, large), List.of(),
+        assertThat(matcher.chooseMeasure(List.of(small, large), List.of(), List.of(),
                 query(2229L, "Mandarina", "unidad", null, null), FoodCategory.FRUIT, AESAN).chosen()).isNull();
-        assertThat(matcher.chooseMeasure(List.of(small, large), List.of(),
+        assertThat(matcher.chooseMeasure(List.of(small, large), List.of(), List.of(),
                 query(2229L, "Mandarina", "unidad", PortionSize.LARGE, null), FoodCategory.FRUIT, AESAN)
                 .chosen()).isEqualTo(large);
     }
@@ -125,12 +158,12 @@ class ReferenceMatcherTest {
                 "cucharada sopera", null, BigDecimal.ONE, "Legumbres en crudo", null, FoodCategory.LEGUME,
                 null, new BigDecimal("15"), new BigDecimal("15"), null, null, new BigDecimal("15"),
                 FoodState.RAW, WeightBasis.NET_EDIBLE, null, null, null, null, "AESAN-MEC-2010",
-                "AESAN/MEC 2010", 1, null, false);
+                "AESAN/MEC 2010", 1, null, false, false);
 
-        assertThat(matcher.chooseMeasure(List.of(legumes), List.of(),
+        assertThat(matcher.chooseMeasure(List.of(legumes), List.of(), List.of(),
                 query(2200L, "Lenteja, hervida", "cda", null, null), FoodCategory.LEGUME, null)
                 .candidates()).isEmpty();
-        assertThat(matcher.chooseMeasure(List.of(legumes), List.of(),
+        assertThat(matcher.chooseMeasure(List.of(legumes), List.of(), List.of(),
                 query(1065L, "Lenteja, seca, cruda", "cda", null, null), FoodCategory.LEGUME, null)
                 .chosen()).isEqualTo(legumes);
     }
@@ -164,7 +197,17 @@ class ReferenceMatcherTest {
                 null, BigDecimal.ONE, "Aceite de oliva", null, FoodCategory.FAT_OIL, "aceite de oliva",
                 null, null, new BigDecimal(ml), new BigDecimal(ml), new BigDecimal(ml),
                 FoodState.UNSPECIFIED, WeightBasis.UNSPECIFIED, null, "1 cucharada sopera", "p. 1", null,
-                source, source, 1, null, false);
+                source, source, 1, null, false, false);
+    }
+
+    /** A nutritionist's row: one diet's when {@code dietId} is set, her global one otherwise. */
+    private static FoodMeasureDto criterion(Long id, Long dietId, Long foodId, HouseholdMeasure measure,
+                                            PortionSize size, String grams) {
+        BigDecimal weight = new BigDecimal(grams);
+        return new FoodMeasureDto(id, null, measure, measure.label(), size, BigDecimal.ONE, "food",
+                foodId, null, null, weight, weight, null, null, weight, FoodState.UNSPECIFIED,
+                WeightBasis.NET_EDIBLE, null, null, null, null, null, null, null, dietId,
+                dietId != null, dietId == null);
     }
 
     private static FoodMeasureDto measure(Long id, String source, HouseholdMeasure measure,
@@ -182,7 +225,7 @@ class ReferenceMatcherTest {
         return new FoodMeasureDto(id, "M" + id, measure, measure.label(), size, new BigDecimal(count),
                 "food", foodId, category, keywords, new BigDecimal(min), new BigDecimal(max), null, null,
                 perMeasure, FoodState.UNSPECIFIED, WeightBasis.NET_EDIBLE, null, null, "p. 1", null,
-                source, source, 1, null, false);
+                source, source, 1, null, false, false);
     }
 
     private static MeasureQueryDto query(Long foodId, String name, String unit, PortionSize size,

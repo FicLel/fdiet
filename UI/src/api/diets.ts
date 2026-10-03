@@ -9,7 +9,7 @@ import type {
   DishIngredient,
   FoodMeasure,
   FoodState,
-  HouseholdMeasure,
+  MeasureCriterionRequest,
   Page,
   PortionSize,
   Recipe,
@@ -132,16 +132,6 @@ export interface ComposeRequest {
   dietId?: number
 }
 
-/** The nutritionist's own weight for a measure of one food, for one diet. Exactly one of grams or ml. */
-export interface DietMeasureRequest {
-  measure: HouseholdMeasure
-  size?: PortionSize | null
-  bedcaFoodId: number
-  grams?: number | null
-  ml?: number | null
-  note?: string | null
-}
-
 /** Where a week is being copied to, and what the copy is called. */
 export interface CopyDietRequest {
   /** Whose diet the copy becomes; it archives whatever they had in force. */
@@ -197,6 +187,13 @@ export const dietsApi = {
    */
   parse: (request: ParseDishRequest) => http.post<Recipe>('/diets/parse', request),
 
+  /**
+   * Deletes a diet, in force or archived, with its week, its journal, its own
+   * measure criteria and its private recipes. Library recipes stay. Deleting the
+   * one in force leaves the patient with none: nothing archived comes back.
+   */
+  remove: (id: number) => http.delete<void>(`/diets/${id}`),
+
   /** Replaces a diet's whole week. What is not sent is deleted. */
   update: (id: number, week: DietRequest) => http.put<Diet>(`/diets/${id}`, week),
 
@@ -241,7 +238,7 @@ export const dietsApi = {
   measures: (id: number) => http.get<FoodMeasure[]>(`/diets/${id}/measures`),
 
   /** Writes (or rewrites) a criterion and attaches it wherever it is now the one chosen. */
-  saveMeasure: (id: number, request: DietMeasureRequest) =>
+  saveMeasure: (id: number, request: MeasureCriterionRequest) =>
     http.put<DietMeasureSaved>(`/diets/${id}/measures`, request),
 
   deleteMeasure: (id: number, measureId: number) =>

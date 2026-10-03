@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -53,4 +54,15 @@ public interface DietRepository extends JpaRepository<DietPlan, Long> {
     @Query("select distinct p from DietPlan p join p.meals m join m.dishes d "
             + "where d.recipe.id = :recipeId order by p.startedOn desc")
     List<DietPlan> findServingRecipe(@Param("recipeId") Long recipeId);
+
+    /**
+     * Deletes one diet in a single statement. The schema takes its meals, dishes,
+     * scores, extras and own measure criteria with it ({@code ON DELETE CASCADE}),
+     * so nothing is loaded to be removed row by row.
+     *
+     * @return how many diets were deleted: 0 when the id names none
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("delete from DietPlan p where p.id = :id")
+    int deleteWithWeekById(@Param("id") Long id);
 }

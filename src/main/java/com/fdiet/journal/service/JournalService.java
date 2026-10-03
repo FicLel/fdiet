@@ -12,6 +12,7 @@ import com.fdiet.journal.dto.DayExtrasDto;
 import com.fdiet.journal.dto.DietJournalDto;
 import com.fdiet.journal.dto.DishScoreDto;
 import com.fdiet.journal.dto.ExtraFoodDto;
+import com.fdiet.journal.dto.JournalCountsDto;
 import com.fdiet.journal.dto.LogExtraFoodRequestDto;
 import com.fdiet.journal.dto.ScoreDishRequestDto;
 import com.fdiet.journal.exception.InvalidJournalEntryException;
@@ -22,10 +23,12 @@ import com.fdiet.journal.model.ExtraFood;
 import com.fdiet.journal.repository.DishScoreRepository;
 import com.fdiet.journal.repository.ExtraFoodRepository;
 import com.fdiet.reference.domain.HouseholdMeasure;
+import com.fdiet.reference.domain.MeasureUser;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.MeasureChoiceDto;
 import com.fdiet.reference.dto.MeasureQueryDto;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
+import com.fdiet.reference.service.IMeasureUsageCounter;
 import com.fdiet.reference.service.IReferenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,7 +43,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-public class JournalService implements IJournalService {
+public class JournalService implements IJournalService, IMeasureUsageCounter {
 
     /** One decimal is as fine as an average of five whole stars can honestly be. */
     private static final int AVERAGE_SCALE = 1;
@@ -98,6 +101,16 @@ public class JournalService implements IJournalService {
                 byDay(extraRepository.findByDietIdOrderByLoggedAtAsc(dietId)),
                 average(scores),
                 scores.size());
+    }
+
+    /** Three queries — the diet's existence and one count per table — whatever the diet holds. */
+    @Override
+    @Transactional(readOnly = true)
+    public JournalCountsDto counts(Long dietId) {
+        requireDiet(dietId);
+        return new JournalCountsDto(dietId,
+                scoreRepository.countByDietId(dietId),
+                extraRepository.countByDietId(dietId));
     }
 
     @Override
@@ -160,12 +173,24 @@ public class JournalService implements IJournalService {
         return journalMapper.toDto(extraRepository.save(extra));
     }
 
+    @Override
+    public MeasureUser user() {
+        return MeasureUser.EXTRA_FOOD;
+    }
+
+    /** One count query: how many logged extras a household measure weighs. */
+    @Override
+    @Transactional(readOnly = true)
+    public long countUsing(Long measureId) {
+        return extraRepository.countByFoodMeasureId(measureId);
+    }
+
     /**
      * The household measure an extra is weighed by, chosen by the rule that
      * chooses one for the week — the one asked for when it fits, else the
-     * diet's own criterion, else a published row only when picking it is not a
-     * judgement — so a spoon logged beside the plan weighs what it weighs inside
-     * it. A measure asked for that does not weigh this food in this unit is
+     * diet's own criterion, else the nutritionist's global one, else a published
+     * row only when picking it is not a judgement — so a spoon logged beside the
+     * plan weighs what it weighs inside it. A measure asked for that does not weigh this food in this unit is
      * refused rather than quietly ignored.
      */
     private ReferenceFoodMeasure measureFor(Long dietId, BedcaFood food, String unit,

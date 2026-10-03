@@ -212,6 +212,46 @@ class AlternativeServiceTest {
                 .allSatisfy(alternative -> assertThat(alternative.equivalentGrams()).isNull());
     }
 
+    /**
+     * CIQUAL publishes no energy for 145 foods. A food like that is still ranked
+     * on the figures it does publish, and gets no equivalent weight by energy —
+     * a blank, never a guess and never a failure.
+     */
+    @Test
+    void ranksAFoodWithoutEnergyAndOffersItNoEquivalentWeight() {
+        BedcaFood noEnergy = blank(5000L, "Cerdo, chuleta, plancha");
+        noEnergy.setProtein(new NutrientValue(new BigDecimal("29"), "g"));
+        noEnergy.setFat(new NutrientValue(new BigDecimal("9"), "g"));
+        noEnergy.setFiber(new NutrientValue(new BigDecimal("0"), "g"));
+        List<BedcaFood> withIt = new java.util.ArrayList<>(catalogue);
+        withIt.add(noEnergy);
+        when(bedcaFoodService.entitiesAll()).thenReturn(withIt);
+
+        FoodAlternativesDto alternatives =
+                service.forFoodId(CHICKEN_BREAST, 10, new BigDecimal("100"), false);
+
+        AlternativeDto chop = alternatives.alternatives().stream()
+                .filter(alternative -> alternative.name().equals("Cerdo, chuleta, plancha"))
+                .findFirst().orElseThrow();
+        assertThat(chop.nutrition().energyKcal()).isNull();
+        assertThat(chop.equivalentGrams()).isNull();
+        assertThat(chop.equivalentPortion()).isNull();
+    }
+
+    @Test
+    void answersForAReferenceFoodWithoutEnergy() {
+        BedcaFood noEnergy = blank(5001L, "Pollo, muslo, asado");
+        noEnergy.setProtein(new NutrientValue(new BigDecimal("27"), "g"));
+        noEnergy.setFat(new NutrientValue(new BigDecimal("8"), "g"));
+        when(bedcaFoodService.entityById(5001L)).thenReturn(noEnergy);
+
+        FoodAlternativesDto alternatives = service.forFoodId(5001L, 10, new BigDecimal("100"), false);
+
+        assertThat(alternatives.portion().energyKcal()).isNull();
+        assertThat(alternatives.alternatives()).isNotEmpty()
+                .allSatisfy(alternative -> assertThat(alternative.equivalentGrams()).isNull());
+    }
+
     /** 104 g of pork against a 100-125 g ration is 0,8 to 1,0 rations, sent as a range. */
     @Test
     void readsTheEquivalentWeightInTheProfilesRations() {

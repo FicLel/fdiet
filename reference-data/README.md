@@ -20,6 +20,10 @@ sources, and the conflicts between them, is in `plan.md`.
 
 One folder per source, so a licence stays with its own figures.
 
+`composition/` is not part of this layer: it holds the open food composition tables (CIQUAL 2025,
+BLS 4.0), fdiet's Spanish-name crosswalk and their manifest, loaded into `composition_foods` by
+`POST /api/composition/sync`. See `composition/README.md`. The reference sync reads none of its files.
+
 ## What is loaded, and under what terms
 
 | Folder | Source | Licence |

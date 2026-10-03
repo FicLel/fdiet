@@ -179,9 +179,10 @@ public class AlternativeService implements IAlternativeService {
 
     /**
      * How much of the alternative carries the same figure as the portion asked
-     * about: energy by default, because it is the one figure every food in the
-     * catalogue publishes, or the grams of one macronutrient. A food that leaves
-     * the figure unpublished, or carries too little of it to be weighed against
+     * about: energy by default, because it is the figure BEDCA publishes for
+     * every food, or the grams of one macronutrient. Not every source does — 145
+     * CIQUAL foods publish no energy — so a food that leaves the figure
+     * unpublished, either side, or carries too little of it to be weighed against
      * (the protein of a lettuce), gets no equivalent weight rather than an
      * invented one; so does a portion that carries none of it.
      */

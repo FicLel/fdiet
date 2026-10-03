@@ -1,0 +1,2 @@
+- [Delivery flow](feedback_delivery_flow.md) — ask questions up front, then backend, frontend, tech-lead; bugs become new FD stories
+- [Done means live](feedback_done_means_live.md) — story done only when it works in the running UI; agents must verify in browser

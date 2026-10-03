@@ -1,3 +1,45 @@
 # Log
 
 - 2026-10-02 — `product/` created; backlog seeded with FD-001…FD-008 from plan.md and earlier notes.
+- 2026-10-02 — FD-009 created (choose food by units), refined with the user, started.
+- 2026-10-02 — FD-010 created (patient-friendly food names), split from FD-009.
+- 2026-10-02 — FD-009 backend done (V14 `global_criterion`, `/api/reference/criteria`, 239 tests green); frontend started.
+- 2026-10-02 — FD-011, FD-012, FD-013 created from bugs found in FD-009 backend.
+- 2026-10-02 — FD-009 frontend done (composer: range → confirm weight, Nueva unidad, criteria list; library dialog gets the composer). `pnpm build` clean; not verified live (backend down).
+- 2026-10-02 — FD-009 gap: patient reads `2 unidades (tamaño mediano)` and typed `kiwi mediano` shows its size twice → backend follow-up started (unit words with size, singular/plural).
+- 2026-10-02 — FD-014, FD-015 created from bugs found in FD-009 frontend; `2 unidad` plural bug folded into FD-009.
+- 2026-10-02 — FD-009 backend follow-up done: `unitWording {singular, plural, sizeInName}` on ingredients and extras, no migration, 249 tests green. Frontend follow-up started.
+- 2026-10-02 — FD-016 created (fractional count wording in composer), found in FD-009.
+- 2026-10-02 — FD-009 frontend follow-up done (patient reads `unitWording`); build clean, not verified live. Tech-lead review started.
+- 2026-10-02 — FD-009 tech-lead review done: both builds green; UI fixes (stale food measures race, Spanish refusal messages). AC 8 partly met (no all-criteria list). Awaiting live check.
+- 2026-10-02 — FD-017, FD-018, FD-019 created from the FD-009 review; FD-011, FD-013 widened.
+- 2026-10-02 — FD-009 live check failed (composer search empty, g per unit empty); rework to frontend.
+- 2026-10-02 — FD-009 frontend rework done (range ration left grams empty; substring search); live a–g pass. Tech-lead review started.
+- 2026-10-02 — FD-020, FD-021, FD-022 created from the FD-009 rework.
+- 2026-10-02 — FD-009 tech-lead review of rework done; remaining AC pass live. Waiting on user confirmation to close.
+- 2026-10-02 — FD-023, FD-024 created from the FD-009 review; FD-013 widened (RationComposer size, error helper).
+- 2026-10-02 — FD-009 done (user confirmed). AC 8 full-list screen carried by FD-017. Closing accepts the defaults: ranged rations start at midpoint as proposal; "unsaved diet" met by unpublished cell + library dialog.
+- 2026-10-02 — FD-023 refined with the user (any diet, confirm with journal counts; active → none; patient refusal kept), resized S → M, started. Leftovers id 4 / diet 14 become its live check.
+- 2026-10-02 — FD-023 backend done (DELETE /api/diets/{id}, GET /api/journal/{dietId}/counts; build green, no migration). Frontend started. FD-025 created (row-by-row private recipe delete).
+- 2026-10-02 — FD-023 frontend done ("Dietas" in builder patient selector; build clean); live: diet 14 and patient 4 deleted. Tech-lead review started. FD-026, FD-027, FD-028 created.
+- 2026-10-02 — FD-023 tech-lead review done (2 UI fixes, CLAUDE.md line); builds green; all AC met. Waiting on user confirmation to close. FD-029 created.
+- 2026-10-02 — FD-020 refined with the user (all three boxes, any word ranked, synonyms later) and started; backend first. FD-030 created (search synonyms).
+- 2026-10-02 — FD-020 backend done (`GET /api/bedca?name=` ranked word-wise, partial-word tail; 263 tests green, no migration). Frontend started. FD-031 created (ranking favours shorter names).
+- 2026-10-02 — FD-020 frontend done (composer fallback removed; other two boxes needed no change; build clean; live not checked — backend 5000 old build). Tech-lead review started. FD-032 created; FD-013 widened (ExtraFoodPanel 760, foodLink 519, hard-coded colours).
+- 2026-10-02 — FD-020 tech-lead review done (fixed: `Té` unfindable — short names dropped from index; stale results during debounce in composer). food tests 35 green, build clean. All AC met in tests/code; live check waits on backend restart. FD-031 widened (as-typed tail order).
+- 2026-10-02 — FD-020 done (user confirmed live).
+- 2026-10-02 — FD-023 live try failed: "No se pudo comprobar qué se eliminaría: journalApi.counts is not a function". Cause: Vite dev server on 5173 serves a stale `journal.ts` (source and backend `/counts` are fine); restart dev server and retry.
+- 2026-10-02 — FD-023 done (user confirmed live after Vite restart).
+- 2026-10-02 — FD-033 created (open data only: replace then remove BEDCA, licence audit), from `reports/Open food data and permissions.md`. Refining; questions to user.
+- 2026-10-02 — FD-034 created (hashed snapshots + manifest, deterministic fresh-install load, check script). Refining; phase D depends on FD-033.
+- 2026-10-02 — FD-033 / FD-034 questions answered by the user (CIQUAL + BLS both; reset existing matches; BEDCA removed last; gated sources out; CC BY 4.0 for fdiet's names and definitions; FD-034 defaults accepted).
+- 2026-10-02 — FD-004 dropped (needs a permission; gated sources out). FD-006 dropped (permission emails no longer pursued). FD-005 rewritten to open sources only.
+- 2026-10-02 — FD-033 started: phase A spike handed to backend.
+- 2026-10-02 — FD-035 created (Zenodo / Software Heritage deposit), split from FD-034.
+- 2026-10-03 — FD-033 phase A done: spike in `product/spikes/FD-033-A-composition-spike.md` (combined 95 % coverage; no edible-portion factor; 143 CIQUAL foods without energy).
+- 2026-10-03 — FD-033 phase B refined with the user: spike design adopted, crosswalk scope 81 + 80 foods, qualified values null, 41/210 floor; must snapshot CIQUAL/BLS into the repo (spike downloads were in tmp). Edible-portion source still open.
+- 2026-10-03 — FD-036 (crosswalk extension) and FD-037 (open energy for 143 CIQUAL foods) created, split from FD-033 B.
+- 2026-10-03 — FD-033 edible portion decided by the user (USDA FDC SR Legacy refuse, CC0, `fdc_id` per row, null refuses gross). Open question closed.
+- 2026-10-03 — FD-033 phase B started: handed to backend.
+- 2026-10-03 — FD-033 B decisions: originals via Git LFS (git-lfs now an FD-034 requirement); qualified values null without original text (settles story decision 8); all 122 crosswalk rows approved (USDA as-purchased edible-portion caveat accepted). No-energy count corrected to 145 (143 `-` + 2 `traces`), FD-037 too.
+- 2026-10-03 — FD-033 phase B implemented and tech-lead reviewed (299 tests green); uncommitted; dev DB needs a composition re-sync. FD-038 created (review follow-ups).

@@ -8,7 +8,6 @@ import com.fdiet.diet.dto.ResolveIngredientDto;
 import com.fdiet.diet.exception.DietNotFoundException;
 import com.fdiet.diet.exception.InvalidDietException;
 import com.fdiet.diet.helpers.IMealTextParser;
-import com.fdiet.diet.helpers.IPortionScaler;
 import com.fdiet.diet.mapper.IDietMapper;
 import com.fdiet.diet.model.Recipe;
 import com.fdiet.diet.model.RecipeIngredient;
@@ -21,10 +20,12 @@ import com.fdiet.food.service.IBedcaFoodService;
 import com.fdiet.food.service.IFoodItemService;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.HouseholdMeasure;
+import com.fdiet.reference.domain.MeasureUser;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.MeasureChoiceDto;
 import com.fdiet.reference.dto.MeasureQueryDto;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
+import com.fdiet.reference.service.IMeasureUsageCounter;
 import com.fdiet.reference.service.IReferenceService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -53,10 +54,13 @@ import java.util.Set;
  * <p>A library recipe is weighed without any diet's own measures. Those belong to
  * one diet and are deleted with it, and a shared recipe weighed by one would go
  * quietly unweighed in every other week the day that diet went. An ingredient of
- * a library recipe that names one is refused, not silently re-weighed.
+ * a library recipe that names one is refused, not silently re-weighed. The
+ * nutritionist's global criteria belong to no diet, so they weigh a library
+ * recipe as they weigh every week. Choosing the measure is
+ * {@link IMeasureResolverService}'s; this service stores what it chose.
  */
 @Service
-public class RecipeService implements IRecipeService {
+public class RecipeService implements IRecipeService, IMeasureUsageCounter {
 
     private static final Sort BY_ID = Sort.by(Sort.Direction.ASC, "id");
 
@@ -75,7 +79,7 @@ public class RecipeService implements IRecipeService {
     private final IFoodItemService foodItemService;
     private final IBedcaFoodService bedcaFoodService;
     private final IReferenceService referenceService;
-    private final IPortionScaler portionScaler;
+    private final IMeasureResolverService measureResolver;
     private final int suggestionLimit;
 
     public RecipeService(RecipeRepository recipeRepository,
@@ -86,7 +90,7 @@ public class RecipeService implements IRecipeService {
                          IFoodItemService foodItemService,
                          IBedcaFoodService bedcaFoodService,
                          IReferenceService referenceService,
-                         IPortionScaler portionScaler,
+                         IMeasureResolverService measureResolver,
                          @Value("${fdiet.diet.suggestion-limit:5}") int suggestionLimit) {
         this.recipeRepository = recipeRepository;
         this.ingredientRepository = ingredientRepository;
@@ -96,7 +100,7 @@ public class RecipeService implements IRecipeService {
         this.foodItemService = foodItemService;
         this.bedcaFoodService = bedcaFoodService;
         this.referenceService = referenceService;
-        this.portionScaler = portionScaler;
+        this.measureResolver = measureResolver;
         this.suggestionLimit = suggestionLimit;
     }
 
@@ -182,11 +186,12 @@ public class RecipeService implements IRecipeService {
         }
         List<DishIngredient> all = written.stream().flatMap(List::stream).toList();
         Foods foods = foodsOf(all);
-        Measures measures = measuresOf(all, foods, dietId, profile);
+        Map<DishIngredient, ReferenceFoodMeasure> measures =
+                measureResolver.measuresOf(all, foods::bedcaFood, dietId, profile);
         for (int at = 0; at < recipes.size(); at++) {
             for (DishIngredient ingredient : written.get(at)) {
                 recipes.get(at).addIngredient(dietMapper.toEntity(
-                        ingredient, foods.of(ingredient), measures.of(ingredient)));
+                        ingredient, foods.of(ingredient), measures.get(ingredient)));
             }
         }
         return recipeRepository.saveAll(recipes);
@@ -321,20 +326,21 @@ public class RecipeService implements IRecipeService {
         }
 
         if (shared && change.foodMeasureId() != null) {
-            requireNoDietMeasures(List.of(change.foodMeasureId()));
+            measureResolver.requireNoDietMeasures(List.of(change.foodMeasureId()));
         }
         Long preferred = change.foodMeasureId() != null
                 ? change.foodMeasureId()
                 : ingredient.getFoodMeasure() == null ? null : ingredient.getFoodMeasure().getId();
-        MeasureChoiceDto choice = choose(ingredient.getBedcaFood(), ingredient.getUnit(),
-                ingredient, preferred, shared ? null : dietId, shared ? null : profile);
+        MeasureChoiceDto choice = measureResolver.choose(ingredient.getBedcaFood(),
+                ingredient.getUnit(), ingredient.getSize(), preferred,
+                shared ? null : dietId, shared ? null : profile);
         if (change.foodMeasureId() != null
                 && (choice.chosen() == null || !change.foodMeasureId().equals(choice.chosen().id()))) {
             throw new InvalidDietException("Household measure " + change.foodMeasureId()
                     + " does not weigh " + ingredient.getUnit() + " of this food. "
                     + "GET /api/reference/measures lists the ones that do");
         }
-        ingredient.setFoodMeasure(entityOf(choice.chosen()));
+        ingredient.setFoodMeasure(measureResolver.entityOf(choice.chosen()));
         return dietMapper.toDto(ingredientRepository.save(ingredient));
     }
 
@@ -356,12 +362,13 @@ public class RecipeService implements IRecipeService {
             ingredients = List.of(withMeasure(ingredients.get(0), preferredMeasure));
         }
         Foods foods = foodsOf(ingredients);
-        Measures measures = measuresOf(ingredients, foods, dietId, profile);
+        Map<DishIngredient, ReferenceFoodMeasure> measures =
+                measureResolver.measuresOf(ingredients, foods::bedcaFood, dietId, profile);
 
         Recipe transientRecipe = new Recipe(written.name(), written.rawText(), null, false);
         for (DishIngredient ingredient : ingredients) {
             transientRecipe.addIngredient(dietMapper.toEntity(
-                    ingredient, foods.of(ingredient), measures.of(ingredient)));
+                    ingredient, foods.of(ingredient), measures.get(ingredient)));
         }
         return dietMapper.toDto(transientRecipe);
     }
@@ -386,8 +393,9 @@ public class RecipeService implements IRecipeService {
                         .filter(written -> written == measure).isPresent())
                 .toList();
         List<MeasureChoiceDto> choices = referenceService.chooseMeasures(candidates.stream()
-                .map(ingredient -> query(ingredient.getBedcaFood(), ingredient.getUnit(),
-                        ingredient, null))
+                .map(ingredient -> new MeasureQueryDto(ingredient.getBedcaFood().getId(),
+                        ingredient.getBedcaFood().getName(), ingredient.getUnit(), ingredient.getSize(),
+                        null))
                 .toList(), dietId, profile);
         Map<Long, ReferenceFoodMeasure> entities = referenceService.measureEntities(choices.stream()
                 .map(MeasureChoiceDto::chosen).filter(Objects::nonNull).map(FoodMeasureDto::id)
@@ -403,6 +411,18 @@ public class RecipeService implements IRecipeService {
         }
         ingredientRepository.saveAll(candidates);
         return attached;
+    }
+
+    @Override
+    public MeasureUser user() {
+        return MeasureUser.RECIPE_INGREDIENT;
+    }
+
+    /** One count query: how many recipe ingredients, of any recipe, a household measure weighs. */
+    @Override
+    @Transactional(readOnly = true)
+    public long countUsing(Long measureId) {
+        return ingredientRepository.countByFoodMeasureId(measureId);
     }
 
     private Recipe entityById(Long id) {
@@ -452,28 +472,14 @@ public class RecipeService implements IRecipeService {
 
     /** A library recipe's ingredients, matched and weighed without any diet's criteria. */
     private void fill(Recipe recipe, List<DishIngredient> ingredients, Long dietId, String profile) {
-        requireNoDietMeasures(ingredients.stream()
+        measureResolver.requireNoDietMeasures(ingredients.stream()
                 .map(DishIngredient::foodMeasureId).filter(Objects::nonNull).toList());
         Foods foods = foodsOf(ingredients);
-        Measures measures = measuresOf(ingredients, foods, dietId, profile);
+        Map<DishIngredient, ReferenceFoodMeasure> measures =
+                measureResolver.measuresOf(ingredients, foods::bedcaFood, dietId, profile);
         for (DishIngredient ingredient : ingredients) {
             recipe.addIngredient(dietMapper.toEntity(
-                    ingredient, foods.of(ingredient), measures.of(ingredient)));
-        }
-    }
-
-    private void requireNoDietMeasures(Collection<Long> measureIds) {
-        if (measureIds.isEmpty()) {
-            return;
-        }
-        List<Long> own = referenceService.measureEntities(measureIds).values().stream()
-                .filter(ReferenceFoodMeasure::isDietOwn)
-                .map(ReferenceFoodMeasure::getId)
-                .toList();
-        if (!own.isEmpty()) {
-            throw new InvalidDietException("A library recipe is shared by every diet, so it cannot "
-                    + "be weighed by one diet's own measure " + own + ". Pick a published measure, "
-                    + "or write the quantity in grams");
+                    ingredient, foods.of(ingredient), measures.get(ingredient)));
         }
     }
 
@@ -532,69 +538,6 @@ public class RecipeService implements IRecipeService {
         return new Foods(items, generic, foodResolverService.resolve(names));
     }
 
-    /**
-     * The household measure each ingredient is weighed by, in one pass: one query
-     * for the diet's own measures, the published ones already in memory, and one
-     * batched load of the rows chosen. A measure the request carries is kept when
-     * it still fits the food and the unit; otherwise the rule decides again, and
-     * "decides" means only when the choice is not a judgement.
-     */
-    private Measures measuresOf(List<DishIngredient> ingredients, Foods foods, Long dietId,
-                                String profile) {
-        List<DishIngredient> written = new ArrayList<>();
-        List<MeasureQueryDto> queries = new ArrayList<>();
-        for (DishIngredient ingredient : ingredients) {
-            FoodMatch match = foods.of(ingredient);
-            BedcaFood food = match == null ? null : match.bedcaFood();
-            if (food == null || portionScaler.weighsDirectly(ingredient.unit())
-                    || HouseholdMeasure.ofUnit(ingredient.unit()).isEmpty()) {
-                continue;
-            }
-            written.add(ingredient);
-            queries.add(new MeasureQueryDto(food.getId(), food.getName(), ingredient.unit(),
-                    ingredient.size(), ingredient.foodMeasureId()));
-        }
-        if (queries.isEmpty()) {
-            return Measures.NONE;
-        }
-        List<MeasureChoiceDto> choices = referenceService.chooseMeasures(queries, dietId, profile);
-        Map<Long, ReferenceFoodMeasure> entities = referenceService.measureEntities(choices.stream()
-                .map(MeasureChoiceDto::chosen).filter(Objects::nonNull).map(FoodMeasureDto::id)
-                .distinct().toList());
-
-        Map<DishIngredient, ReferenceFoodMeasure> chosen = new HashMap<>();
-        for (int at = 0; at < written.size(); at++) {
-            FoodMeasureDto choice = choices.get(at).chosen();
-            if (choice != null) {
-                chosen.put(written.get(at), entities.get(choice.id()));
-            }
-        }
-        return new Measures(chosen);
-    }
-
-    /** The measure one stored ingredient may be weighed by, keeping {@code preferred} when it fits. */
-    private MeasureChoiceDto choose(BedcaFood food, String unit, RecipeIngredient ingredient,
-                                    Long preferred, Long dietId, String profile) {
-        if (food == null || portionScaler.weighsDirectly(unit)) {
-            return MeasureChoiceDto.NONE;
-        }
-        return referenceService.chooseMeasures(
-                List.of(query(food, unit, ingredient, preferred)), dietId, profile).get(0);
-    }
-
-    private static MeasureQueryDto query(BedcaFood food, String unit, RecipeIngredient ingredient,
-                                         Long preferred) {
-        return new MeasureQueryDto(food.getId(), food.getName(), unit,
-                ingredient == null ? null : ingredient.getSize(), preferred);
-    }
-
-    private ReferenceFoodMeasure entityOf(FoodMeasureDto measure) {
-        if (measure == null) {
-            return null;
-        }
-        return referenceService.measureEntities(List.of(measure.id())).get(measure.id());
-    }
-
     /** An id the caller made up is a mistake to report, not a food to guess at. */
     private static void requireAllFound(Set<Long> asked, Set<Long> found, String what) {
         List<Long> unknown = asked.stream().filter(id -> !found.contains(id)).toList();
@@ -622,18 +565,11 @@ public class RecipeService implements IRecipeService {
             String key = Texts.normaliseName(ingredient.name());
             return key == null ? null : byName.get(key);
         }
-    }
 
-    /**
-     * The measure chosen for each written ingredient. Two ingredients written
-     * exactly alike ask the same question, so they share the answer.
-     */
-    private record Measures(Map<DishIngredient, ReferenceFoodMeasure> chosen) {
-
-        static final Measures NONE = new Measures(Map.of());
-
-        ReferenceFoodMeasure of(DishIngredient ingredient) {
-            return chosen.get(ingredient);
+        /** The composition-database food the ingredient found, or null. */
+        BedcaFood bedcaFood(DishIngredient ingredient) {
+            FoodMatch match = of(ingredient);
+            return match == null ? null : match.bedcaFood();
         }
     }
 }

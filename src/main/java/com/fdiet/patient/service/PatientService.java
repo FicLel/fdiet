@@ -83,8 +83,9 @@ public class PatientService implements IPatientService {
             patientRepository.flush();
         } catch (DataIntegrityViolationException e) {
             throw new InvalidPatientException("Patient " + id + " still has diets, and a "
-                    + "patient's diets are the record of them. Delete the diets first, or keep "
-                    + "the patient.");
+                    + "patient's diets are the record of them. Delete each of their diets first, "
+                    + "one by one from the patient's list of diets (DELETE /api/diets/{id}), "
+                    + "then delete the patient — or keep the patient.");
         }
     }
 

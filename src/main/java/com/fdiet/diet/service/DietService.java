@@ -3,8 +3,6 @@ package com.fdiet.diet.service;
 import com.fdiet.common.dto.PageDto;
 import com.fdiet.common.helper.Texts;
 import com.fdiet.diet.domain.Diet;
-import com.fdiet.diet.dto.ComposeRequestDto;
-import com.fdiet.diet.dto.ComposedFragmentDto;
 import com.fdiet.diet.dto.CopyDietRequestDto;
 import com.fdiet.diet.dto.DietDay;
 import com.fdiet.diet.dto.DietDto;
@@ -23,7 +21,6 @@ import com.fdiet.diet.dto.RecipeUsageDto;
 import com.fdiet.diet.dto.ResolveIngredientDto;
 import com.fdiet.diet.exception.DietNotFoundException;
 import com.fdiet.diet.exception.InvalidDietException;
-import com.fdiet.diet.helpers.IPortionScaler;
 import com.fdiet.diet.mapper.IDietMapper;
 import com.fdiet.diet.model.DietPlan;
 import com.fdiet.diet.model.DietStatus;
@@ -33,15 +30,10 @@ import com.fdiet.diet.model.Recipe;
 import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.diet.repository.DietRepository;
 import com.fdiet.diet.repository.PlannedDishRepository;
-import com.fdiet.food.model.BedcaFood;
-import com.fdiet.food.service.IBedcaFoodService;
 import com.fdiet.patient.model.Patient;
 import com.fdiet.patient.service.IPatientService;
-import com.fdiet.reference.domain.FoodState;
-import com.fdiet.reference.dto.DietMeasureRequestDto;
+import com.fdiet.reference.dto.MeasureCriterionRequestDto;
 import com.fdiet.reference.dto.FoodMeasureDto;
-import com.fdiet.reference.dto.MeasureChoiceDto;
-import com.fdiet.reference.dto.MeasureQueryDto;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
 import com.fdiet.reference.service.IReferenceService;
 import org.springframework.data.domain.Page;
@@ -50,8 +42,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -75,29 +65,23 @@ public class DietService implements IDietService {
     private final PlannedDishRepository dishRepository;
     private final IDietMapper dietMapper;
     private final IRecipeService recipeService;
-    private final IBedcaFoodService bedcaFoodService;
     private final IPatientService patientService;
     private final IReferenceService referenceService;
-    private final IPortionScaler portionScaler;
     private final IDietRationService rationService;
 
     public DietService(DietRepository dietRepository,
                        PlannedDishRepository dishRepository,
                        IDietMapper dietMapper,
                        IRecipeService recipeService,
-                       IBedcaFoodService bedcaFoodService,
                        IPatientService patientService,
                        IReferenceService referenceService,
-                       IPortionScaler portionScaler,
                        IDietRationService rationService) {
         this.dietRepository = dietRepository;
         this.dishRepository = dishRepository;
         this.dietMapper = dietMapper;
         this.recipeService = recipeService;
-        this.bedcaFoodService = bedcaFoodService;
         this.patientService = patientService;
         this.referenceService = referenceService;
-        this.portionScaler = portionScaler;
         this.rationService = rationService;
     }
 
@@ -257,6 +241,27 @@ public class DietService implements IDietService {
         return dietMapper.toDto(saved);
     }
 
+    /**
+     * One DELETE of the {@code diets} row; the schema takes the rest with it —
+     * meals, dishes, scores, extras and the diet's own measure criteria are all
+     * {@code ON DELETE CASCADE}. The recipe ids are read first, while the plates
+     * still say which recipes they serve, and the private ones go after the
+     * plates have released them ({@code fk_diet_dishes_recipe} would refuse
+     * otherwise). Library recipes and global criteria are never touched.
+     *
+     * <p>Deleting the diet in force leaves the patient with none: no archived
+     * diet is brought back, because which one to resume is a person's decision.
+     */
+    @Override
+    @Transactional
+    public void delete(Long id) {
+        List<Long> recipeIds = dishRepository.recipeIdsOf(id);
+        if (dietRepository.deleteWithWeekById(id) == 0) {
+            throw DietNotFoundException.diet(id);
+        }
+        recipeService.deletePrivate(recipeIds);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public DietDto findActive(Long patientId) {
@@ -350,51 +355,6 @@ public class DietService implements IDietService {
                 profileOf(request.dietId()), null);
     }
 
-    /**
-     * The composer writes text; it does not store an ingredient of its own. The
-     * fragment is built from the food's own catalogue name, so the parser matches
-     * it exactly, and from a spelling of the measure the parser reads — then it
-     * is read back through that same parser, and what comes back is what the
-     * recipe will hold.
-     */
-    @Override
-    @Transactional(readOnly = true)
-    public ComposedFragmentDto compose(ComposeRequestDto request) {
-        if ((request.grams() == null) == (request.foodMeasureId() == null)) {
-            throw new InvalidDietException(
-                    "A composed food is a weight or a household measure: send grams or foodMeasureId");
-        }
-        BedcaFood food = bedcaFoodService.entityById(request.bedcaFoodId());
-        String name = food.getName().replaceAll("[()+:]", " ").replaceAll("\\s+", " ").trim();
-        String profile = profileOf(request.dietId());
-
-        String fragment;
-        if (request.grams() != null) {
-            fragment = name + " (" + amount(request.grams()) + " g" + stateWords(request.state()) + ")";
-        } else {
-            BigDecimal count = request.count() == null ? BigDecimal.ONE : request.count();
-            FoodMeasureDto measure = referenceService.measureEntities(List.of(request.foodMeasureId()))
-                    .values().stream().findFirst()
-                    .map(referenceService::describe)
-                    .orElseThrow(() -> new InvalidDietException(
-                            "No household measure with id " + request.foodMeasureId()));
-            boolean several = count.compareTo(BigDecimal.ONE) > 0;
-            fragment = name + " (" + amount(count) + " "
-                    + measure.measure().written(several, measure.size())
-                    + stateWords(request.state()) + ")";
-            MeasureChoiceDto choice = choose(food, measure.measure().label(), measure.id(),
-                    request.dietId(), profile);
-            if (choice.chosen() == null || !choice.chosen().id().equals(measure.id())) {
-                throw new InvalidDietException("Household measure " + measure.id()
-                        + " does not weigh " + food.getName());
-            }
-        }
-
-        RecipeDto read = recipeService.read(fragment, name, request.dietId(), profile,
-                request.foodMeasureId());
-        return new ComposedFragmentDto(fragment, read.ingredients().get(0));
-    }
-
     @Override
     @Transactional(readOnly = true)
     public DietRationsDto rations(Long dietId, String profileCode) {
@@ -421,7 +381,7 @@ public class DietService implements IDietService {
      */
     @Override
     @Transactional
-    public DietMeasureSavedDto saveMeasure(Long dietId, DietMeasureRequestDto request) {
+    public DietMeasureSavedDto saveMeasure(Long dietId, MeasureCriterionRequestDto request) {
         DietPlan plan = dietRepository.findById(dietId)
                 .orElseThrow(() -> DietNotFoundException.diet(dietId));
         FoodMeasureDto saved = referenceService.saveDietMeasure(dietId, request);
@@ -596,41 +556,5 @@ public class DietService implements IDietService {
             }
         }
         return dishes;
-    }
-
-    /** The measure a food may be weighed by, keeping {@code preferred} when it fits. */
-    private MeasureChoiceDto choose(BedcaFood food, String unit, Long preferred, Long dietId,
-                                    String profile) {
-        if (food == null || portionScaler.weighsDirectly(unit)) {
-            return MeasureChoiceDto.NONE;
-        }
-        return referenceService.chooseMeasures(List.of(new MeasureQueryDto(food.getId(),
-                food.getName(), unit, null, preferred)), dietId, profile).get(0);
-    }
-
-    /** {@code 70}, {@code 0,5}, {@code 1/2}: a number the parser reads back as written. */
-    private static String amount(BigDecimal value) {
-        BigDecimal stripped = value.setScale(2, RoundingMode.HALF_UP).stripTrailingZeros();
-        if (stripped.compareTo(new BigDecimal("0.5")) == 0) {
-            return "1/2";
-        }
-        if (stripped.compareTo(new BigDecimal("0.25")) == 0) {
-            return "1/4";
-        }
-        return stripped.toPlainString().replace('.', ',');
-    }
-
-    private static String stateWords(FoodState state) {
-        if (state == null) {
-            return "";
-        }
-        return switch (state) {
-            case RAW -> " en crudo";
-            case DRY -> " en seco";
-            case COOKED -> " cocinado";
-            case CANNED -> " en conserva";
-            case DRAINED -> " escurrido";
-            case UNSPECIFIED -> "";
-        };
     }
 }

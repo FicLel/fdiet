@@ -2,7 +2,7 @@ package com.fdiet.food.service;
 
 import com.fdiet.common.helper.Texts;
 import com.fdiet.food.dto.NutritionDto;
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFigures;
 import com.fdiet.food.model.FoodItem;
 import com.fdiet.food.model.NutrientValue;
 import org.springframework.stereotype.Service;
@@ -39,7 +39,7 @@ public class NutritionService implements INutritionService {
     private static final int SCALE = 6;
 
     @Override
-    public NutritionDto per100g(BedcaFood food) {
+    public NutritionDto per100g(CompositionFigures food) {
         if (food == null) {
             return NutritionDto.EMPTY;
         }

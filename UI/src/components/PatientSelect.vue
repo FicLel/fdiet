@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import PatientForm from './PatientForm.vue'
+import PatientDiets from './PatientDiets.vue'
 import { usePatients } from '@/stores/patients'
-import type { Patient, Sex } from '@/api/types'
+import type { Patient } from '@/api/types'
 
 /**
  * Who the screen is about, and how to add somebody it could be about.
@@ -13,11 +15,15 @@ import type { Patient, Sex } from '@/api/types'
  *
  * Each row carries the diet that patient is on, because that is the question
  * asked while picking one: who has a week written and who is still waiting.
+ * In the builder each row also opens that patient's diets, to delete one — a
+ * patient is only removed once they have none.
  */
 
 defineProps<{
   /** The phone header has room for the name and nothing else. */
   compact?: boolean
+  /** The nutritionist's screen: each row opens the patient's diets, with a delete per diet. */
+  manageDiets?: boolean
 }>()
 
 const patients = usePatients()
@@ -26,18 +32,13 @@ const open = ref(false)
 /** The add/edit form is showing. */
 const adding = ref(false)
 /** Which patient the form rewrites; null while it adds somebody new. */
-const editingId = ref<number | null>(null)
-const newName = ref('')
-/** Optional. They only suggest the reference profile a new diet is read against. */
-const birthDate = ref('')
-const sex = ref<Sex | ''>('')
+const editing = ref<Patient | null>(null)
 /** Which row is one click from being removed; only ever one at a time. */
 const confirming = ref<number | null>(null)
-
-const today = new Date().toISOString().slice(0, 10)
+/** Whose diets the menu is showing instead of the caseload. */
+const viewingDiets = ref<Patient | null>(null)
 
 const root = ref<HTMLElement | null>(null)
-const nameField = ref<HTMLInputElement | null>(null)
 
 const label = computed(() => patients.selected.value?.name ?? 'Sin pacientes')
 
@@ -52,15 +53,13 @@ const initial = computed(() => label.value.trim().charAt(0).toUpperCase() || '·
 
 function resetForm(): void {
   adding.value = false
-  editingId.value = null
-  newName.value = ''
-  birthDate.value = ''
-  sex.value = ''
+  editing.value = null
 }
 
 function close(): void {
   open.value = false
   confirming.value = null
+  viewingDiets.value = null
   resetForm()
   patients.clearError()
 }
@@ -78,44 +77,27 @@ function pick(id: number): void {
   close()
 }
 
-async function startAdding(patient?: Patient): Promise<void> {
-  resetForm()
+function startAdding(patient?: Patient): void {
+  editing.value = patient ?? null
   adding.value = true
   confirming.value = null
-  if (patient) {
-    editingId.value = patient.id
-    newName.value = patient.name
-    birthDate.value = patient.birthDate ?? ''
-    sex.value = patient.sex ?? ''
-  }
   patients.clearError()
-  await nextTick()
-  nameField.value?.focus()
 }
 
-async function add(): Promise<void> {
-  const name = newName.value.trim()
-  if (name === '') {
-    return
-  }
-  const request = {
-    name,
-    birthDate: birthDate.value || null,
-    sex: sex.value || null,
-  }
-  if (editingId.value !== null) {
-    const patient = patients.patients.value.find((row) => row.id === editingId.value)
-    // The note is not on this form, so it is sent back as it was.
-    if (await patients.update(editingId.value, { ...request, notes: patient?.notes ?? null })) {
-      resetForm()
-    }
-    return
-  }
-  // `create` switches to whoever was just added, which is what somebody who
-  // has just typed a name wants next.
-  if (await patients.create(request)) {
+/** A new patient closes the menu: `create` already switched to them. */
+function onSaved(created: boolean): void {
+  if (created) {
     close()
+  } else {
+    resetForm()
   }
+}
+
+function showDiets(patient: Patient): void {
+  resetForm()
+  confirming.value = null
+  patients.clearError()
+  viewingDiets.value = patient
 }
 
 async function remove(id: number): Promise<void> {
@@ -130,7 +112,6 @@ async function remove(id: number): Promise<void> {
     confirming.value = null
   }
 }
-
 function onOutside(event: MouseEvent): void {
   if (open.value && root.value && !root.value.contains(event.target as Node)) {
     close()
@@ -184,133 +165,108 @@ onBeforeUnmount(() => {
 
     <!-- The trigger sits on the right of the patient header, so on a phone the
          menu hangs from that edge instead of running off it. -->
-    <div v-if="open" class="menu" :class="{ compact }" role="listbox">
-      <p v-if="patients.listing.value.length === 0" class="empty">
-        Todavía no hay ningún paciente.
-      </p>
+    <div v-if="open" class="menu" :class="{ compact }" :role="viewingDiets ? 'dialog' : 'listbox'">
+      <PatientDiets v-if="viewingDiets" :patient="viewingDiets" @back="viewingDiets = null" />
 
-      <div
-        v-for="row in patients.listing.value"
-        :key="row.patient.id"
-        class="row"
-        :class="{ current: row.patient.id === patients.selectedId.value }"
-      >
-        <button
-          class="option"
-          type="button"
-          role="option"
-          :aria-selected="row.patient.id === patients.selectedId.value"
-          @click="pick(row.patient.id)"
-        >
-          <span class="avatar">{{ row.patient.name.charAt(0).toUpperCase() }}</span>
-          <span class="who">
-            <span class="who-name">{{ row.patient.name }}</span>
-            <span class="who-meta" :class="{ none: !row.hasDiet }">{{ row.meta }}</span>
-          </span>
-        </button>
-
-        <button
-          class="remove"
-          type="button"
-          :disabled="patients.saving.value"
-          :title="`Editar a ${row.patient.name}`"
-          :aria-label="`Editar a ${row.patient.name}`"
-          @click="startAdding(row.patient)"
-        >
-          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M9.5 2.5l2 2L5 11H3V9z" />
-          </svg>
-        </button>
-
-        <button
-          class="remove"
-          :class="{ armed: confirming === row.patient.id }"
-          type="button"
-          :disabled="patients.saving.value"
-          :title="
-            confirming === row.patient.id
-              ? 'Pulsa otra vez para quitarlo'
-              : `Quitar a ${row.patient.name}`
-          "
-          @click="remove(row.patient.id)"
-        >
-          {{ confirming === row.patient.id ? '¿Seguro?' : '×' }}
-        </button>
-      </div>
-
-      <p v-if="patients.error.value" class="error">{{ patients.error.value }}</p>
-
-      <div class="foot">
-        <form v-if="adding" class="add-form" @submit.prevent="add()">
-          <span class="form-title">{{ editingId === null ? 'Nuevo paciente' : 'Editar paciente' }}</span>
-          <input
-            ref="nameField"
-            v-model="newName"
-            class="add-field"
-            type="text"
-            maxlength="255"
-            placeholder="Nombre del paciente"
-            aria-label="Nombre"
-            :disabled="patients.saving.value"
-          />
-          <div class="form-line">
-            <label class="mini">
-              <span>Nacimiento</span>
-              <input
-                v-model="birthDate"
-                class="add-field"
-                type="date"
-                :max="today"
-                :disabled="patients.saving.value"
-              />
-            </label>
-            <label class="mini">
-              <span>Sexo</span>
-              <select v-model="sex" class="add-field" :disabled="patients.saving.value">
-                <option value="">Sin indicar</option>
-                <option value="FEMALE">Mujer</option>
-                <option value="MALE">Hombre</option>
-              </select>
-            </label>
-          </div>
-          <p class="form-hint">
-            Opcionales. Sólo sirven para proponer la población de referencia de una dieta nueva.
-          </p>
-          <div class="form-line">
-            <button class="add-cancel" type="button" @click="resetForm()">Cancelar</button>
-            <button
-              class="add-save"
-              type="submit"
-              :disabled="newName.trim() === '' || patients.saving.value"
-            >
-              Guardar
-            </button>
-          </div>
-        </form>
-
-        <button v-else class="add" type="button" @click="startAdding()">
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 14 14"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            aria-hidden="true"
-          >
-            <path d="M7 3v8M3 7h8" />
-          </svg>
-          Añadir paciente
-        </button>
-
-        <!-- The shape of this control suggests a login. It is not one, and the
-             note is here so nobody has to find that out by trying. -->
-        <p class="note">
-          Cambiar de paciente cambia la semana que se ve. No hay cuentas ni contraseñas: cualquiera
-          puede ver la dieta de cualquiera.
+      <template v-else>
+        <p v-if="patients.listing.value.length === 0" class="empty">
+          Todavía no hay ningún paciente.
         </p>
-      </div>
+
+        <div
+          v-for="row in patients.listing.value"
+          :key="row.patient.id"
+          class="row"
+          :class="{ current: row.patient.id === patients.selectedId.value }"
+        >
+          <button
+            class="option"
+            type="button"
+            role="option"
+            :aria-selected="row.patient.id === patients.selectedId.value"
+            @click="pick(row.patient.id)"
+          >
+            <span class="avatar">{{ row.patient.name.charAt(0).toUpperCase() }}</span>
+            <span class="who">
+              <span class="who-name">{{ row.patient.name }}</span>
+              <span class="who-meta" :class="{ none: !row.hasDiet }">{{ row.meta }}</span>
+            </span>
+          </button>
+
+          <button
+            v-if="manageDiets"
+            class="remove diets"
+            type="button"
+            :title="`Dietas de ${row.patient.name}, para eliminar alguna`"
+            @click="showDiets(row.patient)"
+          >
+            Dietas
+          </button>
+
+          <button
+            class="remove"
+            type="button"
+            :disabled="patients.saving.value"
+            :title="`Editar a ${row.patient.name}`"
+            :aria-label="`Editar a ${row.patient.name}`"
+            @click="startAdding(row.patient)"
+          >
+            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9.5 2.5l2 2L5 11H3V9z" />
+            </svg>
+          </button>
+
+          <button
+            class="remove"
+            :class="{ armed: confirming === row.patient.id }"
+            type="button"
+            :disabled="patients.saving.value"
+            :title="
+              confirming === row.patient.id
+                ? 'Pulsa otra vez para quitarlo'
+                : `Quitar a ${row.patient.name}`
+            "
+            @click="remove(row.patient.id)"
+          >
+            {{ confirming === row.patient.id ? '¿Seguro?' : '×' }}
+          </button>
+        </div>
+
+        <p v-if="patients.error.value" class="error">{{ patients.error.value }}</p>
+
+        <div class="foot">
+          <PatientForm
+            v-if="adding"
+            :key="editing?.id ?? 'new'"
+            :patient="editing"
+            @saved="onSaved"
+            @cancel="resetForm()"
+          />
+
+          <button v-else class="add" type="button" @click="startAdding()">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <path d="M7 3v8M3 7h8" />
+            </svg>
+            Añadir paciente
+          </button>
+
+          <!-- The shape of this control suggests a login. It is not one, and the
+               note is here so nobody has to find that out by trying. -->
+          <p class="note">
+            Cambiar de paciente cambia la semana que se ve. No hay cuentas ni contraseñas: cualquiera
+            puede ver la dieta de cualquiera.
+          </p>
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -474,6 +430,16 @@ onBeforeUnmount(() => {
   color: var(--amber-700);
 }
 
+.remove.diets {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.remove.diets:hover {
+  color: var(--sage-700);
+}
+
 .remove.armed {
   font-size: 11px;
   font-weight: 500;
@@ -514,78 +480,6 @@ onBeforeUnmount(() => {
 
 .add:hover {
   background: var(--sage-50);
-}
-
-.add-form {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding: 7px 4px 5px;
-}
-
-.form-title {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--sage-700);
-}
-
-.form-line {
-  display: flex;
-  gap: 6px;
-}
-
-.mini {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  font-size: 10.5px;
-  color: var(--ink-muted);
-}
-
-.form-hint {
-  margin: 0;
-  font-size: 10.5px;
-  line-height: 1.4;
-  color: var(--ink-faint);
-}
-
-.add-cancel {
-  flex: 1 1 0;
-  height: 32px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  font-weight: 500;
-  color: var(--ink);
-}
-
-.add-field {
-  flex: 1 1 0;
-  min-width: 0;
-  width: 100%;
-  height: 32px;
-  padding: 0 9px;
-  border: 1px solid var(--line-input);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--ink);
-}
-
-.add-save {
-  flex: 1 1 0;
-  height: 32px;
-  padding: 0 12px;
-  border-radius: var(--radius);
-  font-weight: 500;
-  color: var(--surface);
-  background: var(--sage-700);
-}
-
-.add-save:disabled {
-  background: #c2ccc6;
 }
 
 .note {

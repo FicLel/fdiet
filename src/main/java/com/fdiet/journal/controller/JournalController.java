@@ -4,6 +4,7 @@ import com.fdiet.diet.dto.MealType;
 import com.fdiet.journal.dto.DietJournalDto;
 import com.fdiet.journal.dto.DishScoreDto;
 import com.fdiet.journal.dto.ExtraFoodDto;
+import com.fdiet.journal.dto.JournalCountsDto;
 import com.fdiet.journal.dto.LogExtraFoodRequestDto;
 import com.fdiet.journal.dto.ScoreDishRequestDto;
 import com.fdiet.journal.service.IJournalService;
@@ -52,6 +53,13 @@ public class JournalController {
             + "been scored")
     public DietJournalDto find(@PathVariable Long dietId) {
         return journalService.find(dietId);
+    }
+
+    @GetMapping("/{dietId}/counts")
+    @Operation(summary = "How many plates the patient has scored and how many extras they "
+            + "logged on this diet — what deleting the diet would take with it")
+    public JournalCountsDto counts(@PathVariable Long dietId) {
+        return journalService.counts(dietId);
     }
 
     @PutMapping("/{dietId}/scores/{day}/{mealType}/{dishIndex}")

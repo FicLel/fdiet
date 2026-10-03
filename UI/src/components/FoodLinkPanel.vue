@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { useFoodLink } from '@/stores/foodLink'
-import { integer, NO_VALUE, quantity } from '@/domain/format'
+import { integer, NO_VALUE } from '@/domain/format'
 import { measureSource, measureText, perMeasure, stateWord } from '@/domain/rations'
-import { quantityText } from '@/domain/dishText'
+import { amountText } from '@/domain/dishText'
 import { dayName } from '@/domain/week'
 
 /**
@@ -131,7 +131,7 @@ watch(
         <div class="subject">
           <span class="subject-name">{{ at.name }}</span>
           <span class="num subject-qty">
-            {{ at.quantityMax === null ? quantity(at.quantity, at.unit) : `${quantityText(at)} ${at.unit}` }}
+            {{ amountText(at) }}
           </span>
         </div>
         <div class="where">{{ where }}</div>
@@ -162,7 +162,7 @@ watch(
       <form v-if="at.quantityMax !== null" class="range" @submit.prevent="settled !== null && link.confirmQuantity(settled)">
         <span class="title">Cantidad en intervalo</span>
         <p class="note">
-          Escrito como {{ quantityText(at) }} {{ at.unit }}. No cuenta en las cifras hasta que
+          Escrito como {{ amountText(at) }}. No cuenta en las cifras hasta que
           elijas un valor.
         </p>
         <div class="own-line">

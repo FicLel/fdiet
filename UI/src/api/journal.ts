@@ -1,5 +1,12 @@
 import { http } from './http'
-import type { DayOfWeek, DietJournal, DishScore, ExtraFood, MealType } from './types'
+import type {
+  DayOfWeek,
+  DietJournal,
+  DishScore,
+  ExtraFood,
+  JournalCounts,
+  MealType,
+} from './types'
 
 /** What the patient logs when they eat something the plan did not prescribe. */
 export interface LogExtraFoodRequest {
@@ -28,6 +35,9 @@ export interface LogExtraFoodRequest {
 export const journalApi = {
   /** A whole week's scores and off-plan entries, in one request. */
   find: (dietId: number) => http.get<DietJournal>(`/journal/${dietId}`),
+
+  /** How many scores and extras hang off a diet: what deleting it would take with it. */
+  counts: (dietId: number) => http.get<JournalCounts>(`/journal/${dietId}/counts`),
 
   /** Scores one plate, writing over any earlier opinion of the same slot. */
   score: (dietId: number, day: DayOfWeek, mealType: MealType, dishIndex: number, score: number) =>

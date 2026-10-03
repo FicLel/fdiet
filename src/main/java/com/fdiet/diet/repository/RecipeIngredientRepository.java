@@ -49,4 +49,7 @@ public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredie
 
     @EntityGraph(attributePaths = "recipe")
     Optional<RecipeIngredient> findByIdAndRecipeIdIn(Long id, Collection<Long> recipeIds);
+
+    /** How many ingredients, of any recipe, a household measure weighs — the reach of a change to it. */
+    long countByFoodMeasureId(Long foodMeasureId);
 }

@@ -4,7 +4,9 @@ import com.fdiet.common.dto.ApiErrorDto;
 import com.fdiet.diet.exception.DietNotFoundException;
 import com.fdiet.diet.exception.InvalidDietException;
 import com.fdiet.food.exception.BedcaFoodNotFoundException;
+import com.fdiet.food.exception.CompositionFoodNotFoundException;
 import com.fdiet.food.exception.FoodItemNotFoundException;
+import com.fdiet.food.exception.InvalidCompositionDataException;
 import com.fdiet.journal.exception.InvalidJournalEntryException;
 import com.fdiet.journal.exception.JournalEntryNotFoundException;
 import com.fdiet.patient.exception.InvalidPatientException;
@@ -27,6 +29,7 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler({FoodItemNotFoundException.class, BedcaFoodNotFoundException.class,
+            CompositionFoodNotFoundException.class,
             DietNotFoundException.class, JournalEntryNotFoundException.class,
             PatientNotFoundException.class, ReferenceNotFoundException.class})
     public ResponseEntity<ApiErrorDto> handleNotFound(RuntimeException e) {
@@ -75,8 +78,9 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, e.getMessage());
     }
 
-    @ExceptionHandler(UncheckedIOException.class)
-    public ResponseEntity<ApiErrorDto> handleUnreadableSource(UncheckedIOException e) {
+    /** A source file that cannot be read, or one whose contents cannot be loaded as they stand. */
+    @ExceptionHandler({UncheckedIOException.class, InvalidCompositionDataException.class})
+    public ResponseEntity<ApiErrorDto> handleUnreadableSource(RuntimeException e) {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, e.getMessage());
     }
 

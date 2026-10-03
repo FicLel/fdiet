@@ -1,0 +1,123 @@
+source,source_code,name_es,aliases,preferred,edible_portion,edible_portion_fdc_id,reviewed,note
+CIQUAL,17270,Aceite de oliva virgen extra,aceite de oliva;AOVE,true,1.00,171413,true,
+BLS,G230100,"Acelga, cruda",acelga;acelgas,true,0.92,169991,true,CIQUAL only publishes the stalk.
+CIQUAL,13004,Aguacate,aguacate,true,0.74,171705,true,
+CIQUAL,11000,"Ajo, crudo",ajo;ajos,true,0.87,169230,true,
+CIQUAL,13000,"Albaricoque, crudo",albaricoque;albaricoques,true,0.93,171697,true,
+CIQUAL,20052,"Alcachofa, cruda",alcachofa;alcachofas,true,0.40,169205,true,
+CIQUAL,15000,"Almendra, con piel",almendra;almendras,true,0.40,170567,true,Shelled almonds; SR Legacy gives no refuse for shelled nuts.
+CIQUAL,20023,"Apio, crudo",apio,true,0.89,169988,true,
+CIQUAL,13028,"Arándano, crudo",arándano;arándanos,true,0.95,171711,true,
+CIQUAL,26043,"Bacalao, crudo",bacalao,true,1.00,171955,true,Fresh cod. Desalted salt cod has no equivalent in either table.
+CIQUAL,20053,"Berenjena, cruda",berenjena;berenjenas,true,0.81,169228,true,
+CIQUAL,20020,"Calabacín, crudo",calabacín;calabacines,true,0.95,169291,true,
+CIQUAL,20044,"Calabaza, cruda",calabaza,true,0.70,168448,true,
+CIQUAL,25948,Caldo vegetal,caldo vegetal;caldo de verduras,true,1.00,171583,true,Stock cube reconstituted with water.
+CIQUAL,20054,"Cardo, crudo",cardo,true,0.49,169981,true,
+CIQUAL,20034,"Cebolla, cruda",cebolla;cebollas,true,0.90,170000,true,
+CIQUAL,20238,"Cebolla morada, cruda",cebolla morada;cebolla roja,true,0.90,170000,true,"SR Legacy has no red-onion row; the refuse of Onions, raw is used."
+CIQUAL,13008,"Cereza, cruda",cereza;cerezas,true,0.92,171719,true,
+CIQUAL,20056,"Champiñón, crudo",champiñón;champiñones,true,0.97,169251,true,
+CIQUAL,13100,"Ciruela, cruda",ciruela;ciruelas,true,0.94,169949,true,
+CIQUAL,20116,"Col blanca, cruda",col blanca;repollo,true,0.80,169975,true,
+CIQUAL,20058,"Col de Bruselas, cruda",col de bruselas;coles de bruselas,true,0.90,170383,true,
+CIQUAL,20082,"Coliflor, congelada, cruda",coliflor congelada,true,1.00,170398,true,
+CIQUAL,20016,"Coliflor, cruda",coliflor,true,0.39,169986,true,
+CIQUAL,20026,"Endibia, cruda",endibia;endibias,true,0.89,170404,true,
+CIQUAL,20090,"Escarola, cruda",escarola,true,0.86,168412,true,
+CIQUAL,20076,"Espárrago blanco, en conserva",espárragos blancos;espárragos en conserva,true,1.00,169207,true,
+CIQUAL,20279,"Espárrago verde, crudo",espárragos;espárragos verdes;espárragos trigueros;espárrago verde,true,0.53,168389,true,
+CIQUAL,20059,"Espinaca, cruda",espinacas;espinacas frescas;espinaca,true,0.72,168462,true,
+CIQUAL,13015,"Frambuesa, cruda",frambuesa;frambuesas,true,0.96,167755,true,
+CIQUAL,13014,"Fresa, cruda",fresa;fresas;fresón;fresones,true,0.94,167762,true,
+CIQUAL,13018,"Granada, cruda",granada,true,0.56,169134,true,
+CIQUAL,13019,"Grosella roja, cruda",grosella;grosellas,true,0.98,173964,true,
+CIQUAL,20084,"Guisante, congelado, crudo",guisantes congelados,true,1.00,170016,true,
+CIQUAL,20036,"Guisante, en conserva, escurrido",guisantes en conserva,true,1.00,170015,true,
+CIQUAL,20072,"Guisante, crudo",guisante;guisantes,true,0.38,170419,true,
+CIQUAL,13012,"Higo, crudo",higo;higos;brevas,true,0.99,173021,true,
+CIQUAL,22000,"Huevo, crudo",huevo;huevos;huevo de gallina,true,0.88,171287,true,Refuse is the shell.
+CIQUAL,22010,"Huevo, cocido",huevo cocido;huevo duro;huevos cocidos;huevos duros,true,0.88,173424,true,
+CIQUAL,18022,"Infusión, sin azúcar",infusión;infusión sin azúcar;infusiones,true,1.00,173232,true,
+CIQUAL,28845,"Jamón, serrano",jamón serrano,true,,,true,SR Legacy has no dry-cured ham; edible portion left blank.
+CIQUAL,20061,"Judía verde, cruda",judía verde;judías verdes,true,0.88,169961,true,
+CIQUAL,20062,"Judía verde, en conserva, escurrida",judías verdes en conserva,true,1.00,169143,true,
+CIQUAL,13021,"Kiwi, crudo",kiwi;kiwis,true,0.76,168153,true,
+CIQUAL,20031,"Lechuga, cruda",lechuga,true,0.64,169249,true,
+CIQUAL,13009,"Limón, crudo",limón;limones,true,0.53,167746,true,
+CIQUAL,2007,"Limón, zumo",zumo de limón,true,1.00,167747,true,
+CIQUAL,13024,"Mandarina, cruda",mandarina;mandarinas;clementina;clementinas,true,0.74,169105,true,
+CIQUAL,13025,"Mango, crudo",mango,true,0.71,169910,true,
+CIQUAL,13039,"Manzana, cruda",manzana;manzanas,true,0.90,171688,true,
+CIQUAL,13043,"Melocotón, crudo",melocotón;melocotones,true,0.96,169928,true,
+CIQUAL,13118,"Melocotón, desecado",melocotón seco;orejones de melocotón,true,1.00,169934,true,
+CIQUAL,13742,"Melón, crudo",melón,true,0.46,169911,true,"Honeydew, the closest to the Spanish piel de sapo."
+CIQUAL,13010,"Membrillo, crudo",membrillo,true,0.61,168163,true,
+CIQUAL,20064,"Nabo, pelado, crudo",nabo;nabos,true,0.81,170465,true,
+CIQUAL,13034,"Naranja, cruda",naranja;naranjas,true,0.73,169097,true,
+CIQUAL,2013,"Naranja, zumo natural",zumo de naranja;zumo de naranja natural,true,1.00,169098,true,
+CIQUAL,13148,"Nectarina, cruda",nectarina;nectarinas,true,0.91,169914,true,
+CIQUAL,15005,"Nuez, seca",nuez;nueces,true,0.45,170187,true,Shelled walnut kernels; SR Legacy gives no refuse for shelled nuts.
+CIQUAL,20018,"Palmito, en conserva, escurrido",palmito;palmitos,true,1.00,168569,true,
+CIQUAL,7110,Pan integral,pan integral,true,1.00,172688,true,
+CIQUAL,13035,"Papaya, cruda",papaya,true,0.62,169926,true,
+CIQUAL,4008,"Patata, pelada, cruda",patata;patatas,true,0.75,170026,true,
+CIQUAL,4003,"Patata, cocida",patata hervida;patata cocida;patatas cocidas,true,1.00,170440,true,
+CIQUAL,20019,"Pepino, crudo",pepino;pepinos,true,0.97,168409,true,
+CIQUAL,13037,"Pera, cruda",pera;peras,true,0.90,169118,true,
+CIQUAL,11014,"Perejil, fresco",perejil;perejil fresco,true,0.95,170416,true,
+CIQUAL,20087,"Pimiento rojo, crudo",pimiento rojo;pimientos rojos,true,0.82,170108,true,
+CIQUAL,20085,"Pimiento verde, crudo",pimiento verde;pimientos verdes,true,0.82,170427,true,
+CIQUAL,20168,"Pimiento amarillo, crudo",pimiento amarillo,true,0.82,169383,true,
+CIQUAL,13002,"Piña, cruda",piña,true,0.51,169124,true,
+CIQUAL,13005,"Plátano, crudo",plátano;plátanos;banana,true,0.64,173944,true,
+CIQUAL,36003,"Pollo, carne, cruda",pollo,true,0.48,171052,true,
+CIQUAL,36018,"Pollo, pechuga, plancha",pechuga de pollo a la plancha;pechuga de pollo plancha,true,1.00,171534,true,
+CIQUAL,36017,"Pollo, pechuga, cruda",pechuga de pollo,true,1.00,171077,true,
+CIQUAL,36005,"Pollo, asado",pollo asado,true,0.67,171450,true,Meat and skin.
+BLS,F604100,"Pomelo, crudo",pomelo;pomelos,true,0.51,174673,true,CIQUAL only has pummelo.
+CIQUAL,20039,"Puerro, crudo",puerro;puerros,true,0.44,169246,true,
+BLS,G130100,"Rúcula, cruda",rúcula;rucula,true,0.60,169387,true,CIQUAL only has roman rocket.
+CIQUAL,26037,"Salmón, ahumado",salmón ahumado,true,1.00,173687,true,
+CIQUAL,13036,"Sandía, cruda",sandía,true,0.52,167765,true,
+BLS,H620902,"Soja, germinada, en conserva, escurrida",brotes de soja;soja germinada,true,1.00,170079,true,
+CIQUAL,20385,"Tomate, crudo",tomate;tomates;tomate maduro;tomate en rodajas,true,0.91,170457,true,
+CIQUAL,20172,"Tomate cherry, crudo",tomate cherry;tomates cherry,true,0.91,170457,true,SR Legacy has no cherry-tomato row; the refuse of ripe tomatoes is used.
+CIQUAL,20169,"Tomate, pelado y triturado, en conserva",tomate triturado,true,1.00,170051,true,
+CIQUAL,13044,"Uva blanca, cruda",uva blanca;uvas blancas,true,0.96,174683,true,
+CIQUAL,13045,"Uva negra, cruda",uva negra;uvas negras,true,0.96,174683,true,
+CIQUAL,13395,"Uva, cruda",uva;uvas,true,0.96,174683,true,
+CIQUAL,13046,Uva pasa,uva pasa;uvas pasas;pasas,true,1.00,168165,true,
+CIQUAL,11091,Vinagre balsámico,vinagre balsámico,true,1.00,172241,true,
+BLS,R123100,Vinagre de manzana,vinagre de manzana,true,1.00,173469,true,"CIQUAL cider vinegar (11090) publishes no energy, so BLS answers."
+CIQUAL,11018,Vinagre,vinagre,true,1.00,172237,true,
+CIQUAL,20009,"Zanahoria, cruda",zanahoria;zanahorias;zanahoria rallada;palitos de zanahoria,true,0.89,170393,true,
+CIQUAL,2016,"Uva, zumo",zumo de uva,true,1.00,173042,true,
+CIQUAL,11017,Sal,sal;sal fina,true,1.00,173468,true,
+CIQUAL,28964,"Pavo, fiambre en lonchas",lonchas de pavo;fiambre de pavo;pavo en lonchas,true,1.00,172941,true,
+CIQUAL,36306,"Pavo, pechuga, plancha",pechuga de pavo a la plancha,true,,,true,"SR Legacy only has bone-in turkey breast; an escalope is boneless, so the edible portion is left blank."
+CIQUAL,20066,"Maíz dulce, en conserva, escurrido",maíz;maíz dulce,true,1.00,169214,true,
+CIQUAL,26044,"Merluza, cruda",merluza,true,1.00,173713,true,
+CIQUAL,22500,Tortilla francesa,tortilla francesa,true,1.00,172185,true,
+CIQUAL,19033,"Leche, semidesnatada",leche semidesnatada,true,1.00,171267,true,
+CIQUAL,11027,"Menta, fresca",menta;menta fresca;hierbabuena,true,0.41,173475,true,
+BLS,U611172,"Cerdo, solomillo, plancha",solomillo de cerdo a la plancha,true,0.96,168250,true,"CIQUAL has the tenderloin cooked, not grilled."
+CIQUAL,20360,"Lenteja, cocida",lentejas cocidas;lenteja cocida,true,1.00,172421,true,
+CIQUAL,11049,Pimentón,pimentón;pimentón dulce,true,1.00,171329,true,
+CIQUAL,7340,Biscote integral,biscotes integrales;biscote integral,true,1.00,172689,true,
+CIQUAL,9102,"Arroz integral, crudo",arroz integral;arroz integral crudo,true,1.00,169703,true,
+CIQUAL,11104,Salsa de soja,salsa de soja,true,1.00,174277,true,"Not the low-sodium kind, which neither table publishes."
+CIQUAL,11038,"Tomillo, seco",tomillo,true,1.00,170938,true,
+CIQUAL,11035,"Orégano, seco",orégano,true,1.00,171328,true,
+CIQUAL,11060,"Hierbas provenzales, secas",hierbas provenzales,true,,,true,SR Legacy has no herb mix; edible portion left blank.
+BLS,X389000,Guacamole,guacamole;guacamole casero,true,,,true,BLS recipe (homemade). SR Legacy has no guacamole; edible portion left blank.
+BLS,X411243,Caldo de pollo,caldo de pollo;caldo de pollo casero,true,1.00,172884,true,BLS recipe (homemade).
+CIQUAL,9870,"Pasta integral, seca",fideos integrales;pasta integral;macarrones integrales,true,1.00,169738,true,
+CIQUAL,18151,"Café con leche, sin azúcar",café con leche,true,,,true,SR Legacy has no coffee with milk; edible portion left blank.
+CIQUAL,13033,"Aceituna verde, en salmuera",aceitunas;aceitunas verdes;aceituna,true,1.00,169096,true,SR Legacy publishes these olives with no refuse.
+BLS,K420162,"Boniato, asado",boniato asado;batata asada,true,0.78,168483,true,"CIQUAL has sweet potato cooked, not baked."
+CIQUAL,15004,"Avellana, sin sal",avellana;avellanas,true,0.41,170581,true,
+CIQUAL,20507,"Garbanzo, cocido",garbanzos cocidos;garbanzo cocido,true,1.00,173757,true,
+CIQUAL,26039,"Atún, en conserva al natural, escurrido",atún al natural;atún en conserva,true,1.00,173709,true,
+BLS,H430100,"Pipas de girasol, peladas",pipas de girasol;semillas de girasol,true,0.54,170562,true,Unsalted kernels.
+CIQUAL,15047,"Chía, semilla",semillas de chía;semilla de chía;chía,true,1.00,170554,true,

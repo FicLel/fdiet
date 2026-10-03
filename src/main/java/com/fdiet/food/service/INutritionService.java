@@ -1,7 +1,7 @@
 package com.fdiet.food.service;
 
 import com.fdiet.food.dto.NutritionDto;
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFigures;
 import com.fdiet.food.model.FoodItem;
 
 /**
@@ -17,8 +17,11 @@ import com.fdiet.food.model.FoodItem;
  */
 public interface INutritionService {
 
-    /** The generic food's composition per 100 g of edible portion. */
-    NutritionDto per100g(BedcaFood food);
+    /**
+     * A composition food's figures per 100 g of edible portion — BEDCA, CIQUAL
+     * or BLS, which all publish each figure with its own unit.
+     */
+    NutritionDto per100g(CompositionFigures food);
 
     /** The branded product's composition per 100 g, as its label declares it. */
     NutritionDto per100g(FoodItem item);

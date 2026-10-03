@@ -9,7 +9,11 @@ import type { BedcaFood, FoodItem, Page } from './types'
  * (`Lechuga`, `Pollo, pechuga, plancha`), `branded` the ~100k commercial
  * products, keyed on EAN, for the days a diet names a product outright.
  *
- * Both searches are `LIKE '%…%'` on the name under a case- and
+ * The `bedca` search is word by word — accents, case and plurals ignored — and
+ * answers in rank order, best first, so `pan de molde` finds
+ * `Pan blanco, de molde, tostado`; a blank name is an alphabetical page and a
+ * term nothing matches an empty one. Callers show that order as it comes.
+ * The `branded` search is `LIKE '%…%'` on the name under a case- and
  * accent-insensitive collation, so `lechuga` finds `Lechuga`.
  */
 export const catalogueApi = {

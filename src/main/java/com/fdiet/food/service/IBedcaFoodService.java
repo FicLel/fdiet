@@ -23,7 +23,14 @@ import java.util.Map;
  */
 public interface IBedcaFoodService {
 
-    /** A page of foods, narrowed to those whose name contains {@code name}. */
+    /**
+     * A page of foods. Without {@code name}, every food alphabetically. With
+     * it, the foods sharing at least one of its words (reduced by
+     * {@link com.fdiet.food.helpers.INameMatcher#tokens}: accents, plurals and
+     * quantity words dropped), ranked by how many they share and then as
+     * {@link #suggest} ranks; a food that only contains the term as typed
+     * ({@code lechu} in {@code Lechuga}) comes last.
+     */
     PageDto<BedcaFoodDto> search(String name, int page, int size);
 
     BedcaFoodDto findById(Long id);

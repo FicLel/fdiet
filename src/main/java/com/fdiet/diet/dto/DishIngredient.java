@@ -1,9 +1,11 @@
 package com.fdiet.diet.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fdiet.food.dto.FoodSuggestionDto;
 import com.fdiet.food.dto.NutritionDto;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.PortionSize;
+import com.fdiet.reference.domain.UnitWording;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -41,6 +43,11 @@ import java.util.List;
  * would weigh in the food's state by a published cooking yield — offered, never
  * applied), {@code nutrition} (this ingredient's own quantity, not per
  * 100 g) and {@code suggestions}, which the fix-up listing fills when asked to.
+ *
+ * <p>{@code unitWording} is the unit said in both numbers with its size agreeing
+ * ({@code unidad mediana} / {@code unidades medianas}), derived from {@code name},
+ * {@code unit} and {@code size} on the way out and ignored on the way in; see
+ * {@link UnitWording}.
  */
 public record DishIngredient(
         Long id,
@@ -95,6 +102,12 @@ public record DishIngredient(
         return new DishIngredient(id, name, quantity, quantityMax, unit, state, size, foodItemId,
                 bedcaFoodId, foodMeasureId, matchedName, measure, stateMismatch, yieldHint, nutrition,
                 candidates);
+    }
+
+    /** The unit as the patient reads it, in both numbers; derived, never stored. */
+    @JsonProperty(value = "unitWording", access = JsonProperty.Access.READ_ONLY)
+    public UnitWording unitWording() {
+        return UnitWording.of(name, unit, size);
     }
 
     /** Whether the quantity is a range nobody has settled yet. */

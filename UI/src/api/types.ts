@@ -118,6 +118,19 @@ export interface FoodItem {
   carbohydratesG: number | null
 }
 
+/**
+ * The unit as the patient reads it, worded by the backend with the size
+ * agreeing (`unidad mediana` / `unidades medianas`). When the size is already
+ * in the name (`kiwi mediano`), `sizeInName` is true and the wording leaves it
+ * out. Plain `g`/`ml` or an unknown word come back as stored. Read-only:
+ * never sent back.
+ */
+export interface UnitWording {
+  singular: string | null
+  plural: string | null
+  sizeInName: boolean
+}
+
 export interface DishIngredient {
   id: number | null
   /** What the diet calls the food, exactly as written. */
@@ -130,6 +143,8 @@ export interface DishIngredient {
    */
   quantityMax: number | null
   unit: string
+  /** `unit` worded for reading; absent from an older backend. */
+  unitWording?: UnitWording | null
   /** The state the text says the food is weighed in — `lentejas cocidas` — or null when it says none. */
   state: FoodState | null
   /** The size the text names — `1 kiwi mediano` — or null. */
@@ -366,6 +381,29 @@ export interface FoodMeasure {
   dietId: number | null
   /** The nutritionist's own criterion for this diet, not a published row. */
   dietOwn: boolean
+  /** The nutritionist's own criterion for every diet ("tu criterio"), not a published row. */
+  globalOwn: boolean
+}
+
+/**
+ * The nutritionist's own weight for one household measure of one food: for one
+ * diet (`dietsApi.saveMeasure`) or for every diet (`referenceApi.createCriterion`).
+ * Exactly one of grams or ml, for one measure, edible part.
+ */
+export interface MeasureCriterionRequest {
+  measure: HouseholdMeasure
+  size?: PortionSize | null
+  bedcaFoodId: number
+  grams?: number | null
+  ml?: number | null
+  note?: string | null
+}
+
+/** What a change to a criterion reaches, live: the ingredients and extras it weighs now. */
+export interface MeasureUsage {
+  measureId: number
+  ingredients: number
+  extraFoods: number
 }
 
 export interface Ration {
@@ -535,70 +573,5 @@ export interface Page<T> {
   last: boolean
 }
 
-/* ---------------------------------------------------------------------------
- * The journal — the patient's side of the plan.
- *
- * The week says what to eat. These say what was thought of it and what was
- * eaten beside it, and they are the only rows a patient writes.
- * ------------------------------------------------------------------------- */
-
-/**
- * What the patient thought of one plate, 1–5.
- *
- * **It names a slot, not a dish.** `PUT /api/diets/{id}` replaces the whole
- * week, so every dish id is new after any publish; a score keyed on one would
- * be lost each time the nutritionist edited a single cell. The place in the
- * week is what survives.
- */
-export interface DishScore {
-  day: DayOfWeek
-  mealType: MealType
-  dishIndex: number
-  score: number
-  scoredAt: string
-}
-
-/** Something eaten that the plan did not prescribe. */
-export interface ExtraFood {
-  id: number
-  day: DayOfWeek
-  /** What the patient wrote, kept whether or not anything matched it. */
-  name: string
-  quantity: number
-  unit: string
-  state: FoodState | null
-  size: PortionSize | null
-  bedcaFoodId: number | null
-  foodItemId: number | null
-  /** What the catalogue calls the food, once matched. */
-  matchedName: string | null
-  /** The maker, when the match came from the branded half. */
-  brand: string | null
-  /** The household measure that weighed `1 cucharada`, the same rule the week weighs by. */
-  foodMeasureId: number | null
-  measure: FoodMeasure | null
-  /** Scaled to the quantity logged; null when unmatched or unweighable. */
-  nutrition: Nutrition | null
-  loggedAt: string
-}
-
-export interface DayExtras {
-  day: DayOfWeek
-  extras: ExtraFood[]
-  nutrition: NutritionSummary
-}
-
-/**
- * A whole week's journal in one answer.
- *
- * `averageScore` is null while nothing has been scored — nobody rated the week
- * badly, they have not rated it — and travels with `scored`, the number of
- * plates it was worked out over.
- */
-export interface DietJournal {
-  dietId: number
-  scores: DishScore[]
-  days: DayExtras[]
-  averageScore: number | null
-  scored: number
-}
+/** The journal's types live in their own file; re-exported so imports stay as they were. */
+export type * from './journalTypes'

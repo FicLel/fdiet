@@ -2,13 +2,10 @@ package com.fdiet.reference.service;
 
 import com.fdiet.alternative.domain.FoodCategory;
 import com.fdiet.alternative.helpers.IFoodCategoriser;
-import com.fdiet.common.helper.Texts;
 import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.service.IBedcaFoodService;
-import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.HouseholdMeasure;
-import com.fdiet.reference.domain.WeightBasis;
-import com.fdiet.reference.dto.DietMeasureRequestDto;
+import com.fdiet.reference.dto.MeasureCriterionRequestDto;
 import com.fdiet.reference.dto.ExchangeSystemDto;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.HouseholdMeasureDto;
@@ -49,7 +46,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -73,9 +69,6 @@ public class ReferenceService implements IReferenceService {
     /** Somebody this old reads against the adult profile, whatever else covers the age. */
     private static final int ADULT_MONTHS = 18 * 12;
 
-    private static final int NOTE_MAX = 500;
-    private static final int LABEL_MAX = 160;
-
     private final ReferenceSourceRepository sourceRepository;
     private final ReferencePopulationRepository populationRepository;
     private final ReferenceRationRepository rationRepository;
@@ -88,6 +81,7 @@ public class ReferenceService implements IReferenceService {
     private final ReferenceMatcher matcher;
     private final IFoodCategoriser categoriser;
     private final IBedcaFoodService bedcaFoodService;
+    private final IMeasureCriterionService criteria;
     private final String defaultAdultProfile;
 
     /**
@@ -109,6 +103,7 @@ public class ReferenceService implements IReferenceService {
                             ReferenceMatcher matcher,
                             IFoodCategoriser categoriser,
                             IBedcaFoodService bedcaFoodService,
+                            IMeasureCriterionService criteria,
                             @Value("${fdiet.reference.default-adult-profile:AESAN-2022:ADULTOS}")
                             String defaultAdultProfile) {
         this.sourceRepository = sourceRepository;
@@ -123,6 +118,7 @@ public class ReferenceService implements IReferenceService {
         this.matcher = matcher;
         this.categoriser = categoriser;
         this.bedcaFoodService = bedcaFoodService;
+        this.criteria = criteria;
         this.defaultAdultProfile = defaultAdultProfile;
     }
 
@@ -322,7 +318,8 @@ public class ReferenceService implements IReferenceService {
                                                 String profileCode) {
         BedcaFood food = bedcaFoodService.entityById(bedcaFoodId);
         Snapshot current = snapshot();
-        List<FoodMeasureDto> own = dietId == null ? List.of() : dietMeasures(dietId);
+        List<FoodMeasureDto> own = dietId == null ? List.of() : criteria.dietRows(dietId);
+        List<FoodMeasureDto> global = criteria.globalRows(List.of(food.getId()));
         PopulationView profile = profileCode == null ? null : current.populations().get(profileCode);
         String profileSource = profile == null ? null : profile.sourceCode();
         FoodCategory category = categoriser.of(food.getName());
@@ -332,7 +329,7 @@ public class ReferenceService implements IReferenceService {
                 : Arrays.stream(HouseholdMeasure.values()).map(HouseholdMeasure::label).toList();
         List<FoodMeasureDto> all = new ArrayList<>();
         for (String written : units) {
-            all.addAll(matcher.chooseMeasure(current.measures(), own,
+            all.addAll(matcher.chooseMeasure(current.measures(), own, global,
                     new MeasureQueryDto(food.getId(), food.getName(), written, null, null),
                     category, profileSource).candidates());
         }
@@ -347,14 +344,16 @@ public class ReferenceService implements IReferenceService {
             return List.of();
         }
         Snapshot current = snapshot();
-        List<FoodMeasureDto> own = dietId == null ? List.of() : dietMeasures(dietId);
+        List<FoodMeasureDto> own = dietId == null ? List.of() : criteria.dietRows(dietId);
+        List<FoodMeasureDto> global = criteria.globalRows(queries.stream()
+                .map(MeasureQueryDto::bedcaFoodId).filter(Objects::nonNull).collect(Collectors.toSet()));
         PopulationView profile = profileCode == null ? null : current.populations().get(profileCode);
         String profileSource = profile == null ? null : profile.sourceCode();
 
         return queries.stream()
                 .map(query -> query.bedcaFoodId() == null || query.foodName() == null
                         ? MeasureChoiceDto.NONE
-                        : matcher.chooseMeasure(current.measures(), own, query,
+                        : matcher.chooseMeasure(current.measures(), own, global, query,
                         categoriser.of(query.foodName()), profileSource))
                 .toList();
     }
@@ -375,86 +374,23 @@ public class ReferenceService implements IReferenceService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<FoodMeasureDto> dietMeasures(Long dietId) {
-        return measureRepository.findByDietIdOrderByIdAsc(dietId).stream()
-                .map(mapper::toDto)
-                .toList();
+        return criteria.dietRows(dietId);
     }
 
     @Override
-    @Transactional
-    public FoodMeasureDto saveDietMeasure(Long dietId, DietMeasureRequestDto request) {
-        if ((request.grams() == null) == (request.ml() == null)) {
-            throw new InvalidReferenceException(
-                    "A measure weighs in grams or in millilitres: send exactly one of grams and ml");
-        }
-        BedcaFood food = bedcaFoodService.entityById(request.bedcaFoodId());
-        ReferenceFoodMeasure measure = measureRepository.findByDietIdOrderByIdAsc(dietId).stream()
-                .filter(row -> row.getMeasure() == request.measure()
-                        && Objects.equals(row.getBedcaFoodId(), food.getId())
-                        && row.getSize() == request.size())
-                .findFirst()
-                .orElseGet(ReferenceFoodMeasure::new);
-
-        measure.setDietId(dietId);
-        measure.setSource(null);
-        measure.setCode(null);
-        measure.setMeasure(request.measure());
-        measure.setSize(request.size());
-        measure.setCount(BigDecimal.ONE);
-        measure.setBedcaFoodId(food.getId());
-        measure.setFoodCategory(categoriser.of(food.getName()));
-        measure.setKeywords(null);
-        measure.setFoodLabel(Texts.truncate(food.getName(), LABEL_MAX));
-        measure.setGramsMin(request.grams());
-        measure.setGramsMax(request.grams());
-        measure.setMlMin(request.ml());
-        measure.setMlMax(request.ml());
-        measure.setState(FoodState.UNSPECIFIED);
-        measure.setWeightBasis(WeightBasis.NET_EDIBLE);
-        measure.setGrossGrams(null);
-        measure.setHouseholdText("1 " + request.measure().label());
-        measure.setPageRef(null);
-        measure.setNote(Texts.clean(request.note(), NOTE_MAX));
-        return mapper.toDto(measureRepository.save(measure));
+    public FoodMeasureDto saveDietMeasure(Long dietId, MeasureCriterionRequestDto request) {
+        return criteria.saveDietMeasure(dietId, request);
     }
 
     @Override
-    @Transactional
     public void deleteDietMeasure(Long dietId, Long measureId) {
-        ReferenceFoodMeasure measure = measureRepository.findById(measureId)
-                .filter(row -> dietId.equals(row.getDietId()))
-                .orElseThrow(() -> ReferenceNotFoundException.measure(measureId));
-        measureRepository.delete(measure);
+        criteria.deleteDietMeasure(dietId, measureId);
     }
 
     @Override
-    @Transactional
     public Map<Long, Long> copyDietMeasures(Long fromDietId, Long toDietId) {
-        Map<Long, Long> copied = new HashMap<>();
-        for (ReferenceFoodMeasure row : measureRepository.findByDietIdOrderByIdAsc(fromDietId)) {
-            ReferenceFoodMeasure copy = new ReferenceFoodMeasure();
-            copy.setDietId(toDietId);
-            copy.setMeasure(row.getMeasure());
-            copy.setSize(row.getSize());
-            copy.setCount(row.getCount());
-            copy.setBedcaFoodId(row.getBedcaFoodId());
-            copy.setFoodCategory(row.getFoodCategory());
-            copy.setKeywords(row.getKeywords());
-            copy.setFoodLabel(row.getFoodLabel());
-            copy.setGramsMin(row.getGramsMin());
-            copy.setGramsMax(row.getGramsMax());
-            copy.setMlMin(row.getMlMin());
-            copy.setMlMax(row.getMlMax());
-            copy.setState(row.getState());
-            copy.setWeightBasis(row.getWeightBasis());
-            copy.setGrossGrams(row.getGrossGrams());
-            copy.setHouseholdText(row.getHouseholdText());
-            copy.setNote(row.getNote());
-            copied.put(row.getId(), measureRepository.save(copy).getId());
-        }
-        return copied;
+        return criteria.copyDietMeasures(fromDietId, toDietId);
     }
 
     /**
@@ -498,7 +434,8 @@ public class ReferenceService implements IReferenceService {
                 rationRepository::saveAll));
 
         Map<String, ReferenceFoodMeasure> measures = byCode(
-                measureRepository.findByDietIdIsNullOrderByIdAsc(), ReferenceFoodMeasure::getCode);
+                measureRepository.findByDietIdIsNullAndGlobalCriterionFalseOrderByIdAsc(),
+                ReferenceFoodMeasure::getCode);
         List<ReferenceRowsDto.FoodMeasure> measureRows = rows.foodMeasures().stream()
                 .filter(row -> foodKnown(row.bedcaFoodId(), foods, row.origin(), row.code(), skipped))
                 .toList();
@@ -667,7 +604,8 @@ public class ReferenceService implements IReferenceService {
         List<RationDto> rations = rationRepository.findAllByOrderByIdAsc().stream()
                 .map(mapper::toDto)
                 .toList();
-        List<FoodMeasureDto> measures = measureRepository.findByDietIdIsNullOrderByIdAsc().stream()
+        List<FoodMeasureDto> measures = measureRepository
+                .findByDietIdIsNullAndGlobalCriterionFalseOrderByIdAsc().stream()
                 .map(mapper::toDto)
                 .toList();
 

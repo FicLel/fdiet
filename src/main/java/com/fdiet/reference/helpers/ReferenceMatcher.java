@@ -32,6 +32,8 @@ import java.util.function.Function;
  * <ol>
  *   <li>the measure a person already picked for this ingredient;
  *   <li>the diet's own criterion for that measure and food, when there is one;
+ *   <li>else the nutritionist's global criterion for it — hers for every diet,
+ *       and the reason a published range such as an egg's weighs at all;
  *   <li>the only row the diet's profile source publishes for it — the profile
  *       is how a diet settles a disagreement between sources;
  *   <li>several published rows that agree to the gram.
@@ -51,12 +53,13 @@ public class ReferenceMatcher {
      *
      * @param published       every published measure row
      * @param own             the diet's own rows, empty when there is no diet
+     * @param global          the nutritionist's global criteria for the food
      * @param category        the food's family, read off its name
      * @param profileSourceCode the source of the diet's profile, or null
      */
     public MeasureChoiceDto chooseMeasure(List<FoodMeasureDto> published, List<FoodMeasureDto> own,
-                                          MeasureQueryDto query, FoodCategory category,
-                                          String profileSourceCode) {
+                                          List<FoodMeasureDto> global, MeasureQueryDto query,
+                                          FoodCategory category, String profileSourceCode) {
         HouseholdMeasure measure = HouseholdMeasure.ofUnit(query.unit()).orElse(null);
         if (measure == null || query.bedcaFoodId() == null) {
             return MeasureChoiceDto.NONE;
@@ -64,10 +67,13 @@ public class ReferenceMatcher {
         FoodState foodState = FoodState.ofFoodName(query.foodName());
         List<FoodMeasureDto> ownCandidates =
                 measureCandidates(own, measure, query, category, foodState);
+        List<FoodMeasureDto> globalCandidates =
+                measureCandidates(global, measure, query, category, foodState);
         List<FoodMeasureDto> publishedCandidates =
                 measureCandidates(published, measure, query, category, foodState);
 
         List<FoodMeasureDto> all = new ArrayList<>(ownCandidates);
+        all.addAll(globalCandidates);
         publishedCandidates.stream()
                 .sorted(byProfileThenTier(profileSourceCode))
                 .forEach(all::add);
@@ -84,9 +90,14 @@ public class ReferenceMatcher {
             }
         }
 
-        if (!ownCandidates.isEmpty()) {
-            List<FoodMeasureDto> weighing = ownCandidates.stream().filter(FoodMeasureDto::weighs).toList();
-            return new MeasureChoiceDto(weighing.size() == 1 ? weighing.get(0) : null, all);
+        // A criterion of the nutritionist's decides when there is one: the diet's
+        // first, then her global one. Several that weigh differently (sizes the
+        // text did not name) are offered, as published rows are.
+        for (List<FoodMeasureDto> criteria : List.of(ownCandidates, globalCandidates)) {
+            if (!criteria.isEmpty()) {
+                List<FoodMeasureDto> weighing = criteria.stream().filter(FoodMeasureDto::weighs).toList();
+                return new MeasureChoiceDto(weighing.size() == 1 ? weighing.get(0) : null, all);
+            }
         }
 
         List<FoodMeasureDto> weighing =

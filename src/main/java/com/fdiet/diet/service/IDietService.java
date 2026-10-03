@@ -1,8 +1,6 @@
 package com.fdiet.diet.service;
 
 import com.fdiet.common.dto.PageDto;
-import com.fdiet.diet.dto.ComposeRequestDto;
-import com.fdiet.diet.dto.ComposedFragmentDto;
 import com.fdiet.diet.dto.CopyDietRequestDto;
 import com.fdiet.diet.dto.DietDto;
 import com.fdiet.diet.dto.DietMeasureSavedDto;
@@ -16,7 +14,7 @@ import com.fdiet.diet.dto.ParseDishRequestDto;
 import com.fdiet.diet.dto.RecipeDto;
 import com.fdiet.diet.dto.RecipeUsageDto;
 import com.fdiet.diet.dto.ResolveIngredientDto;
-import com.fdiet.reference.dto.DietMeasureRequestDto;
+import com.fdiet.reference.dto.MeasureCriterionRequestDto;
 import com.fdiet.reference.dto.FoodMeasureDto;
 
 import java.time.DayOfWeek;
@@ -56,6 +54,14 @@ public interface IDietService {
      * not copied: what one patient thought of a plate is their own record.
      */
     DietDto copy(Long id, CopyDietRequestDto request);
+
+    /**
+     * Deletes a diet, active or archived, with its week, its journal, its own
+     * measure criteria and its private recipes. Library recipes and global
+     * criteria stay. Deleting the diet in force leaves the patient with none;
+     * no archived diet is reactivated.
+     */
+    void delete(Long id);
 
     /** The diet in force now for one patient. */
     DietDto findActive(Long patientId);
@@ -119,12 +125,6 @@ public interface IDietService {
     /** Changes a diet's name, profile or clinical mark without sending its week. */
     DietDto updateSettings(Long id, DietSettingsDto settings);
 
-    /**
-     * The text a food added by ration or household measure is written as, and
-     * that text read back through the parser. Stores nothing.
-     */
-    ComposedFragmentDto compose(ComposeRequestDto request);
-
     /** The week counted in rations against its profile, or against {@code profileCode}. */
     DietRationsDto rations(Long dietId, String profileCode);
 
@@ -132,7 +132,7 @@ public interface IDietService {
     List<FoodMeasureDto> measures(Long dietId);
 
     /** Writes the diet's own weight for a measure and attaches it where it now weighs. */
-    DietMeasureSavedDto saveMeasure(Long dietId, DietMeasureRequestDto request);
+    DietMeasureSavedDto saveMeasure(Long dietId, MeasureCriterionRequestDto request);
 
     /** Removes one of the diet's own measures; the ingredients it weighed are left unmeasured. */
     void deleteMeasure(Long dietId, Long measureId);

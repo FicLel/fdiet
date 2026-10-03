@@ -11,7 +11,9 @@ import { NO_VALUE } from './format'
 /**
  * Display only. Every count on screen is one the backend sent: nothing here
  * divides a weight by a ration, picks a midpoint of a range, or decides whether
- * a day meets a recommendation.
+ * a day meets a recommendation. (The midpoints the UI shows — a range measure's
+ * weight per unit, a range ration's weight in the composer — are proposals for
+ * the nutritionist to confirm: `midpointProposal` in `measureCriteria.ts`.)
  */
 
 const UP_TO_TWO = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 })
@@ -115,7 +117,10 @@ export function perMeasure(measure: FoodMeasure): string | null {
 }
 
 export function measureSource(measure: FoodMeasure): string {
-  return measure.dietOwn ? 'Criterio de esta dieta' : (measure.sourceShortName ?? 'Sin fuente')
+  if (measure.dietOwn) {
+    return 'Criterio de esta dieta'
+  }
+  return measure.globalOwn ? 'Tu criterio' : (measure.sourceShortName ?? 'Sin fuente')
 }
 
 /** `≥ 4 a la semana`, `≤ 3 al día`, `2–3 al día`. */

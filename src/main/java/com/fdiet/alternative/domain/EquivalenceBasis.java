@@ -7,8 +7,9 @@ import java.util.function.Function;
 
 /**
  * What an equivalent portion holds constant: the same energy, or the same grams
- * of one macronutrient. Energy is the default because every row of the
- * composition database publishes it; the others are how a nutritionist who plans
+ * of one macronutrient. Energy is the default because every BEDCA row publishes
+ * it (145 CIQUAL foods do not, and get no equivalent weight by it — {@link #of}
+ * is null for them); the others are how a nutritionist who plans
  * in exchanges asks the question ("how much rice carries the carbohydrate of this
  * bread").
  *

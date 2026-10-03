@@ -15,8 +15,8 @@ import java.math.BigDecimal;
  * medianas, 180 g"); {@code gramsPerMeasure} is one unit of it, divided out on
  * read, and null when the source gave a range — a range weighs nothing until a
  * person picks a value in it. {@code dietOwn} marks a nutritionist's criterion
- * for one diet, which is never presented as a published figure; its source
- * fields are null.
+ * for one diet and {@code globalOwn} her criterion for every diet; neither is
+ * ever presented as a published figure, and their source fields are null.
  */
 public record FoodMeasureDto(
         Long id,
@@ -44,7 +44,8 @@ public record FoodMeasureDto(
         String sourceShortName,
         Integer sourceTier,
         Long dietId,
-        boolean dietOwn) {
+        boolean dietOwn,
+        boolean globalOwn) {
 
     /** Whether one measure can be turned into grams at all. */
     public boolean weighs() {

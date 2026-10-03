@@ -115,7 +115,8 @@ public class ReferenceMapper implements IReferenceMapper {
                 source == null ? null : source.getShortName(),
                 source == null ? null : source.getTier(),
                 measure.getDietId(),
-                measure.isDietOwn());
+                measure.isDietOwn(),
+                measure.isGlobalCriterion());
     }
 
     @Override
@@ -242,6 +243,7 @@ public class ReferenceMapper implements IReferenceMapper {
         measure.setCode(row.code());
         measure.setSource(source);
         measure.setDietId(null);
+        measure.setGlobalCriterion(false);
         measure.setMeasure(row.measure());
         measure.setSize(row.size());
         measure.setCount(row.count());

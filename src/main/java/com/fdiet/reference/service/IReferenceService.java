@@ -1,6 +1,6 @@
 package com.fdiet.reference.service;
 
-import com.fdiet.reference.dto.DietMeasureRequestDto;
+import com.fdiet.reference.dto.MeasureCriterionRequestDto;
 import com.fdiet.reference.dto.ExchangeSystemDto;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.HouseholdMeasureDto;
@@ -30,7 +30,8 @@ import java.util.Map;
  *
  * <p>Nothing here is derived and stored. The published rows are small and read
  * on every weighing, so they are held in memory and dropped whenever a sync
- * writes; a diet's own measures are read per request.
+ * writes; the nutritionist's own criteria (one diet's, and her global ones) are
+ * read per request through {@link IMeasureCriterionService}.
  */
 public interface IReferenceService {
 
@@ -96,14 +97,17 @@ public interface IReferenceService {
 
     /**
      * Every measure that could weigh a food — narrowed to one unit when given —
-     * with the diet's own rows first when a diet is given.
+     * the diet's own rows first when a diet is given, then the nutritionist's
+     * global criteria, then published rows.
      */
     List<FoodMeasureDto> measuresForFood(Long bedcaFoodId, String unit, Long dietId,
                                          String profileCode);
 
     /**
      * The measure each written ingredient may be weighed by, in one pass over
-     * the published rows and one query for the diet's own. Answers line up
+     * the published rows, one query for the diet's own criteria and one for the
+     * global criteria of the foods asked about. Precedence: picked, diet,
+     * global, published. Answers line up
      * with the queries.
      */
     List<MeasureChoiceDto> chooseMeasures(List<MeasureQueryDto> queries, Long dietId,
@@ -122,7 +126,7 @@ public interface IReferenceService {
      * replacing an earlier one for the same measure, food and size. The caller
      * has checked the diet exists.
      */
-    FoodMeasureDto saveDietMeasure(Long dietId, DietMeasureRequestDto request);
+    FoodMeasureDto saveDietMeasure(Long dietId, MeasureCriterionRequestDto request);
 
     void deleteDietMeasure(Long dietId, Long measureId);
 

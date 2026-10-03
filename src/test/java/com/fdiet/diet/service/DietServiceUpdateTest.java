@@ -7,7 +7,6 @@ import com.fdiet.diet.dto.MealDto;
 import com.fdiet.diet.dto.MealType;
 import com.fdiet.diet.dto.RecipeDto;
 import com.fdiet.diet.exception.InvalidDietException;
-import com.fdiet.diet.helpers.PortionScaler;
 import com.fdiet.diet.mapper.DietMapper;
 import com.fdiet.diet.model.DietPlan;
 import com.fdiet.diet.model.DietStatus;
@@ -16,7 +15,6 @@ import com.fdiet.diet.model.PlannedMeal;
 import com.fdiet.diet.model.Recipe;
 import com.fdiet.diet.repository.DietRepository;
 import com.fdiet.diet.repository.PlannedDishRepository;
-import com.fdiet.food.service.IBedcaFoodService;
 import com.fdiet.patient.model.Patient;
 import com.fdiet.patient.service.IPatientService;
 import com.fdiet.reference.service.IReferenceService;
@@ -59,10 +57,8 @@ class DietServiceUpdateTest {
             mock(PlannedDishRepository.class),
             new DietMapper(mock(IDietNutritionService.class), mock(IReferenceService.class)),
             recipeService,
-            mock(IBedcaFoodService.class),
             mock(IPatientService.class),
             mock(IReferenceService.class),
-            new PortionScaler(),
             mock(IDietRationService.class));
 
     private final Recipe ownSalad = recipe(7L, "Ensalada", false);

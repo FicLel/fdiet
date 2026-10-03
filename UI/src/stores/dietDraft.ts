@@ -21,10 +21,11 @@ import type {
   MealType,
   PortionSize,
   Recipe,
+  UnitWording,
   YieldHint,
 } from '@/api/types'
 import { buildRows, cellKey, dishAt, mealOf, type GridRow, type MealRow } from '@/domain/slots'
-import { renderRecipe } from '@/domain/dishText'
+import { joinFragment, renderRecipe } from '@/domain/dishText'
 import { dishTotals, ingredientsOf, type DishTotals } from '@/domain/nutrition'
 import { addDays, dayName, dayNumber, longDate, mondayOf, WEEK } from '@/domain/week'
 
@@ -106,6 +107,7 @@ export interface IngredientAt {
   /** The upper end of a range still to be settled, or null. */
   quantityMax: number | null
   unit: string
+  unitWording?: UnitWording | null
   /** The catalogue's own name for the food, when it is already matched. */
   matchedName: string | null
   bedcaFoodId: number | null
@@ -144,6 +146,7 @@ export function locate(
         quantity: ingredient.quantity,
         quantityMax: ingredient.quantityMax,
         unit: ingredient.unit,
+        unitWording: ingredient.unitWording,
         matchedName: ingredient.matchedName,
         bedcaFoodId: ingredient.bedcaFoodId,
         foodItemId: ingredient.foodItemId,
@@ -688,16 +691,7 @@ function removeDish(row: MealRow, day: DayOfWeek): void {
  */
 function appendFragment(row: MealRow, day: DayOfWeek, fragment: string): void {
   const edit = editOf(row, day)
-  const current = edit.mode === 'own' ? edit.text.trim() : ''
-  let next: string
-  if (current === '') {
-    next = fragment
-  } else if (current.endsWith(':') || current.endsWith('+')) {
-    next = `${current} ${fragment}`
-  } else {
-    next = `${current} + ${fragment}`
-  }
-  setRecipeText(row, day, next)
+  setRecipeText(row, day, joinFragment(edit.mode === 'own' ? edit.text : '', fragment))
 }
 
 /** Puts one cell back the way it is stored. */

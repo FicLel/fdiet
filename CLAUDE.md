@@ -19,7 +19,8 @@ fill it in; `build.gradle` reads `.env` and passes it to `bootRun`, `test` and t
 tasks. A real exported environment variable always wins over the `.env` entry.
 
 `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, and the optional
-`SERVER_PORT`, `FOOD_CSV_PATH` and `BEDCA_CSV_PATH`.
+`SERVER_PORT`, `FOOD_CSV_PATH`, `BEDCA_CSV_PATH` and `COMPOSITION_DATA_PATH` (default
+`reference-data/composition`).
 
 ## Architecture
 
@@ -96,7 +97,14 @@ names a product outright.
 ### `bedca_foods` — the composition database
 
 - `controller/BedcaController` — `@RestController` at `/api/bedca`:
-  - `GET /api/bedca?name=&page=&size=` — page of foods.
+  - `GET /api/bedca?name=&page=&size=` — page of foods. No `name`: alphabetical. With one, it is
+    a **ranked word search** (FD-020): the term is reduced by `NameMatcher` (accents, plurals,
+    quantity and serving words dropped) and every food sharing at least one word shows — most
+    words shared first, then the `suggest` order (share of the food's name covered, then name).
+    A food that shares no word but contains the term as typed (`lechu` → `Lechuga`) comes last,
+    so a box being typed into never goes blank mid-word. Ranked from the in-memory suggestion
+    index; the page's foods are one `findAllById`. `pan de molde` puts both `…, de molde,
+    tostado` breads first; `jamón york` lists the `Jamón …` foods (no synonyms yet).
   - `GET /api/bedca/{id}` — one food, 404 through `BedcaFoodNotFoundException`.
   - `POST /api/bedca/sync` — imports bedca_foods.csv; safe to re-run.
 - `service/BedcaFoodService` — owns `bedca_foods`: search, lookup, the batched
@@ -121,7 +129,66 @@ the attribution to appear wherever the figures are shown; see **BEDCA-ATTRIBUTIO
 note that the data is **non-commercial** without AESAN's authorisation.
 
 Only the fourteen components a diet is read by are stored. The other 33 stay in the CSV;
-adding one is a constant in `Nutrient`, a field on `BedcaFood` and a column pair in a migration.
+adding one is a constant in `Nutrient`, a field on `BedcaFood` (and `CompositionFood`) and a
+column pair in a migration. `Nutrient` reads and writes through `model/CompositionFigures`, the
+fourteen value+unit accessors both composition entities implement, so `NutritionService.per100g`
+and the mappers serve BEDCA, CIQUAL and BLS alike.
+
+### `composition_foods` — the open composition tables (FD-033 phase B, `V15`)
+
+**CIQUAL 2025 (ANSES) and BLS 4.0 (Max Rubner-Institut), both CC BY 4.0, in one table beside
+`bedca_foods`.** It is BEDCA's open replacement in waiting: BEDCA keeps running, nothing points at
+the new table yet (re-keying references is phase C, resetting matches phase D), and nothing here
+touches a diet. One table rather than two so that, when consumers move, they point at one id column.
+
+- `source` (`CIQUAL` | `BLS`, `model/CompositionSource`, which also carries each licence's
+  attribution) + `source_code` as published (CIQUAL `alim_code`, BLS `C131000`);
+  `uk_composition_foods_source_code` is the key a sync writes over, so ids never change. **Every
+  food carries its source** — CIQUAL's protein is nitrogen × Jones factor, BLS's × 6.25, and BLS's
+  energy is its own formula — and `CompositionFoodDto` sends `source`, `sourceLabel` and
+  `attribution` with every food.
+- **Values as published, with units**, like `bedca_foods`. Energy is the source's **kcal** figure
+  (CIQUAL's Regulation (EU) 1169/2011 column, BLS `ENERCC`), so no kJ→kcal factor is applied to it.
+  **A qualified value (`traces`, `< 0,2`, `<LOQ`, `<LOD`, `TR`, `-`) is NULL**, never 0; the original
+  text is not copied beside it — the committed upstream file is the record of what was written.
+- **Energy can be missing**: 145 CIQUAL foods publish no number for it (143 `-`, 2 `traces`), listed
+  in `reference-data/composition/composition-es/ciqual_no_energy.csv` (FD-037) and flagged
+  `energyPublished: false`. Nothing downstream may assume energy: `AlternativeService` already gives
+  such a food no equivalent weight by energy and still ranks it on its other figures (tested).
+- **fdiet's crosswalk columns** — `name_es`, `name_aliases`, `name_preferred`, `name_reviewed`,
+  `edible_portion`, `edible_portion_fdc_id` — come from `composition-es/links.csv`, not from either
+  source, and are NULL on every food it does not name. `name_es` is written **head first, BEDCA
+  style** (`Pollo, pechuga, plancha`), so `FoodCategoriser` (120 of the 122 names) and the
+  `FoodState` reader read it. **CIQUAL answers first; a BLS row is used where CIQUAL has no
+  same-food equivalent, or only BLS has the state written or an energy figure.** A name two rows
+  claim goes to the one marked preferred; a name shared without exactly one preferred stops the
+  sync before anything is written (`helpers/NameIndex`, the same index the lookup uses).
+- **Every crosswalk row starts as a machine prefill (`reviewed = false`)** and a person approves it; the
+  122 rows of FD-033 phase B were approved by the project owner on 2026-10-03.
+  Scope today: the "Dieta 1" foods of example-ui.xlsx and the BEDCA foods referenced on 2026-10-03
+  (122 rows); the rest is FD-036.
+- **`edible_portion` = 1 − refuse/100 of the USDA SR Legacy food in `edible_portion_fdc_id`**
+  (CC0; `usda-sr-legacy/refuse.csv` is the extract, and a test checks every row against it). NULL
+  where no SR Legacy food fits (5 rows) — and NULL still refuses a gross weight, as with BEDCA.
+- **Matching is exact**, as for BEDCA: `ICompositionFoodService.entitiesByName` answers a Spanish
+  name or alias, case and accents ignored, from an in-memory index of every row (one query, dropped
+  on sync). Re-importing example-ui.xlsx against the crosswalk matches **144 of 210** ingredients
+  outright (BEDCA: 41, the floor) — `ExampleDietCompositionMatchTest` measures it on every build.
+
+The classes, all in `food/`: `controller/CompositionController`; `service/CompositionFoodService`
+(owns the table: search, lookup, the batched `entitiesByName` / `entitiesByIds`, the sync's
+writes), `service/CompositionImportService` (owns no repository: reads both tables and the
+crosswalk outside the write transaction, joins them in memory, one `storeAll`),
+`service/CompositionStartupSync`; `helpers/CiqualTableReader`, `helpers/BlsTableReader`
+(`ICompositionTableReader`, columns found **by header**), `helpers/SheetStreamReader` (POI's
+streaming reader: BLS is 7,140 × 418 cells, too big for the in-memory workbook),
+`helpers/CompositionLinkReader`, `helpers/NameIndex`; `repository/CompositionFoodRepository` with
+the `CompositionFoodUpsertRepository` fragment — one JDBC `INSERT … ON DUPLICATE KEY UPDATE` in
+batches of `fdiet.composition.batch-size`, because Hibernate cannot batch identity inserts.
+
+**Loading.** At startup, only when the table is empty (`fdiet.composition.sync-on-startup`, on by
+default): ten thousand rows out of 15 MB of spreadsheets is too slow to repeat on every start, unlike
+the reference CSVs. After changing a snapshot or the crosswalk, `POST /api/composition/sync`.
 
 ### Importing
 
@@ -159,7 +226,11 @@ somebody can act on and leaves the index underneath for the write that check rac
 Deleting a patient who still has diets is **refused**, not cascaded: `fk_diets_patient` has no
 `ON DELETE`, and the service turns the resulting integrity violation into a 400. The weeks written
 for somebody are the record of them, and dropping a name should not drop the record. The check is
-the foreign key itself rather than a query, because `diets` is another context's table.
+the foreign key itself rather than a query, because `diets` is another context's table. The
+refusal says where to go instead: delete the patient's diets one by one (`DELETE /api/diets/{id}`,
+from the patient's list of diets), then the patient. It is in English like every other refusal;
+the UI answers that 400 with its own Spanish text naming the same way out (the "Dietas" list beside
+the patient in the builder's selector).
 
 `V7` seeds one patient, `Victor`, and hands every diet that already existed to them — they were all
 written for one person. The row is seeded on an empty database too: a screen that picks a patient
@@ -235,7 +306,9 @@ Two kinds of recipe share the table:
 **A library recipe is never weighed by one diet's own measure** (`ref_food_measures.diet_id`): that
 row goes with its diet, and the shared recipe would go quietly unweighed everywhere. Saving such an
 ingredient to the library, or PATCHing one to it, is a 400; library ingredients are chosen measures
-without any diet's criteria, and `PUT …/measures` attaches only to private recipes.
+without any diet's criteria, and `PUT …/measures` attaches only to private recipes. The
+nutritionist's **global** criteria (`V14`, see `reference`) belong to no diet, so they do weigh
+library recipes, exactly as they weigh every week.
 
 `service/RecipeService` (`IRecipeService`) owns both tables and everything about an ingredient:
 reading text, matching (the batched `foodsOf` / `measuresOf`), the fix-up list and the PATCH. The
@@ -288,24 +361,50 @@ juice) are within a few percent of; for olive oil it overstates by about 9 %, an
 
 **A household measure weighs only through a row that says so.** `recipe_ingredients.food_measure_id`
 (`V10`) points at a `ref_food_measures` row — published (`1 cucharada sopera` of olive oil, 10 ml,
-AESAN 2022) or the diet's own criterion — and `PortionScaler.weigh` uses it: the row's point weight
+AESAN 2022), the diet's own criterion, or the nutritionist's global criterion (`1 huevo mediano = 58 g`)
+— and `PortionScaler.weigh` uses it: the row's point weight
 divided by its count (`3 Uds. medianas = 180 g` is 60 g each), cut to the edible part by the food's
 `edible_portion` when the row is a gross weight (and refused when that fraction is unpublished). A
 range (`53–63 g`) weighs nothing, and a measure weighs only the unit it measures. `countedByMeasure`
 says how much of `counted` rests on one.
 
+**The patient reads the unit, never works it out.** `DishIngredient` and `ExtraFoodDto` carry
+`unitWording: {singular, plural, sizeInName}` — `reference/domain/UnitWording`, derived on read from
+`name`, `unit` and `size`, never stored, ignored when a body sends it back. For a household measure it
+is `HouseholdMeasure.written` in both numbers with the size agreeing (`unidad mediana` /
+`unidades medianas`, `vaso pequeño` / `vasos pequeños`), so the gender and plural of a measure stay in
+Java; a weight, a volume or a word the vocabulary does not know is the unit as stored in both. The
+reader picks by the quantity served (servings × quantity). `sizeInName` is true when the name already
+carries a size word (`1 kiwi mediano` keeps the name `kiwi mediano`); the size is then left out of the
+wording, so quantity + unit + name says it once.
+
 ### Interfaces and injection
 
 Every class in `diet/`, `alternative/` and `patient/` is injected through an interface
-(`IDietService`, `IRecipeService`, `IDietMapper`, `IMealTextParser`, `IPortionScaler`, `IDietNutritionService`,
+(`IDietService`, `IDietComposeService`, `IRecipeService`, `IDietMapper`, `IMealTextParser`, `IPortionScaler`, `IDietNutritionService`,
 `IAlternativeService`, `IFoodCategoriser`, `INutritionSimilarity`, `IPatientService`,
-`IPatientMapper`, `IReferenceService`, `IReferenceMapper`, `IDietRationService`, …), as are the food services
+`IPatientMapper`, `IReferenceService`, `IMeasureCriterionService`, `IReferenceMapper`, `IDietRationService`,
+`IMeasureResolverService`, …), as are the food services
 they depend on: `IFoodItemService`, `IBedcaFoodService`, `INutritionService`, `INameMatcher`,
-`IBedcaImportService`, `IBedcaFoodMapper`. The older `food/` classes
+`IBedcaImportService`, `IBedcaFoodMapper`, `ICompositionFoodService`, `ICompositionImportService`,
+`ICompositionFoodMapper`, `ICompositionTableReader`, `ICompositionLinkReader`, `ISheetStreamReader`. The older `food/` classes
 (`FoodItemService`'s siblings, `FoodImportService`) still use their concrete types. The
 repositories are Spring Data interfaces already.
 
 ### Endpoints
+
+`CompositionController` at `/api/composition` — CIQUAL 2025 and BLS 4.0 (see `composition_foods`):
+
+- `GET /api/composition?name=&page=&size=` — without `name`, by source and English name; with one,
+  foods whose Spanish name or aliases share its words first (most shared first), then any food whose
+  Spanish, English or original name contains the text as typed (`lettuce`, `laitue`), so a food the
+  crosswalk does not name yet is still found. Each food carries `source`, `sourceLabel`,
+  `attribution`, `energyPublished`, and its figures as published and converted.
+- `GET /api/composition/{id}` — one food, 404 through `CompositionFoodNotFoundException`.
+- `POST /api/composition/sync` — loads both snapshots and the crosswalk; safe to re-run (upsert on
+  `(source, source_code)`, ids kept). Answers with counts per source, `linked`, `linksUnmatched`,
+  `withoutEnergy` and **both attribution strings**. A crosswalk that gives one name to two foods
+  without exactly one preferred is a 422, and nothing is written.
 
 `PatientController` at `/api/patients` — the caseload is a handful of rows, so the listing is not
 paged:
@@ -331,6 +430,13 @@ diet is addressed by its own id:
   food match already made) and library links (shared). It becomes
   their diet in force, archiving what they were on; the source is untouched and the **journal is
   not copied**.
+- `DELETE /api/diets/{id}` (204; unknown id 404) — any diet, active or archived. One `DELETE` of
+  the `diets` row; the schema cascades its meals, dishes, scores, extras and own measure criteria
+  (`ON DELETE CASCADE`, V2/V6/V8). The service reads the recipe ids its plates serve first and
+  deletes the **private** ones afterwards (`IRecipeService.deletePrivate`); **library** recipes and
+  global criteria are untouched. Deleting the diet in force leaves the patient with **no diet in
+  force** — no archived diet is reactivated; which one to resume is a person's decision.
+  `GET /api/journal/{dietId}/counts` answers what the confirm warns about.
 - `GET /api/diets/active?patientId=`, `GET /api/diets/{id}` — the week, ordered by day and slot.
 - `GET /api/diets/current` — every patient's diet in force, without their weeks: who is on a diet
   right now, in one query. This is the board the UI's patient selector is drawn from.
@@ -354,6 +460,8 @@ diet is addressed by its own id:
 - `POST /api/diets/compose` — `{bedcaFoodId, grams | foodMeasureId + count, state?, dietId?}` →
   the text fragment to append to a cell (`Lenteja, seca, cruda (60 g en crudo)`) and what the parser
   reads back from it. The editor's "añadir por raciones" goes through this, so it still has no parser.
+  Answered by `service/DietComposeService` (`IDietComposeService`), which owns no table and asks
+  `IDietService` for the diet's profile.
 - `GET /api/diets/{id}/rations?profile=` — the week counted in rations (see `reference`).
 - `GET /api/diets/{id}/measures`, `PUT /api/diets/{id}/measures`, `DELETE /api/diets/{id}/measures/{measureId}`
   — the diet's own measure criteria (`{measure, size?, bedcaFoodId, grams | ml, note?}`). A PUT
@@ -514,13 +622,22 @@ quantity by it.
   `PortionSize`, `HouseholdMeasure` (the kitchen words and every spelling of them, in code; an alias
   claimed twice is a startup failure), `WeightBasis`, `FoodKeywords`.
 - `helpers/ReferenceMatcher` — pure. Which measure weighs an ingredient: the one a person picked;
-  else the diet's own criterion if exactly one weighs; else the only weighing row from the profile's
-  source; else published rows that agree to the gram. **A range, a raw-state row for a cooked food and
+  else the diet's own criterion if exactly one weighs; else the nutritionist's global criterion if
+  exactly one weighs; else the only weighing row from the profile's source; else published rows that
+  agree to the gram. **A range, a raw-state row for a cooked food and
   a size the text did not name never attach on their own** — they are offered as candidates. Which
   ration counts a food: a BEDCA id, or a `FoodCategory` narrowed by `;`-separated keywords (plurals
   allowed, longest phrase wins, `!` excludes).
-- `service/ReferenceService` — owns every `ref_*` table; an in-memory snapshot of DTOs, reset on
-  sync. `ReferenceImportService` owns no repository and reads the CSVs by header.
+- `service/ReferenceService` — owns every `ref_*` table except the nutritionist's rows of
+  `ref_food_measures`; an in-memory snapshot of DTOs of the published rows, reset on sync.
+  `ReferenceImportService` owns no repository and reads the CSVs by header.
+- `service/MeasureCriterionService` (`IMeasureCriterionService`) — owns the nutritionist's rows of
+  `ref_food_measures`, split from the published ones by who writes them: one diet's criteria and her
+  global ones. `ReferenceService` reads both from it per request (one query each) when it chooses a
+  measure, and delegates the diet-criterion methods to it.
+- `diet/service/MeasureResolverService` (`IMeasureResolverService`) — the diet's side of choosing a
+  measure, the counterpart of `FoodResolverService`: which ingredients need one, asked in one batch,
+  handed back as entities a recipe can point at. Owns no table.
 - `diet/service/DietRationService` — the week in rations, derived on read and stored nowhere. A
   range ration divides into a range count; a gross ration is cut to its edible part; cooked lentils
   against a dry ration are not counted but named with the reason. Every day carries `coverage`
@@ -532,13 +649,47 @@ quantity by it.
 
 `ReferenceController` at `/api/reference`: `GET sources`, `GET profiles?ageMonths=` (the suggested one
 is marked, never applied), `GET profiles/{code}`, `GET rations?profile=&bedcaFoodId=`,
-`GET measures?bedcaFoodId=&unit=&dietId=&profile=`, `GET vocabulary`,
+`GET measures?bedcaFoodId=&unit=&dietId=&profile=` (the diet's criteria, then the global ones, then
+published rows), `GET vocabulary`,
 `GET exchange-systems?clinical=`, `GET yields?bedcaFoodId=`, `POST sync` (answers with every source's
 attribution).
 
 **The machine offers, the nutritionist decides**, here as in food matching: a nutritionist may give a
 measure their own weight for one diet (`ref_food_measures.diet_id`, deleted with the diet and copied
 with it), and that criterion is labelled as theirs, never as published data.
+
+**Her global criterion** (`V14`, `ref_food_measures.global_criterion`) is the same idea for every diet
+of every patient: one BEDCA food, one household measure (+ optional size), a point weight per unit
+(`huevo mediano = 58 g` where AESAN publishes only `53–63 g`; `rebanada de pan de molde = 30 g` where no
+source publishes anything). It belongs to no diet and no source, so it weighs library recipes, an unsaved
+week (`compose`/`parse` without `dietId`) and logged extras alike; `FoodMeasureDto.globalOwn` labels it.
+**Precedence: picked > diet criterion > global criterion > published.** The weight is the edible part
+(`NET_EDIBLE`), as a diet's criterion is.
+
+- **The sync never touches it.** The sync addresses rows by `code`, and `ck_ref_food_measures_global`
+  keeps a global criterion without code or source; the published snapshot is read by
+  `findByDietIdIsNullAndGlobalCriterionFalse…`, so a criterion is never mistaken for published data.
+- **One per food, measure and size**: `criterion_key` is a generated column (the `library_key` trick)
+  under `uk_ref_food_measures_criterion`; the service checks first for a message, the index is underneath.
+- **A change is live** for every ingredient and extra pointing at it, like a library recipe's. `GET …/usage`
+  says how many before a save. While in use, its food, measure and size are fixed (moving it would weigh
+  those rows as another food) — only the weight and note change.
+- **Delete is refused while in use** (400). The ingredient and extra foreign keys are `ON DELETE SET NULL`
+  (right for a diet's criterion, which goes with its diet), so the check is a count, answered by the
+  owning services through the `IMeasureUsageCounter` port (`RecipeService`, `JournalService`): the
+  reference module may not call into `diet` or `journal`, so it declares the question and they answer
+  it. Looked up lazily (`ObjectProvider`) because those services depend on `IReferenceService`.
+
+`MeasureCriterionController` at `/api/reference/criteria` — not paged: one person's criteria, and every
+weighing reads them anyway:
+
+- `GET /api/reference/criteria?bedcaFoodId=` — every global criterion by food, or one food's.
+- `GET /api/reference/criteria/{id}`, `GET /api/reference/criteria/{id}/usage` —
+  `{measureId, ingredients, extraFoods}`.
+- `POST /api/reference/criteria` (201), `PUT /api/reference/criteria/{id}` —
+  `{measure, size?, bedcaFoodId, grams | ml, note?}` (the same body as a diet's criterion). A second
+  criterion for the same food, measure and size is a 400.
+- `DELETE /api/reference/criteria/{id}` (204) — one nothing is weighed by; otherwise a 400.
 
 ### `journal`
 
@@ -586,6 +737,9 @@ total in this codebase travels with its counts.
 
 - `GET /api/journal/{dietId}` — a whole week's scores and off-plan entries in one answer, since the
   screen that reads it draws all seven days at once.
+- `GET /api/journal/{dietId}/counts` — `{dietId, scored, extras}`: how many plates were scored and
+  how many extras logged, one `count` query each (404 for an unknown diet). What deleting the diet
+  would take with it, for the confirm; answered here because the two tables are this service's.
 - `PUT /api/journal/{dietId}/scores/{day}/{mealType}/{dishIndex}` — score one plate, writing over
   any earlier opinion of the same slot. 400 when the diet has no dish there, checked with one count
   query through `IDietService.hasDishAt`.
@@ -614,6 +768,8 @@ changing an entity, add a migration to match or startup fails.
 | `V11__ingredient_range_and_extra_measure.sql` | `diet_ingredients.quantity_max`; `extra_foods.state`, `portion_size`, `food_measure_id` |
 | `V12__create_yield_factors.sql` | `ref_yield_factors` — published cooking yields, offered and never applied |
 | `V13__create_recipes.sql` | `recipes`; `diet_dishes.recipe_id`, `servings`; `diet_ingredients` becomes `recipe_ingredients`; `raw_text` moves to the recipe |
+| `V14__global_measure_criteria.sql` | `ref_food_measures.global_criterion` + generated `criterion_key` (unique): the nutritionist's measure criteria for every diet |
+| `V15__create_composition_foods.sql` | `composition_foods`: CIQUAL 2025 + BLS 4.0 as published (`uk (source, source_code)`), plus fdiet's crosswalk columns (Spanish name, aliases, preferred, reviewed, SR Legacy edible portion) |
 
 ## Data files and licensing
 
@@ -628,6 +784,19 @@ application credits included; the values may not be modified or normalised; and 
 personal, educational or **non-commercial** purposes without AESAN's express authorisation. The
 full terms and the attribution string are in `BEDCA-ATTRIBUTION.txt`, and `POST /api/bedca/sync`
 returns the attribution in its response so no caller can store the data without being handed it.
+
+`reference-data/composition/` holds the open composition tables, each **unmodified upstream file**
+in its own folder with a `LICENSE.md` carrying its attribution, plus `manifest.csv` (per file: URL or
+landing page, DOI, retrieval date, bytes, SHA-256, SPDX id). Its `.gitattributes` switches off
+line-ending conversion so the hashes stay true, and routes the `.xlsx` and `.pdf` snapshots
+(about 17 MB) through **Git LFS**: a clone needs `git lfs install` first, or those files are pointer
+files and the composition sync fails. `ciqual-2025/` (Zenodo, 10.5281/zenodo.17550133) and
+`bls-4.0/` (DOI 10.25826/Data20251217-134202-0; the download link carries a rotating token, so the
+page and the DOI are recorded, not the link) are **CC BY 4.0**; `usda-sr-legacy/refuse.csv` is an
+extract of SR Legacy's refuse figures, **CC0**; `composition-es/` is fdiet's own work, **CC BY 4.0**:
+the Spanish-name crosswalk `links.csv` and the list of CIQUAL foods without energy. fdiet's joins
+never go inside an upstream file. `POST /api/composition/sync` returns the CIQUAL and BLS
+attribution strings.
 
 `reference-data/` holds the reference CSVs, each folder under its own source's terms; the 5 al día
 figures are **CC BY-SA 4.0**, so a derived file stays ShareAlike; the USDA yields are US public domain.

@@ -38,6 +38,18 @@ class MealTextParserTest {
         assertThat(oil.unit()).isEqualTo("cdta");
     }
 
+    /** What the composer writes for a food added in units, weighed by the nutritionist's criterion. */
+    @Test
+    void readsBackAFoodTheComposerWroteInUnits() {
+        RecipeDto dish = parser.parse("Huevo, entero, crudo (2 unidades medianas)", "Huevo");
+
+        DishIngredient eggs = dish.ingredients().get(0);
+        assertThat(eggs.name()).isEqualTo("Huevo, entero, crudo");
+        assertThat(eggs.quantity()).isEqualByComparingTo("2");
+        assertThat(eggs.unit()).isEqualTo("unidades");
+        assertThat(eggs.size()).isEqualTo(PortionSize.MEDIUM);
+    }
+
     @Test
     void fallsBackToOneUnitWhenNoQuantityIsGiven() {
         RecipeDto dish = parser.parse("Pescado (120 gr) + sal + limón", "Segundo plato");

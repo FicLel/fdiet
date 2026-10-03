@@ -1,0 +1,1 @@
+- [Delivery flow](feedback_delivery_flow.md) — ask all questions first, then backend → frontend → tech-lead; bugs become new stories

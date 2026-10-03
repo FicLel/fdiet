@@ -41,7 +41,7 @@ const dirtyLabel = computed(() => {
     <AppLogo />
     <span class="divider" />
 
-    <PatientSelect />
+    <PatientSelect manage-diets />
 
     <span class="num week">{{ label }}</span>
 

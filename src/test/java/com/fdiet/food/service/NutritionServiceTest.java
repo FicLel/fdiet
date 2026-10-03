@@ -2,6 +2,7 @@ package com.fdiet.food.service;
 
 import com.fdiet.food.dto.NutritionDto;
 import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.model.FoodItem;
 import com.fdiet.food.model.NutrientValue;
 import org.junit.jupiter.api.Test;
@@ -90,5 +91,19 @@ class NutritionServiceTest {
     void knowsWhenNothingIsKnown() {
         assertThat(nutritionService.per100g((BedcaFood) null).isEmpty()).isTrue();
         assertThat(nutritionService.per100g(new BedcaFood()).isEmpty()).isTrue();
+    }
+
+    /** CIQUAL 20031 "Lettuce, raw": energy published in kcal, sodium in mg, energy-less foods blank. */
+    @Test
+    void readsACiqualFoodTheSameWay() {
+        CompositionFood lettuce = new CompositionFood();
+        lettuce.setEnergy(new NutrientValue(new BigDecimal("14.7"), "kcal"));
+        lettuce.setSodium(new NutrientValue(new BigDecimal("10"), "mg"));
+
+        NutritionDto nutrition = nutritionService.per100g(lettuce);
+
+        assertThat(nutrition.energyKcal()).isEqualByComparingTo("14.7");
+        assertThat(nutrition.sodiumMg()).isEqualByComparingTo("10");
+        assertThat(nutritionService.per100g(new CompositionFood()).energyKcal()).isNull();
     }
 }

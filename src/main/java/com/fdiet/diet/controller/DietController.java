@@ -16,9 +16,10 @@ import com.fdiet.diet.dto.ParseDishRequestDto;
 import com.fdiet.diet.dto.RecipeDto;
 import com.fdiet.diet.dto.ResolveIngredientDto;
 import com.fdiet.diet.exception.InvalidDietException;
+import com.fdiet.diet.service.IDietComposeService;
 import com.fdiet.diet.service.IDietImportService;
 import com.fdiet.diet.service.IDietService;
-import com.fdiet.reference.dto.DietMeasureRequestDto;
+import com.fdiet.reference.dto.MeasureCriterionRequestDto;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -59,10 +60,13 @@ public class DietController {
 
     private final IDietService dietService;
     private final IDietImportService dietImportService;
+    private final IDietComposeService dietComposeService;
 
-    public DietController(IDietService dietService, IDietImportService dietImportService) {
+    public DietController(IDietService dietService, IDietImportService dietImportService,
+                          IDietComposeService dietComposeService) {
         this.dietService = dietService;
         this.dietImportService = dietImportService;
+        this.dietComposeService = dietComposeService;
     }
 
     @PostMapping
@@ -90,6 +94,17 @@ public class DietController {
             + "journal is not copied")
     public DietDto copy(@PathVariable Long id, @RequestBody @Valid CopyDietRequestDto request) {
         return dietService.copy(id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Delete a diet, active or archived, with its week, its journal (scores "
+            + "and extras), its own measure criteria and its private recipes. Library recipes and "
+            + "global criteria stay. Deleting the diet in force leaves the patient with none — no "
+            + "archived diet is reactivated. GET /api/journal/{dietId}/counts says what a "
+            + "confirm should warn about")
+    public void delete(@PathVariable Long id) {
+        dietService.delete(id);
     }
 
     @GetMapping("/active")
@@ -160,7 +175,7 @@ public class DietController {
             + "read that text back through the parser. Stores nothing: the editor appends the "
             + "fragment to the recipe")
     public ComposedFragmentDto compose(@RequestBody @Valid ComposeRequestDto request) {
-        return dietService.compose(request);
+        return dietComposeService.compose(request);
     }
 
     @PatchMapping("/{id}")
@@ -192,7 +207,7 @@ public class DietController {
     @Operation(summary = "Set the diet's own weight for one household measure of one food (and "
             + "size), replacing an earlier one, and attach it to the diet's ingredients it weighs")
     public DietMeasureSavedDto saveMeasure(@PathVariable Long id,
-                                           @RequestBody @Valid DietMeasureRequestDto request) {
+                                           @RequestBody @Valid MeasureCriterionRequestDto request) {
         return dietService.saveMeasure(id, request);
     }
 

@@ -86,8 +86,12 @@ public class NameMatcher implements INameMatcher {
         if (ingredientTokens.isEmpty() || foodTokens.isEmpty()) {
             return 0;
         }
-        long covered = foodTokens.stream().filter(ingredientTokens::contains).count();
-        return (int) Math.round(100.0 * covered / foodTokens.size());
+        return (int) Math.round(100.0 * shared(ingredientTokens, foodTokens) / foodTokens.size());
+    }
+
+    @Override
+    public int shared(Set<String> searchTokens, List<String> foodTokens) {
+        return (int) foodTokens.stream().filter(searchTokens::contains).count();
     }
 
     /**

@@ -1,28 +1,40 @@
 <script setup lang="ts">
 import { computed, ref, shallowRef } from 'vue'
-import { catalogueApi } from '@/api/catalogue'
 import { dietsApi } from '@/api/diets'
 import { referenceApi } from '@/api/reference'
 import type { BedcaFood, FoodMeasure, FoodState, Ration } from '@/api/types'
 import {
-  amount,
-  measureSource,
-  measureText,
-  rationIsFixed,
-  rationWeight,
-  stateWord,
-} from '@/domain/rations'
+  asksForWeight as needsWeight,
+  choiceTotal,
+  GRAMS_CHOICE,
+  rationRange,
+  rationStart,
+  weightHint as hintFor,
+  writesMl,
+  type ComposerChoice,
+} from '@/domain/composerChoice'
+import { criterionFor, unitsWeight, weighs } from '@/domain/measureCriteria'
+import { amount, stateWord } from '@/domain/rations'
+import BedcaFoodSearch from './BedcaFoodSearch.vue'
+import ComposerChoices from './ComposerChoices.vue'
+import MeasureCriteriaList from './MeasureCriteriaList.vue'
+import MeasureCriterionForm from './MeasureCriterionForm.vue'
 
 /**
  * Writes a food into the cell from a ration or a household measure instead of
  * by hand: pick a food, pick "1 ración · 60–80 g en seco · AESAN 2022" or
- * "1 cucharada sopera · 10 ml", say how many, and the backend writes the text.
+ * "1 unidad mediana · 58 g · Tu criterio", say how many, and the backend
+ * writes the text.
  *
  * **It appends text, nothing else.** The fragment is the backend's own writing
  * of the choice, and it is read back by the same parser as anything typed; the
- * editor never builds an ingredient of its own. A range asks for a value —
- * nothing picks the midpoint — and so does a gross weight, since what the diet
- * weighs is what is eaten.
+ * editor never builds an ingredient of its own. A ration that is a range asks
+ * for a value, and so does a gross weight, since what the diet weighs is what
+ * is eaten. A measure that is a range asks once for the nutritionist's weight
+ * per unit, kept as her criterion; from then on it is written in units.
+ *
+ * `dietId` is null for a diet not yet saved and in the recipe library: the
+ * global criteria weigh there too.
  */
 
 const props = defineProps<{
@@ -32,29 +44,24 @@ const props = defineProps<{
 
 const emit = defineEmits<{ append: [fragment: string] }>()
 
-type Choice =
-  | { kind: 'ration'; ration: Ration }
-  | { kind: 'measure'; measure: FoodMeasure }
-  | { kind: 'grams' }
+/** What the criterion form is open for: a published range, or a new unit (`from` null). */
+type Asking = { from: FoodMeasure | null } | null
 
 const open = ref(false)
-const term = ref('')
-const results = shallowRef<BedcaFood[]>([])
-const searching = ref(false)
 const food = shallowRef<BedcaFood | null>(null)
 const rations = shallowRef<Ration[]>([])
 const measures = shallowRef<FoodMeasure[]>([])
 const loadingOptions = ref(false)
-const choice = shallowRef<Choice>({ kind: 'grams' })
+const choice = shallowRef<ComposerChoice>(GRAMS_CHOICE)
+const asking = shallowRef<Asking>(null)
 const count = ref(1)
 const grams = ref<number | null>(null)
+/** The weight shown is the middle of a published range, not yet one she typed. */
+const proposed = ref(false)
 const state = ref<FoodState | ''>('')
 const busy = ref(false)
 const error = ref<string | null>(null)
 const added = ref<string | null>(null)
-
-let timer: ReturnType<typeof setTimeout> | undefined
-let token = 0
 
 const STATES: { value: FoodState | ''; label: string }[] = [
   { value: '', label: 'Sin indicar' },
@@ -65,138 +72,159 @@ const STATES: { value: FoodState | ''; label: string }[] = [
   { value: 'DRAINED', label: 'Escurrido' },
 ]
 
-function search(value: string): void {
-  term.value = value
-  if (timer !== undefined) {
-    clearTimeout(timer)
-  }
-  const query = value.trim()
-  if (query === '') {
-    token++
-    results.value = []
-    searching.value = false
-    return
-  }
-  searching.value = true
-  timer = setTimeout(async () => {
-    const mine = ++token
-    try {
-      const page = await catalogueApi.bedca(query, 0, 8)
-      if (mine === token) {
-        results.value = page.content
-      }
-    } catch {
-      if (mine === token) {
-        results.value = []
-      }
-    } finally {
-      if (mine === token) {
-        searching.value = false
-      }
-    }
-  }, 300)
+const globalCriteria = computed(() => measures.value.filter((measure) => measure.globalOwn))
+
+function loadMeasures(chosen: BedcaFood): Promise<FoodMeasure[]> {
+  return referenceApi.measures(chosen.id, {
+    dietId: props.dietId ?? undefined,
+    profile: props.profileCode,
+  })
 }
 
 async function pick(chosen: BedcaFood): Promise<void> {
   food.value = chosen
-  results.value = []
-  term.value = ''
   error.value = null
   added.value = null
   rations.value = []
   measures.value = []
-  choice.value = { kind: 'grams' }
+  asking.value = null
+  choice.value = GRAMS_CHOICE
   loadingOptions.value = true
   try {
     const [rationRows, measureRows] = await Promise.all([
       referenceApi.rations(chosen.id, props.profileCode),
-      referenceApi.measures(chosen.id, {
-        dietId: props.dietId ?? undefined,
-        profile: props.profileCode,
-      }),
+      loadMeasures(chosen),
     ])
-    // Only the choices this food can still be asked of after a click.
-    rations.value = rationRows.filter(
-      (ration) => (ration.gramsMin ?? ration.mlMin) !== null,
-    )
+    // Another food was picked, or the composer reset, while this one loaded.
+    if (food.value !== chosen) {
+      return
+    }
+    // Only the rations this food can still be asked of after a click.
+    rations.value = rationRows.filter((ration) => (ration.gramsMin ?? ration.mlMin) !== null)
     measures.value = measureRows
     const first = rations.value[0]
+    const weighing = measureRows.find(weighs)
     if (first) {
       select({ kind: 'ration', ration: first })
-    } else if (measures.value.some((measure) => measure.gramsPerMeasure !== null)) {
-      select({
-        kind: 'measure',
-        measure: measures.value.find((measure) => measure.gramsPerMeasure !== null)!,
-      })
+    } else if (weighing) {
+      select({ kind: 'measure', measure: weighing })
     }
   } catch (cause) {
-    error.value = `No se pudieron leer sus raciones${cause instanceof Error ? `: ${cause.message}` : ''}`
+    if (food.value === chosen) {
+      error.value = `No se pudieron leer sus raciones${cause instanceof Error ? `: ${cause.message}` : ''}`
+    }
   } finally {
-    loadingOptions.value = false
+    if (food.value === chosen) {
+      loadingOptions.value = false
+    }
   }
 }
 
-function select(next: Choice): void {
+/**
+ * A range measure is answered by the criterion that already covers it, or asks
+ * for one; anything else is chosen as it is.
+ */
+function select(next: ComposerChoice): void {
+  if (next.kind === 'measure' && !weighs(next.measure)) {
+    const criterion = criterionFor(measures.value, next.measure)
+    if (!criterion) {
+      asking.value = { from: next.measure }
+      return
+    }
+    next = { kind: 'measure', measure: criterion }
+  }
+  asking.value = null
   choice.value = next
   count.value = 1
   grams.value = null
+  proposed.value = false
   if (next.kind === 'ration') {
     state.value = next.ration.state === 'UNSPECIFIED' ? '' : next.ration.state
-    if (rationIsFixed(next.ration) && next.ration.weightBasis !== 'GROSS') {
-      grams.value = next.ration.gramsMin ?? next.ration.mlMin
-    }
+    const start = rationStart(next.ration)
+    grams.value = start.grams
+    proposed.value = start.proposed
   } else if (next.kind === 'measure') {
     state.value = next.measure.state === 'UNSPECIFIED' ? '' : next.measure.state
   }
+}
+
+/**
+ * Reads the measures again after a criterion was written or changed, and
+ * selects `selectId` — or keeps the chosen measure, by id, while it exists.
+ */
+async function refreshMeasures(selectId: number | null): Promise<void> {
+  const chosen = food.value
+  if (!chosen) {
+    return
+  }
+  try {
+    const rows = await loadMeasures(chosen)
+    if (food.value !== chosen) {
+      return
+    }
+    measures.value = rows
+  } catch (cause) {
+    if (food.value !== chosen) {
+      return
+    }
+    error.value = `No se pudieron leer sus medidas${cause instanceof Error ? `: ${cause.message}` : ''}`
+    return
+  }
+  const current = choice.value
+  const wanted = selectId ?? (current.kind === 'measure' ? current.measure.id : null)
+  if (wanted === null) {
+    return
+  }
+  const found = measures.value.find((measure) => measure.id === wanted)
+  if (found) {
+    select({ kind: 'measure', measure: found })
+  } else if (current.kind === 'measure') {
+    select(GRAMS_CHOICE)
+  }
+}
+
+function onCriterionSaved(criterion: FoodMeasure): void {
+  asking.value = null
+  void refreshMeasures(criterion.id)
 }
 
 function reset(): void {
   food.value = null
   rations.value = []
   measures.value = []
-  choice.value = { kind: 'grams' }
+  asking.value = null
+  choice.value = GRAMS_CHOICE
   error.value = null
+  loadingOptions.value = false
 }
 
-/** A ration that is a range or a gross weight needs the weight of one ration typed. */
-const asksForWeight = computed(() => {
-  const current = choice.value
-  return (
-    current.kind === 'grams' ||
-    (current.kind === 'ration' &&
-      (!rationIsFixed(current.ration) || current.ration.weightBasis === 'GROSS'))
-  )
-})
+const asksForWeight = computed(() => needsWeight(choice.value))
+const weightHint = computed(() => hintFor(choice.value, proposed.value))
+const isMl = computed(() => writesMl(choice.value))
+const total = computed(() => choiceTotal(choice.value, count.value, grams.value))
 
-const weightHint = computed(() => {
-  const current = choice.value
-  if (current.kind !== 'ration') {
-    return 'g'
-  }
-  const published = rationWeight(current.ration)
-  return current.ration.weightBasis === 'GROSS'
-    ? `g comestibles por ración (publicado: ${published})`
-    : `g por ración (${published})`
-})
-
-const isMl = computed(
-  () => choice.value.kind === 'ration' && choice.value.ration.gramsMin === null,
+/** `2 × unidad mediana ≈ 116 g`: the nutritionist's side only; the cell is written in units. */
+const unitsLine = computed(() =>
+  choice.value.kind === 'measure' ? unitsWeight(count.value, choice.value.measure) : null,
 )
 
-const total = computed<number | null>(() => {
-  const current = choice.value
-  if (current.kind === 'measure') {
-    return current.measure.gramsPerMeasure === null
-      ? null
-      : current.measure.gramsPerMeasure * count.value
-  }
-  if (grams.value === null || grams.value <= 0) {
-    return null
-  }
-  return current.kind === 'ration' ? grams.value * count.value : grams.value
-})
+/** `120 g en seco`: what the cell will say for a weight. */
+const writtenLine = computed(() =>
+  total.value === null
+    ? null
+    : [amount(total.value, 1), isMl.value ? 'ml (leídos como g)' : 'g', stateWord(state.value || null)]
+        .filter(Boolean)
+        .join(' '),
+)
 
-const canAdd = computed(() => food.value !== null && !busy.value && total.value !== null && count.value > 0)
+const canAdd = computed(
+  () =>
+    food.value !== null &&
+    !busy.value &&
+    asking.value === null &&
+    total.value !== null &&
+    count.value > 0,
+)
 
 async function add(): Promise<void> {
   const chosen = food.value
@@ -206,44 +234,24 @@ async function add(): Promise<void> {
   }
   busy.value = true
   error.value = null
+  const common = {
+    bedcaFoodId: chosen.id,
+    state: state.value || null,
+    dietId: props.dietId ?? undefined,
+  }
   try {
     const composed = await dietsApi.compose(
       current.kind === 'measure'
-        ? {
-            bedcaFoodId: chosen.id,
-            foodMeasureId: current.measure.id,
-            count: count.value,
-            state: state.value || null,
-            dietId: props.dietId ?? undefined,
-          }
-        : {
-            bedcaFoodId: chosen.id,
-            grams: Math.round(total.value! * 100) / 100,
-            state: state.value || null,
-            dietId: props.dietId ?? undefined,
-          },
+        ? { ...common, foodMeasureId: current.measure.id, count: count.value }
+        : { ...common, grams: Math.round(total.value! * 100) / 100 },
     )
     emit('append', composed.fragment)
-    added.value = composed.fragment
+    added.value = unitsLine.value ? `${composed.fragment} · ${unitsLine.value}` : composed.fragment
   } catch (cause) {
     error.value = `No se pudo añadir${cause instanceof Error ? `: ${cause.message}` : ''}`
   } finally {
     busy.value = false
   }
-}
-
-function isChosen(candidate: Choice): boolean {
-  const current = choice.value
-  if (current.kind !== candidate.kind) {
-    return false
-  }
-  if (current.kind === 'ration' && candidate.kind === 'ration') {
-    return current.ration.id === candidate.ration.id
-  }
-  if (current.kind === 'measure' && candidate.kind === 'measure') {
-    return current.measure.id === candidate.measure.id
-  }
-  return true
 }
 </script>
 
@@ -262,22 +270,7 @@ function isChosen(candidate: Choice): boolean {
         <button class="link" type="button" @click="open = false; reset()">Cerrar</button>
       </div>
 
-      <template v-if="!food">
-        <input
-          class="input"
-          :value="term"
-          placeholder="Buscar un alimento genérico"
-          aria-label="Buscar un alimento genérico"
-          @input="search(($event.target as HTMLInputElement).value)"
-        />
-        <p v-if="searching" class="hint">Buscando…</p>
-        <ul v-else-if="results.length > 0" class="results">
-          <li v-for="result in results" :key="result.id">
-            <button class="result" type="button" @click="pick(result)">{{ result.name }}</button>
-          </li>
-        </ul>
-        <p v-else-if="term.trim() !== ''" class="hint">Ningún alimento genérico se llama así.</p>
-      </template>
+      <BedcaFoodSearch v-if="!food" @pick="pick" />
 
       <template v-else>
         <div class="food">
@@ -287,86 +280,79 @@ function isChosen(candidate: Choice): boolean {
 
         <p v-if="loadingOptions" class="hint">Leyendo raciones y medidas…</p>
 
-        <div v-else class="choices">
-          <button
-            v-for="ration in rations"
-            :key="`r-${ration.id}`"
-            class="choice"
-            :class="{ on: isChosen({ kind: 'ration', ration }) }"
-            type="button"
-            :title="[ration.note, ration.pageRef].filter(Boolean).join(' · ')"
-            @click="select({ kind: 'ration', ration })"
-          >
-            <span class="choice-main">1 ración · {{ rationWeight(ration) }}</span>
-            <span class="choice-meta">{{ ration.groupLabel }} · {{ ration.sourceShortName }}</span>
-          </button>
-
-          <button
-            v-for="measure in measures"
-            :key="`m-${measure.id}`"
-            class="choice"
-            :class="{ on: isChosen({ kind: 'measure', measure }) }"
-            type="button"
-            :disabled="measure.gramsPerMeasure === null"
-            :title="
-              measure.gramsPerMeasure === null
-                ? 'Un rango no pesa: escribe los gramos'
-                : [measure.note, measure.pageRef].filter(Boolean).join(' · ')
-            "
-            @click="select({ kind: 'measure', measure })"
-          >
-            <span class="choice-main">{{ measureText(measure) }}</span>
-            <span class="choice-meta">
-              {{ measureSource(measure) }}
-              <template v-if="measure.gramsPerMeasure === null"> · rango, no pesa</template>
-            </span>
-          </button>
-
-          <button
-            class="choice"
-            :class="{ on: choice.kind === 'grams' }"
-            type="button"
-            @click="select({ kind: 'grams' })"
-          >
-            <span class="choice-main">Gramos</span>
-            <span class="choice-meta">Escribir el peso</span>
-          </button>
-        </div>
+        <ComposerChoices
+          v-else
+          :rations="rations"
+          :measures="measures"
+          :choice="choice"
+          @select="select"
+          @new-unit="asking = { from: null }"
+        />
 
         <p v-if="!loadingOptions && rations.length === 0 && measures.length === 0" class="hint">
-          Ninguna fuente cargada publica una ración o una medida para este alimento.
+          Ninguna fuente cargada publica una ración o una medida para este alimento. Puedes crear
+          tu propia unidad.
         </p>
 
-        <div class="line">
-          <label v-if="choice.kind !== 'grams'" class="mini">
-            <span>Cuántas</span>
-            <input v-model.number="count" class="input num" type="number" min="0.25" step="0.25" />
-          </label>
-          <label v-if="asksForWeight" class="mini grow">
-            <span>{{ weightHint }}</span>
-            <input v-model.number="grams" class="input num" type="number" min="1" step="1" />
-          </label>
-          <label class="mini">
-            <span>Estado</span>
-            <select v-model="state" class="input">
-              <option v-for="option in STATES" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
-          </label>
-        </div>
+        <MeasureCriterionForm
+          v-if="asking"
+          :key="asking.from?.id ?? 'new'"
+          :bedca-food-id="food.id"
+          :from="asking.from"
+          @saved="onCriterionSaved"
+          @cancel="asking = null"
+        />
 
-        <p class="hint">
-          <template v-if="total !== null">
-            Se escribirá {{ amount(total, 1) }} {{ isMl ? 'ml (leídos como g)' : 'g' }}
-            {{ stateWord(state || null) }}.
-          </template>
-          <template v-else>Indica un peso para poder añadirlo.</template>
-        </p>
+        <template v-else>
+          <div class="line">
+            <label v-if="choice.kind !== 'grams'" class="mini">
+              <span>Cuántas</span>
+              <input v-model.number="count" class="input num" type="number" min="0.25" step="0.25" />
+            </label>
+            <label v-if="asksForWeight" class="mini grow">
+              <span>{{ weightHint }}</span>
+              <input
+                v-model.number="grams"
+                class="input num"
+                :class="{ proposal: proposed }"
+                type="number"
+                min="1"
+                step="1"
+                @input="proposed = false"
+              />
+            </label>
+            <label class="mini">
+              <span>Estado</span>
+              <select v-model="state" class="input">
+                <option v-for="option in STATES" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+          </div>
 
-        <button class="add" type="button" :disabled="!canAdd" @click="add()">
-          {{ busy ? 'Añadiendo…' : 'Añadir al plato' }}
-        </button>
+          <p class="hint">
+            <template v-if="unitsLine">
+              {{ unitsLine }}. Se escribe en unidades; el paciente no ve los gramos.
+            </template>
+            <template v-else-if="proposed && total !== null && choice.kind === 'ration'">
+              Propuesta: el punto medio de {{ rationRange(choice.ration) }} por ración. Cámbiala si
+              pesas otra cosa; se escribirá {{ amount(total, 1) }} {{ isMl ? 'ml' : 'g' }}.
+            </template>
+            <template v-else-if="writtenLine">Se escribirá {{ writtenLine }}.</template>
+            <template v-else>Indica un peso para poder añadirlo.</template>
+          </p>
+
+          <button class="add" type="button" :disabled="!canAdd" @click="add()">
+            {{ busy ? 'Añadiendo…' : 'Añadir al plato' }}
+          </button>
+        </template>
+
+        <MeasureCriteriaList
+          v-if="globalCriteria.length > 0"
+          :criteria="globalCriteria"
+          @changed="refreshMeasures(null)"
+        />
       </template>
 
       <p v-if="added" class="done">Añadido: {{ added }}</p>
@@ -442,67 +428,6 @@ function isChosen(candidate: Choice): boolean {
   color: var(--ink-strong);
 }
 
-.results {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.result {
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
-  background: var(--surface);
-  text-align: left;
-  font-size: 11.5px;
-  color: var(--ink-strong);
-}
-
-.result:hover {
-  border-color: var(--sage-200);
-  background: var(--sage-50);
-}
-
-.choices {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.choice {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 6px 8px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
-  background: var(--surface);
-  text-align: left;
-}
-
-.choice.on {
-  border-color: var(--sage-600);
-  background: var(--sage-50);
-}
-
-.choice:disabled {
-  opacity: 0.6;
-}
-
-.choice-main {
-  font-size: 11.5px;
-  color: var(--ink-strong);
-}
-
-.choice-meta {
-  font-size: 10.5px;
-  color: var(--ink-faint);
-}
-
 .line {
   display: flex;
   gap: 6px;
@@ -529,6 +454,11 @@ function isChosen(candidate: Choice): boolean {
   text-overflow: ellipsis;
 }
 
+.input.proposal {
+  font-style: italic;
+  color: var(--ink-muted);
+}
+
 .hint {
   margin: 0;
   font-size: 11px;
@@ -545,7 +475,7 @@ function isChosen(candidate: Choice): boolean {
 }
 
 .add:disabled {
-  background: #c2ccc6;
+  background: var(--ink-disabled);
 }
 
 .done {

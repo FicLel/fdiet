@@ -4,6 +4,7 @@ import com.fdiet.diet.dto.MealType;
 import com.fdiet.journal.dto.DietJournalDto;
 import com.fdiet.journal.dto.DishScoreDto;
 import com.fdiet.journal.dto.ExtraFoodDto;
+import com.fdiet.journal.dto.JournalCountsDto;
 import com.fdiet.journal.dto.LogExtraFoodRequestDto;
 import com.fdiet.journal.dto.ScoreDishRequestDto;
 
@@ -19,6 +20,12 @@ public interface IJournalService {
 
     /** A whole week's scores and off-plan entries, in one answer. */
     DietJournalDto find(Long dietId);
+
+    /**
+     * How many scores and extras the diet holds, counted in the database — what
+     * deleting the diet would take with it.
+     */
+    JournalCountsDto counts(Long dietId);
 
     /**
      * Sets what the patient thought of one plate, writing over any earlier

@@ -33,7 +33,7 @@ import java.math.BigDecimal;
 @Table(name = "bedca_foods")
 @Getter
 @Setter
-public class BedcaFood {
+public class BedcaFood implements CompositionFigures {
 
     /** The source's own {@code f_id}: assigned, never generated. */
     @Id

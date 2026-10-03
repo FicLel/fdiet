@@ -1,4 +1,5 @@
-import type { DishIngredient, Recipe } from '@/api/types'
+import type { DishIngredient, Recipe, UnitWording } from '@/api/types'
+import { quantity } from './format'
 
 /**
  * What a recipe's ingredients read as.
@@ -37,6 +38,21 @@ export function renderRecipe(recipe: Recipe | null | undefined): string {
   return recipe.rawText ?? recipe.ingredients.map(renderIngredient).join(' + ')
 }
 
+/**
+ * Recipe text with one more fragment at the end, joined the way a diet joins
+ * ingredients: a `+` between them, none after a `:` or a `+` already typed.
+ */
+export function joinFragment(text: string, fragment: string): string {
+  const current = text.trim()
+  if (current === '') {
+    return fragment
+  }
+  if (current.endsWith(':') || current.endsWith('+')) {
+    return `${current} ${fragment}`
+  }
+  return `${current} + ${fragment}`
+}
+
 /** `40`, or `40-60` for a range nobody has settled — the way the parser reads it back. */
 export function quantityText(ingredient: Pick<DishIngredient, 'quantity' | 'quantityMax'>): string {
   return ingredient.quantityMax === null
@@ -45,15 +61,56 @@ export function quantityText(ingredient: Pick<DishIngredient, 'quantity' | 'quan
 }
 
 /**
- * One ingredient at a plate's servings, for the patient: `2 huevos` served 1,5
- * times is `3 unidad`. A range scales at both ends.
+ * The unit for an amount, in the backend's wording: `unidad mediana` for
+ * exactly one, `unidades medianas` for anything else — a range included. The
+ * size and the gender it agrees with are the backend's; nothing here guesses
+ * an ending. Without a wording (an older backend), the unit as stored.
+ */
+export function unitFor(
+  amount: Pick<DishIngredient, 'quantity' | 'quantityMax'>,
+  unit: string,
+  wording: UnitWording | null | undefined,
+): string {
+  const one = amount.quantityMax === null && amount.quantity === 1
+  return (one ? wording?.singular : wording?.plural) ?? unit
+}
+
+/**
+ * `2 unidades medianas`, `1.200 g`, or `40-60 g` for a range nobody has settled
+ * (which counts nowhere until a value in it is chosen): an ingredient's amount
+ * on the nutritionist's lists, worded for reading.
+ */
+export function amountText(
+  ingredient: Pick<DishIngredient, 'quantity' | 'quantityMax' | 'unit' | 'unitWording'>,
+): string {
+  const unit = unitFor(ingredient, ingredient.unit, ingredient.unitWording)
+  return ingredient.quantityMax === null
+    ? quantity(ingredient.quantity, unit)
+    : `${quantityText(ingredient)} ${unit}`
+}
+
+/** Whether the parser gave the ingredient no quantity of its own (`sal`): `1 unidad` and no size. */
+export function isUnstatedQuantity(ingredient: DishIngredient): boolean {
+  return (
+    ingredient.quantity === 1 &&
+    ingredient.quantityMax === null &&
+    ingredient.unit === DEFAULT_UNIT &&
+    ingredient.size === null
+  )
+}
+
+/**
+ * One ingredient at a plate's servings, for the patient: `2 unidades medianas`
+ * served 1,5 times is `3 unidades medianas`, served 0,5 times `1 unidad
+ * mediana`. A range scales at both ends. Units only — never the grams a measure
+ * weighs, which stay on the nutritionist's side.
  */
 export function servedQuantity(ingredient: DishIngredient, servings: number): string {
   const scaled = {
     quantity: round(ingredient.quantity * servings),
     quantityMax: ingredient.quantityMax === null ? null : round(ingredient.quantityMax * servings),
   }
-  return `${quantityText(scaled)} ${ingredient.unit}`
+  return `${quantityText(scaled)} ${unitFor(scaled, ingredient.unit, ingredient.unitWording)}`
 }
 
 function round(value: number): number {

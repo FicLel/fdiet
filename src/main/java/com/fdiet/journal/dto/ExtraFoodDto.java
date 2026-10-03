@@ -1,8 +1,10 @@
 package com.fdiet.journal.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fdiet.food.dto.NutritionDto;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.PortionSize;
+import com.fdiet.reference.domain.UnitWording;
 import com.fdiet.reference.dto.FoodMeasureDto;
 
 import java.math.BigDecimal;
@@ -18,6 +20,8 @@ import java.time.LocalDateTime;
  * quantity logged, worked out on read and never stored — null when nothing was
  * matched, or when the unit is one nothing can weigh. {@code measure} is the
  * household measure that weighed it, with its source, when one did.
+ * {@code unitWording} is the unit in both numbers with its size agreeing — the
+ * same shape the week's ingredients carry; see {@link UnitWording}.
  */
 public record ExtraFoodDto(
         Long id,
@@ -36,4 +40,10 @@ public record ExtraFoodDto(
         FoodMeasureDto measure,
         NutritionDto nutrition,
         LocalDateTime loggedAt) {
+
+    /** The unit as the patient reads it, in both numbers; derived, never stored. */
+    @JsonProperty("unitWording")
+    public UnitWording unitWording() {
+        return UnitWording.of(name, unit, size);
+    }
 }

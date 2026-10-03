@@ -1,6 +1,7 @@
 import { computed, ref, shallowRef } from 'vue'
 import { patientsApi, type PatientRequest } from '@/api/patients'
 import { dietsApi } from '@/api/diets'
+import { isRefusal } from '@/api/http'
 import type { DietSummary, Patient } from '@/api/types'
 
 /**
@@ -25,6 +26,13 @@ import type { DietSummary, Patient } from '@/api/types'
 
 /** Survives a reload, so the editor comes back to the person they were on. */
 const SELECTED_KEY = 'fdiet.patient'
+
+/**
+ * The only refusal a patient delete has is "still has diets". The backend says
+ * it in English, so the screen says it in Spanish and says where to go instead.
+ */
+const STILL_HAS_DIETS =
+  'Este paciente aún tiene dietas. Elimina sus dietas una a una desde su lista de dietas («Dietas», junto a su nombre) y después elimina el paciente.'
 
 const patients = shallowRef<Patient[]>([])
 const current = shallowRef<DietSummary[]>([])
@@ -198,8 +206,8 @@ function ageInMonths(patient: Patient | null, on: Date = new Date()): number | n
 
 /**
  * Removes a patient. The backend refuses one who still has diets — their weeks
- * are the record of them — and that refusal is shown as it is written rather
- * than rephrased into something vaguer.
+ * are the record of them — and that refusal is answered with where to delete
+ * them; any other failure is shown as the backend wrote it.
  */
 async function remove(id: number): Promise<boolean> {
   if (saving.value) {
@@ -213,7 +221,11 @@ async function remove(id: number): Promise<boolean> {
     settleSelection()
     return true
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'No se pudo quitar el paciente'
+    error.value = isRefusal(cause)
+      ? STILL_HAS_DIETS
+      : cause instanceof Error
+        ? cause.message
+        : 'No se pudo quitar el paciente'
     return false
   } finally {
     saving.value = false

@@ -16,6 +16,14 @@ export class ApiError extends Error {
   }
 }
 
+/** The backend's answer to a request it understood and refuses (in use, duplicate, invalid). */
+export const HTTP_BAD_REQUEST = 400
+
+/** Whether the backend refused the request on its merits, rather than failing. */
+export function isRefusal(cause: unknown): cause is ApiError {
+  return cause instanceof ApiError && cause.status === HTTP_BAD_REQUEST
+}
+
 /** Spring's problem detail, when the backend bothered to write one. */
 interface ProblemDetail {
   detail?: string

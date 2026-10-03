@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Dish } from '@/api/types'
-import { servedQuantity } from '@/domain/dishText'
+import { isUnstatedQuantity, servedQuantity } from '@/domain/dishText'
 
 /**
  * What is on a plate and how it is made, as the patient reads it.
@@ -18,10 +18,9 @@ const recipe = computed(() => props.dish?.recipe ?? null)
 const lines = computed(() =>
   (recipe.value?.ingredients ?? []).map((ingredient) => ({
     name: ingredient.name,
-    amount:
-      ingredient.quantity === 1 && ingredient.quantityMax === null && ingredient.unit === 'unidad'
-        ? ''
-        : servedQuantity(ingredient, props.dish?.servings ?? 1),
+    amount: isUnstatedQuantity(ingredient)
+      ? ''
+      : servedQuantity(ingredient, props.dish?.servings ?? 1),
   })),
 )
 
