@@ -8,8 +8,8 @@ import java.math.BigDecimal;
 /**
  * What else a diet could put on the plate in place of a given food.
  *
- * <p>It owns no table. The composition database is reached through
- * {@link com.fdiet.food.service.IBedcaFoodService} and read through
+ * <p>It owns no table. The composition foods (CIQUAL 2025 / BLS 4.0) are reached through
+ * {@link com.fdiet.food.service.ICompositionFoodService} and read through
  * {@link com.fdiet.food.service.INutritionService}, the same way the diet module
  * reaches it — this context adds a judgement about foods, not a store of them.
  *
@@ -24,7 +24,7 @@ import java.math.BigDecimal;
 public interface IAlternativeService {
 
     /**
-     * Alternatives to the composition-database food with that id.
+     * Alternatives to the CIQUAL or BLS food with that id.
      *
      * @param foodId   the food being replaced; 404 if the catalogue has no such row
      * @param limit    how many to hand back, best first
@@ -51,8 +51,8 @@ public interface IAlternativeService {
      * The same answer for a food named rather than pointed at, which is how a
      * diet is written.
      *
-     * <p>The name has to be one the catalogue carries, matched exactly — the
-     * collation is case- and accent-insensitive, so {@code lechuga} finds
+     * <p>The name has to be a Spanish name or alias of fdiet's crosswalk, matched exactly — the
+     * comparison is case- and accent-insensitive, so {@code lechuga} finds
      * {@code Lechuga}, and anything less than exact is a 404 rather than a
      * guess. An ingredient whose name is not in the catalogue is matched first
      * through {@code GET /api/diets/{id}/ingredients?suggest=true}, by a person.

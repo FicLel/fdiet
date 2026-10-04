@@ -1,6 +1,6 @@
 package com.fdiet.journal.mapper;
 
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.model.FoodItem;
 import com.fdiet.journal.dto.DishScoreDto;
 import com.fdiet.journal.dto.ExtraFoodDto;
@@ -35,7 +35,7 @@ public class JournalMapper implements IJournalMapper {
 
     @Override
     public ExtraFoodDto toDto(ExtraFood extra) {
-        BedcaFood bedca = extra.getBedcaFood();
+        CompositionFood food = extra.getCompositionFood();
         FoodItem item = extra.getFoodItem();
         ReferenceFoodMeasure measure = extra.getFoodMeasure();
         return new ExtraFoodDto(
@@ -46,9 +46,10 @@ public class JournalMapper implements IJournalMapper {
                 extra.getUnit(),
                 extra.getState(),
                 extra.getSize(),
-                bedca == null ? null : bedca.getId(),
+                food == null ? null : food.getId(),
                 item == null ? null : item.getId(),
-                matchedName(bedca, item),
+                matchedName(food, item),
+                food == null ? null : food.getSource(),
                 item == null ? null : item.getBrand(),
                 measure == null ? null : measure.getId(),
                 referenceService.describe(measure),
@@ -57,9 +58,9 @@ public class JournalMapper implements IJournalMapper {
     }
 
     /** What the catalogue calls the food, or null while it calls it nothing. */
-    private static String matchedName(BedcaFood bedca, FoodItem item) {
-        if (bedca != null) {
-            return bedca.getName();
+    private static String matchedName(CompositionFood food, FoodItem item) {
+        if (food != null) {
+            return food.label();
         }
         return item == null ? null : item.getCommercialName();
     }

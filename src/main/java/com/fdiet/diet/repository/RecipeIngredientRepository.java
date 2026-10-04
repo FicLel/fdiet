@@ -28,22 +28,22 @@ import java.util.Optional;
  */
 public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredient, Long> {
 
-    @EntityGraph(attributePaths = {"foodItem", "bedcaFood"})
+    @EntityGraph(attributePaths = {"foodItem", "compositionFood"})
     Page<RecipeIngredient> findByRecipeIdIn(Collection<Long> recipeIds, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"bedcaFood", "recipe"})
+    @EntityGraph(attributePaths = {"compositionFood", "recipe"})
     List<RecipeIngredient> findByRecipeIdIn(Collection<Long> recipeIds);
 
     /** The ones still waiting to be matched — the fix-up list. */
-    @EntityGraph(attributePaths = {"foodItem", "bedcaFood"})
+    @EntityGraph(attributePaths = {"foodItem", "compositionFood"})
     @Query("select i from RecipeIngredient i where i.recipe.id in :recipeIds "
-            + "and i.foodItem is null and i.bedcaFood is null")
+            + "and i.foodItem is null and i.compositionFood is null")
     Page<RecipeIngredient> findUnmatched(@Param("recipeIds") Collection<Long> recipeIds,
                                          Pageable pageable);
 
-    @EntityGraph(attributePaths = {"foodItem", "bedcaFood"})
+    @EntityGraph(attributePaths = {"foodItem", "compositionFood"})
     @Query("select i from RecipeIngredient i where i.recipe.id in :recipeIds "
-            + "and (i.foodItem is not null or i.bedcaFood is not null)")
+            + "and (i.foodItem is not null or i.compositionFood is not null)")
     Page<RecipeIngredient> findMatched(@Param("recipeIds") Collection<Long> recipeIds,
                                        Pageable pageable);
 

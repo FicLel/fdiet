@@ -48,8 +48,8 @@ public class DietNutritionService implements IDietNutritionService {
         if (weighed == null) {
             return null;
         }
-        NutritionDto per100g = ingredient.getBedcaFood() != null
-                ? nutritionService.per100g(ingredient.getBedcaFood())
+        NutritionDto per100g = ingredient.getCompositionFood() != null
+                ? nutritionService.per100g(ingredient.getCompositionFood())
                 : nutritionService.per100g(ingredient.getFoodItem());
         return per100g.isEmpty() ? null : per100g.scaled(weighed.factor().multiply(servings));
     }
@@ -107,6 +107,8 @@ public class DietNutritionService implements IDietNutritionService {
         }
         return portionScaler.weigh(ingredient.getQuantity(), ingredient.getUnit(),
                 ingredient.getFoodMeasure(),
-                ingredient.getBedcaFood() == null ? null : ingredient.getBedcaFood().getEdiblePortion());
+                ingredient.getCompositionFood() == null
+                        ? null
+                        : ingredient.getCompositionFood().getEdiblePortion());
     }
 }

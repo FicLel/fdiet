@@ -16,6 +16,7 @@ import type {
   PortionSize,
   UnitWording,
 } from './types'
+import type { CompositionSource } from './compositionTypes'
 /**
  * What the patient thought of one plate, 1–5.
  *
@@ -44,10 +45,13 @@ export interface ExtraFood {
   unitWording?: UnitWording | null
   state: FoodState | null
   size: PortionSize | null
-  bedcaFoodId: number | null
+  /** The CIQUAL / BLS food it is matched to; at most one of this and `foodItemId`. */
+  compositionFoodId: number | null
   foodItemId: number | null
   /** What the catalogue calls the food, once matched. */
   matchedName: string | null
+  /** Which table a matched composition food comes from; null otherwise. */
+  matchedSource: CompositionSource | null
   /** The maker, when the match came from the branded half. */
   brand: string | null
   /** The household measure that weighed `1 cucharada`, the same rule the week weighs by. */

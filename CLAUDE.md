@@ -80,21 +80,29 @@ belongs to exactly one patient, so `dish_scores.diet_id` already says who wrote 
 
 ### The two halves of the catalogue
 
-`food_items` and `bedca_foods` are both foods and they answer different questions.
+`food_items` and `composition_foods` are both foods and they answer different questions.
 
-| | `food_items` | `bedca_foods` |
+| | `food_items` | `composition_foods` |
 | --- | --- | --- |
-| what | branded commercial products | generic Spanish foods |
-| source | fooddata.csv, keyed on EAN | bedca_foods.csv, AESAN/BEDCA v1.0 |
-| size | ~100 k rows | 957 rows |
+| what | branded commercial products | generic foods, with fdiet's Spanish names |
+| source | fooddata.csv, keyed on EAN | CIQUAL 2025 + BLS 4.0, keyed on `(source, source_code)` |
+| size | ~100 k rows | ~10,600 rows, 123 named in Spanish |
 | a name | `BEKIND BARRA CEREAL CARAMELO ALMENDRA Y SAL` | `Lechuga`, `Pollo, pechuga, plancha` |
 
-A diet says `lechuga (80 gr)`, so **the composition database is the half that answers**: an
-import of example-ui.xlsx matched 0 of 210 ingredients against `food_items` and matches a
-useful share against `bedca_foods`. The branded catalogue is still there for the days a diet
-names a product outright.
+A diet says `lechuga (80 gr)`, so **the composition foods are the half that answers**: an
+import of example-ui.xlsx matches 0 of 210 ingredients against `food_items` and 144 against the
+Spanish crosswalk of `composition_foods`. The branded catalogue is still there for the days a diet
+names a product outright. Since FD-033 phase D (`V17`/`V18`) every recipe ingredient, journal
+extra, reference row, alternative and ration count points at `composition_foods`; `bedca_foods`
+below is still loaded and served at `/api/bedca`, but **nothing matches to it any more** and
+phase E removes it.
 
-### `bedca_foods` — the composition database
+### `bedca_foods` — the retired composition database (removed in FD-033 phase E)
+
+Nothing outside `/api/bedca` reads it since phase D. `recipe_ingredients.bedca_food_id` and
+`extra_foods.bedca_food_id` are NULL on every row and no entity maps them; `bedcaFoodId` in any
+request is a 400 (`common/helper/RetiredFields`, `@Null` on the retired field — a field Jackson
+simply ignored would let an old caller's match vanish without a word).
 
 - `controller/BedcaController` — `@RestController` at `/api/bedca`:
   - `GET /api/bedca?name=&page=&size=` — page of foods. No `name`: alphabetical. With one, it is
@@ -136,10 +144,10 @@ and the mappers serve BEDCA, CIQUAL and BLS alike.
 
 ### `composition_foods` — the open composition tables (FD-033 phase B, `V15`)
 
-**CIQUAL 2025 (ANSES) and BLS 4.0 (Max Rubner-Institut), both CC BY 4.0, in one table beside
-`bedca_foods`.** It is BEDCA's open replacement in waiting: BEDCA keeps running, the reference rows
-point at the new table since phase C (`V16`, below), ingredients and extras move in phase D (resetting
-matches), and nothing here touches a diet. One table rather than two so that, when consumers move, they point at one id column.
+**CIQUAL 2025 (ANSES) and BLS 4.0 (Max Rubner-Institut), both CC BY 4.0, in one table.** It is
+BEDCA's open replacement: the reference rows point at it since phase C (`V16`), and recipe
+ingredients and journal extras since phase D (`V17`/`V18`, below). One table rather than two, so
+every consumer points at one id column.
 
 - `source` (`CIQUAL` | `BLS`, `model/CompositionSource`, which also carries each licence's
   attribution) + `source_code` as published (CIQUAL `alim_code`, BLS `C131000`);
@@ -171,10 +179,16 @@ matches), and nothing here touches a diet. One table rather than two so that, wh
 - **`edible_portion` = 1 − refuse/100 of the USDA SR Legacy food in `edible_portion_fdc_id`**
   (CC0; `usda-sr-legacy/refuse.csv` is the extract, and a test checks every row against it). NULL
   where no SR Legacy food fits (5 rows) — and NULL still refuses a gross weight, as with BEDCA.
-- **Matching is exact**, as for BEDCA: `ICompositionFoodService.entitiesByName` answers a Spanish
-  name or alias, case and accents ignored, from an in-memory index of every row (one query, dropped
-  on sync). Re-importing example-ui.xlsx against the crosswalk matches **144 of 210** ingredients
-  outright (BEDCA: 41, the floor) — `ExampleDietCompositionMatchTest` measures it on every build.
+- **Matching is exact**: `ICompositionFoodService.entitiesByName` answers a Spanish name or alias,
+  case and accents ignored, from an in-memory index of every row (one query, dropped on sync); the
+  index is built by `CompositionIndexRow.nameIndex`. Re-importing example-ui.xlsx matches **144 of
+  210** ingredients outright (BEDCA: 41, the floor) — `ExampleDietCompositionMatchTest` measures it
+  through the real `FoodResolverService` on every build.
+- **Suggestions and alternatives read Spanish names only.** `suggest(text, limit)` ranks the
+  crosswalked foods' Spanish words in memory (`CompositionSuggestionDto`: id, name, `source`,
+  `sourceLabel`, score) and `entitiesNamed()` hands `com.fdiet.alternative` the crosswalked foods in
+  one query. A food without a Spanish name can still be found by search and picked by id, but it has
+  no family, no state read off its name and no suggestion: those are judgements about Spanish names.
 
 The classes, all in `food/`: `controller/CompositionController`; `service/CompositionFoodService`
 (owns the table: search, lookup, the batched `entitiesByName` / `entitiesByIds`, the sync's
@@ -193,11 +207,27 @@ the reference CSVs. After changing a snapshot or the crosswalk, `POST /api/compo
 composition startup sync runs before the reference one (`@Order`), because reference rows name
 composition foods and a fresh database can only key them once the foods are in.
 
-**Who points at it (FD-033 phase C, `V16`).** The reference rows: `ref_rations` and
-`ref_food_measures` (published rows, diet criteria, global criteria) name a food by
-`composition_food_id`, and the reference CSVs by `composition_source,composition_code`. Ingredients
-and extras still point at BEDCA until phase D; `ICompositionFoodService.idsByKey` resolves the stable
-keys from the same in-memory index (no query once it is built).
+**Who points at it.** The reference rows (phase C, `V16`): `ref_rations` and `ref_food_measures`
+(published rows, diet criteria, global criteria) name a food by `composition_food_id`, and the
+reference CSVs by `composition_source,composition_code`; `ICompositionFoodService.idsByKey` resolves
+the stable keys from the same in-memory index (no query once it is built). Recipe ingredients and
+journal extras (phase D): `recipe_ingredients.composition_food_id` and
+`extra_foods.composition_food_id` (FK, indexed, no `ON DELETE`; a check keeps at most one of it and
+`food_item_id`).
+
+**The phase D reset and re-match (`V17` + `V18`, applied to the dev DB 2026-10-03).** `V17` added the
+columns and set every `bedca_food_id` to NULL; no BEDCA id was carried over (decisions 2, 19). `V18`
+is a **Java** Flyway migration (`src/main/java/db/migration/`) that re-matched every row without a
+food by **exact Spanish name or alias, once more without size words** — `diet/helpers/ExactNames` over
+`CompositionIndexRow.nameIndex`, the very rule a fresh import goes through — and released a household
+measure whose row names another composition food. A migration, not a startup step or an endpoint,
+because it must run exactly once per database, before anybody reads a week, and Flyway's history is
+the record that it did; an endpoint left behind could re-match archived weeks silently. On a fresh
+database it finds nothing to do. The Gradle `flyway*` tasks compile first and read
+`classpath:db/migration` beside the SQL folder, so they resolve `V18` too (without that, `flywayInfo`
+listed it as "Future" and a fresh `flywayMigrate` would have skipped it, leaving a hole that fails
+validation once a later migration is applied). Before/after per diet:
+`product/reports/FD-033-D-before-after.md` (452 of 959 rows matched by exact name, BEDCA had 158).
 
 ### Importing
 
@@ -331,13 +361,16 @@ foreign keys keep their `fk_diet_ingredients_*` names. The import still reads ea
 private recipe, named by the text or the row; it never links a library recipe by name.
 
 `RecipeIngredient` carries `raw_name` — what the diet calls the food — and *may* point at one of
-the two catalogues: `bedca_food_id` for a generic composition-database food, the usual match, or
+the two catalogues: `composition_food_id` for a CIQUAL / BLS food, the usual match, or
 `food_item_id` for a branded product. **Both are nullable, on purpose, and only one is ever set.**
 Both null means "not matched yet": the ingredient is stored exactly as written and matched later
 through `PATCH /api/diets/{id}/ingredients/{ingredientId}`, because dropping it would silently
 lose part of the week. Nutrition figures for an ingredient are only available once it is matched.
 The entity associations are mappings, not layer crossings — when the diet service needs food
-*data* it goes through `IBedcaFoodService` / `IFoodItemService`, never a food repository.
+*data* it goes through `IIngredientFoodService` (which asks `ICompositionFoodService` /
+`IFoodItemService` and the resolver in batches, and ranks the fix-up suggestions), never a food
+repository. `RecipeIngredient.compositionFoodId()` is the column's id, compared with the food a
+reference row or a measure criterion names.
 
 `Recipe` carries `raw_text` for the same reason one level up: **the ingredients as they were written**.
 Reading a sentence into a name and quantities cannot be undone — `MealTextParser` keeps one
@@ -390,7 +423,7 @@ wording, so quantity + unit + name says it once.
 ### Interfaces and injection
 
 Every class in `diet/`, `alternative/` and `patient/` is injected through an interface
-(`IDietService`, `IDietComposeService`, `IRecipeService`, `IDietMapper`, `IMealTextParser`, `IPortionScaler`, `IDietNutritionService`,
+(`IDietService`, `IDietComposeService`, `IRecipeService`, `IIngredientFoodService`, `IDietMapper`, `IMealTextParser`, `IPortionScaler`, `IDietNutritionService`,
 `IAlternativeService`, `IFoodCategoriser`, `INutritionSimilarity`, `IPatientService`,
 `IPatientMapper`, `IReferenceService`, `IMeasureCriterionService`, `IReferenceMapper`, `IDietRationService`,
 `IMeasureResolverService`, …), as are the food services
@@ -452,10 +485,12 @@ diet is addressed by its own id:
 - `GET /api/diets?patientId=&page=&size=` — that patient's archived diets, without their weeks.
 - `GET /api/diets/{id}/ingredients?resolved=false&suggest=true&page=&size=` — the fix-up list:
   the ingredients of every recipe the diet's plates serve, library ones included.
-  `suggest=true` attaches the composition database's best candidates to each unmatched
-  ingredient, ranked, costing no query.
+  `suggest=true` attaches the best CIQUAL / BLS candidates (`{compositionFoodId, name, source,
+  sourceLabel, score}`, by Spanish name) to each unmatched ingredient, ranked, costing no query.
+  Each ingredient carries `compositionFoodId`, `matchedName` and `matchedSource`.
 - `PATCH /api/diets/{id}/ingredients/{ingredientId}` — match one ingredient to a food
-  (`bedcaFoodId` or `foodItemId`, not both — matching to one releases the other), or correct its
+  (`compositionFoodId` or `foodItemId`, not both — matching to one releases the other;
+  `bedcaFoodId` is a 400), or correct its
   name, quantity or unit. Fields left out are left alone. On a library recipe's ingredient the
   change reaches every plate that serves it.
 - `POST /api/diets/parse` — reads recipe text (`text`, optional `slotName`) into a recipe with
@@ -466,9 +501,10 @@ diet is addressed by its own id:
   `startedOn`, `referenceProfile`, `clinical`.
 - `PATCH /api/diets/{id}` — `{name?, referenceProfileCode?, clinical?}` without sending the week.
   A blank `referenceProfileCode` takes the profile off.
-- `POST /api/diets/compose` — `{bedcaFoodId, grams | foodMeasureId + count, state?, dietId?}` →
+- `POST /api/diets/compose` — `{compositionFoodId, grams | foodMeasureId + count, state?, dietId?}` →
   the text fragment to append to a cell (`Lenteja, seca, cruda (60 g en crudo)`) and what the parser
-  reads back from it. The editor's "añadir por raciones" goes through this, so it still has no parser.
+  reads back from it, pinned to the food asked for (so a food with no Spanish name still comes back
+  matched). The editor's "añadir por raciones" goes through this, so it still has no parser.
   Answered by `service/DietComposeService` (`IDietComposeService`), which owns no table and asks
   `IDietService` for the diet's profile.
 - `GET /api/diets/{id}/rations?profile=` — the week counted in rations (see `reference`).
@@ -517,28 +553,28 @@ ration count names it "Cantidad en intervalo, sin confirmar" — until a person 
 sends `quantity` clears `quantity_max`. `raw_text` keeps the range as written.
 
 `service/FoodResolverService` matches the whole week against both catalogues in four batched calls
-at most: `entitiesByName` for the names it has not seen, `entitiesByIds` for the ones its cache
-already knows. The composition database is asked first, and only the names it does not carry go
-to the branded one. Both halves share one `CachedLookup`, so neither has its own copy of the
-logic. **The caches hold names against ids, never entities**: an entity cached across a
-transaction is detached.
+at most. The composition foods are asked first through `diet/helpers/ExactNames` (exactly, then
+without size words — two `entitiesByName`, each answered from the in-memory crosswalk index and one
+`findAllById`), and only the names they do not carry go to the branded one, through a `CachedLookup`
+of names against ids. **The cache holds names against ids, never entities**: an entity cached across a
+transaction is detached. The composition half keeps no cache of its own; its index is one, dropped on
+every sync.
 
-**Matching is exact and never guesses.** The `utf8mb4_unicode_ci` collation is case- and
-accent-insensitive, so `lechuga` finds `Lechuga`. A name that is not found is tried once more without
+**Matching is exact and never guesses.** Case and accents are ignored, so `lechuga` finds `Lechuga`. A name that is not found is tried once more without
 its size words (`kiwi mediano` → `Kiwi`): a size says how big the piece is, never which food it is. Anything less than exact is left unmatched and
-offered as a *suggestion* instead — `IBedcaFoodService.suggest` ranks all 957 names in memory
-through `food/helpers/NameMatcher` and hands back the best few, and a person picks one with a
-PATCH. Similarity alone puts `1 pan integral` on `Pan rallado` and `2 lonchas de jamón serrano`
+offered as a *suggestion* instead — `ICompositionFoodService.suggest` ranks the crosswalk's Spanish
+names in memory through `food/helpers/NameMatcher` and hands back the best few, and a person picks
+one with a PATCH. Similarity alone puts `1 pan integral` on `Pan rallado` and `2 lonchas de jamón serrano`
 on `Jamón asado`: close enough to score 100, wrong enough to put a false figure in someone's
 diet. A blank is better than a wrong number, so the machine offers and the nutritionist decides.
 
-Importing example-ui.xlsx matches 41 of its 210 ingredients outright; the other 169 come back
-from the fix-up endpoint each with its candidates.
+Importing example-ui.xlsx matches 144 of its 210 ingredients outright (BEDCA matched 41); the other
+66 come back from the fix-up endpoint each with its candidates.
 
 ### `alternative`
 
 What else could go on the plate instead of this. It owns **no table and no schema**: it reaches
-the composition database through `IBedcaFoodService` and reads it through `INutritionService`,
+the composition foods through `ICompositionFoodService` and reads them through `INutritionService`,
 the same way `diet` does, and adds a judgement about foods rather than a store of them. It is a
 context of its own, and one endpoint, so that neither the catalogue nor the week has to grow a
 second job.
@@ -566,10 +602,13 @@ exactly why the arithmetic is never allowed to make the first decision.
   components both foods publish are compared**, and fewer than two shared components is a null
   rather than a score resting on one number. Sugars are published for 205 of 957 foods and
   sodium says how a food was canned, so neither is counted.
-- `service/AlternativeService` — one pass over the catalogue per request: the category is read
-  off every name, the wrong shelf is dropped before a figure is looked at, and the rest is
-  ordered. 957 rows is one query and no index of its own to fall stale after a sync, which is
-  why `IBedcaFoodService.entitiesAll()` exists.
+- `service/AlternativeService` — one pass over the crosswalked foods per request
+  (`ICompositionFoodService.entitiesNamed()`, one query): the category is read off every Spanish
+  name, the wrong shelf is dropped before a figure is looked at, and the rest is ordered. Only foods
+  the crosswalk names in Spanish have a family, so the shelf is the crosswalk (123 foods today; FD-036
+  grows it) — a food without a Spanish name gets `category: null` and no alternatives. Rations are
+  counted by the food's composition id and Spanish name. `AlternativeDto` carries `compositionFoodId`
+  and `source`; `FoodAlternativesDto` carries `source`.
 
 **Categories are derived on read and never stored**, like a kcal figure converted from kilojoules.
 The source publishes a group for 182 of its 957 foods, so a stored category would exist for one
@@ -612,13 +651,14 @@ FD-033 phase C) by `composition_source,composition_code` — the source's own ke
 installation — resolved in one batched lookup; a row whose food is not loaded is skipped with a
 reason, not failed.
 
-**Composition ids and BEDCA ids are never compared.** Until FD-033 phase D re-matches ingredients and
-extras, they point at BEDCA foods, and a rule naming a composition food — the 60 5 al día rations and
-62 measures that name one, and every diet or global criterion — weighs and counts none of them
-(accepted, decision 15). They are looked up by name only (`MeasureQueryDto.byNameOnly`,
-`countingRation(profile, null, name)`), which reaches family + keyword rows exactly as before. Phase D
-replaces those calls with the matched composition food, and `RecipeIngredient.compositionFoodId()`
-(null today) with the ingredient's own column.
+**A food is asked about by its composition id and its Spanish name** (FD-033 phase D): the id reaches
+the rows naming that food — the 5 al día rations and measures, every diet and global criterion — and
+the name reaches family + keyword rows. A food without a Spanish name reaches only the rows naming it.
+When no query of a batch names a composition food, the criteria are not read at all (every criterion
+names one). A **picked** measure (`food_measure_id`, sent back on a `PUT`) is kept while its row is
+still live for the same measure and still covers the food, even when the narrowing that ranks
+candidates would leave it out (FD-039, `ReferenceMatcher.chooseMeasure`); otherwise the rule decides
+again.
 
 Only openly reusable sources are seeded: **AESAN 2022** (the default adult profile,
 `fdiet.reference.default-adult-profile`), the **AESAN/MEC 2010** school consensus (four age bands, and
@@ -674,12 +714,10 @@ is marked, never applied), `GET profiles/{code}`, `GET rations?profile=&composit
 `GET measures?compositionFoodId=&unit=&dietId=&profile=` (the diet's criteria, then the global ones,
 then published rows), `GET vocabulary`,
 `GET exchange-systems?clinical=`, `GET yields?compositionFoodId=`, `POST sync` (answers with every
-source's attribution). Until FD-033 phase D, `rations`, `measures` and `yields` take `bedcaFoodId`
-**instead** (exactly one of the two; both is a 400): the BEDCA food is read by its name only, so it
-reaches family + keyword rows and no row or criterion naming a food — what the composer and the
-fix-up panel need while ingredients are BEDCA matches. A composition food without a Spanish name
-reaches only the rows naming it (no family). `RationDto` and `FoodMeasureDto` carry
-`compositionFoodId` (was `bedcaFoodId`).
+source's attribution). `measures` and `yields` require `compositionFoodId`; `rations` without one lists
+the profile's rations. `bedcaFoodId` on any of the three is a 400 (FD-033 phase D). A composition
+food without a Spanish name reaches only the rows naming it (no family). `RationDto` and
+`FoodMeasureDto` carry `compositionFoodId`.
 
 **The machine offers, the nutritionist decides**, here as in food matching: a nutritionist may give a
 measure their own weight for one diet (`ref_food_measures.diet_id`, deleted with the diet and copied
@@ -727,7 +765,7 @@ it and what was eaten instead. It owns two tables and adds nothing to the week �
 - `model/DishScore` → `dish_scores` — what the patient thought of one plate, 1–5.
 - `model/ExtraFood` → `extra_foods` — something eaten that the plan did not prescribe.
 - `service/JournalService` — owns both tables. It reaches the week through `IDietService` and the
-  catalogue through `IBedcaFoodService` / `IFoodItemService`, never through their repositories.
+  catalogue through `ICompositionFoodService` / `IFoodItemService`, never through their repositories.
 - `service/JournalNutritionService` — the mirror of `DietNutritionService` over this context's own
   rows. It **borrows `IPortionScaler`** rather than keeping a unit table of its own: there is one
   answer to what a millilitre weighs, and two copies of it would drift until a day's plan and that
@@ -744,8 +782,9 @@ dish in the slot, the score stays and now describes that one. Losing every score
 is worse, and `scored_at` is there so the two can be told apart.
 
 `ExtraFood` is shaped like `RecipeIngredient` because it is the same idea from the other side:
-`raw_name` always kept, a quantity with its own unit, and **at most one** of `bedca_food_id` /
-`food_item_id` set. Both null is an entry nothing matched — kept on the record, counted towards
+`raw_name` always kept, a quantity with its own unit, and **at most one** of `composition_food_id` /
+`food_item_id` set (`POST …/extras` takes `compositionFoodId`; `bedcaFoodId` is a 400;
+`ExtraFoodDto` carries `compositionFoodId` and `matchedSource`). Both null is an entry nothing matched — kept on the record, counted towards
 nothing. The branded half is the usual match here, the reverse of the week: a diet says `lechuga`,
 while a patient logging an extra is normally holding a wrapper with an EAN on it.
 
@@ -798,6 +837,8 @@ changing an entity, add a migration to match or startup fails.
 | `V14__global_measure_criteria.sql` | `ref_food_measures.global_criterion` + generated `criterion_key` (unique): the nutritionist's measure criteria for every diet |
 | `V15__create_composition_foods.sql` | `composition_foods`: CIQUAL 2025 + BLS 4.0 as published (`uk (source, source_code)`), plus fdiet's crosswalk columns (Spanish name, aliases, preferred, reviewed, SR Legacy edible portion) |
 | `V16__rekey_reference_foods_to_composition.sql` | `ref_rations` / `ref_food_measures`: `bedca_food_id` replaced by `composition_food_id` (FK, indexed), re-keyed through the approved BEDCA→CIQUAL/BLS mapping seeded in the migration; `criterion_key`, `ck_ref_food_measures_global` and `idx_ref_food_measures_global` rebuilt on it. A diet or global criterion without an equivalent stops the migration by name (`SIGNAL`), before anything changes; a published row without one is made inert until the next sync |
+| `V17__point_ingredients_and_extras_at_composition_foods.sql` | `recipe_ingredients` / `extra_foods`: `composition_food_id` (FK, indexed) and a check that at most one of it and `food_item_id` is set; every `bedca_food_id` reset to NULL (columns kept until phase E) |
+| `V18__rematch_ingredients_by_composition_name` (Java, `src/main/java/db/migration/`) | re-matches every ingredient and extra without a food by exact Spanish name / alias of the crosswalk (size-word retry), the import's rule; releases a measure whose row names another food |
 
 ## Data files and licensing
 

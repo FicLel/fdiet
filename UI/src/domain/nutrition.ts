@@ -63,7 +63,7 @@ export function recipeTotals(ingredients: DishIngredient[], servings = 1): DishT
     value === null || value === undefined ? value : value * servings
   const totals: DishTotals = { ...EMPTY_TOTALS, ingredients: ingredients.length }
   for (const ingredient of ingredients) {
-    if (ingredient.foodItemId === null && ingredient.bedcaFoodId === null) {
+    if (ingredient.foodItemId === null && ingredient.compositionFoodId === null) {
       totals.unmatched++
       continue
     }

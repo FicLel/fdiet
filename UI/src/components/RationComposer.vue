@@ -2,7 +2,8 @@
 import { computed, ref, shallowRef } from 'vue'
 import { dietsApi } from '@/api/diets'
 import { referenceApi } from '@/api/reference'
-import type { BedcaFood, FoodMeasure, FoodState, Ration } from '@/api/types'
+import type { CompositionFood } from '@/api/compositionTypes'
+import type { FoodMeasure, FoodState, Ration } from '@/api/types'
 import {
   asksForWeight as needsWeight,
   choiceTotal,
@@ -15,7 +16,8 @@ import {
 } from '@/domain/composerChoice'
 import { criterionFor, unitsWeight, weighs } from '@/domain/measureCriteria'
 import { amount, stateWord } from '@/domain/rations'
-import BedcaFoodSearch from './BedcaFoodSearch.vue'
+import { compositionFoodName } from '@/domain/compositionFood'
+import CompositionFoodSearch from './CompositionFoodSearch.vue'
 import ComposerChoices from './ComposerChoices.vue'
 import GlobalCriteriaPanel from './GlobalCriteriaPanel.vue'
 
@@ -33,10 +35,9 @@ import GlobalCriteriaPanel from './GlobalCriteriaPanel.vue'
  * per unit, kept as her criterion; from then on it is written in units.
  *
  * `dietId` is null for a diet not yet saved and in the recipe library: the
- * global criteria weigh there too. A criterion names a CIQUAL / BLS food while
- * this food is still BEDCA's (FD-033 phase C), so the criteria panel picks its
- * own food, and a criterion saved now is listed there but not offered here
- * until the foods are re-matched.
+ * global criteria weigh there too. The food is a CIQUAL / BLS one, like the
+ * criteria; the criteria panel still picks its own food (starting from this
+ * one's name), and a criterion saved for another food is not offered here.
  */
 
 const props = defineProps<{
@@ -50,7 +51,7 @@ const emit = defineEmits<{ append: [fragment: string] }>()
 type Asking = { from: FoodMeasure | null } | null
 
 const open = ref(false)
-const food = shallowRef<BedcaFood | null>(null)
+const food = shallowRef<CompositionFood | null>(null)
 const rations = shallowRef<Ration[]>([])
 const measures = shallowRef<FoodMeasure[]>([])
 const loadingOptions = ref(false)
@@ -74,14 +75,14 @@ const STATES: { value: FoodState | ''; label: string }[] = [
   { value: 'DRAINED', label: 'Escurrido' },
 ]
 
-function loadMeasures(chosen: BedcaFood): Promise<FoodMeasure[]> {
-  return referenceApi.measures({ bedcaFoodId: chosen.id }, {
+function loadMeasures(chosen: CompositionFood): Promise<FoodMeasure[]> {
+  return referenceApi.measures({ compositionFoodId: chosen.id }, {
     dietId: props.dietId ?? undefined,
     profile: props.profileCode,
   })
 }
 
-async function pick(chosen: BedcaFood): Promise<void> {
+async function pick(chosen: CompositionFood): Promise<void> {
   food.value = chosen
   error.value = null
   added.value = null
@@ -92,7 +93,7 @@ async function pick(chosen: BedcaFood): Promise<void> {
   loadingOptions.value = true
   try {
     const [rationRows, measureRows] = await Promise.all([
-      referenceApi.rations({ bedcaFoodId: chosen.id }, props.profileCode),
+      referenceApi.rations({ compositionFoodId: chosen.id }, props.profileCode),
       loadMeasures(chosen),
     ])
     // Another food was picked, or the composer reset, while this one loaded.
@@ -175,8 +176,8 @@ async function refreshMeasures(selectId: number | null): Promise<void> {
     select({ kind: 'measure', measure: found })
     return
   }
-  // Not listed (a CIQUAL / BLS criterion, while this food is BEDCA's): the
-  // choice already made stands unless its own measure is gone.
+  // Not listed (a criterion saved for another food): the choice already made
+  // stands unless its own measure is gone.
   const current = choice.value
   if (current.kind === 'measure' && !measures.value.some((measure) => measure.id === current.measure.id)) {
     select(GRAMS_CHOICE)
@@ -235,7 +236,7 @@ async function add(): Promise<void> {
   busy.value = true
   error.value = null
   const common = {
-    bedcaFoodId: chosen.id,
+    compositionFoodId: chosen.id,
     state: state.value || null,
     dietId: props.dietId ?? undefined,
   }
@@ -270,11 +271,12 @@ async function add(): Promise<void> {
         <button class="link" type="button" @click="open = false; reset()">Cerrar</button>
       </div>
 
-      <BedcaFoodSearch v-if="!food" @pick="pick" />
+      <CompositionFoodSearch v-if="!food" @pick="pick" />
 
       <template v-else>
-        <div class="food">
-          <span class="food-name">{{ food.name }}</span>
+        <div class="food" :title="food.attribution">
+          <span class="food-name">{{ compositionFoodName(food) }}</span>
+          <span class="food-source">{{ food.sourceLabel }}</span>
           <button class="link" type="button" @click="reset()">Cambiar</button>
         </div>
 
@@ -297,7 +299,7 @@ async function add(): Promise<void> {
         <GlobalCriteriaPanel
           v-if="asking"
           :key="asking.from?.id ?? 'new'"
-          :hint="food.name"
+          :hint="compositionFoodName(food)"
           :from="asking.from"
           @saved="onCriterionSaved"
           @close="asking = null"
@@ -410,6 +412,11 @@ async function add(): Promise<void> {
   font-weight: 600;
   font-size: 12.5px;
   color: var(--ink-strong);
+}
+
+.food-source {
+  font-size: 10.5px;
+  color: var(--ink-muted);
 }
 
 .input {

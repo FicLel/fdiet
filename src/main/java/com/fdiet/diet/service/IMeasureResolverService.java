@@ -1,7 +1,7 @@
 package com.fdiet.diet.service;
 
 import com.fdiet.diet.dto.DishIngredient;
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.reference.domain.PortionSize;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.MeasureChoiceDto;
@@ -25,18 +25,18 @@ public interface IMeasureResolverService {
     /**
      * The measure each written ingredient is weighed by, in two batched calls
      * whatever the number of ingredients. An ingredient with no
-     * composition-database food, written in a weight or volume, or in a word that
+     * composition food, written in a weight or volume, or in a word that
      * is no household measure, is absent — so is one nothing could be chosen for.
      *
-     * @param foodOf the composition-database food each ingredient was matched to,
-     *               or null
+     * @param foodOf the composition food (CIQUAL / BLS) each ingredient was matched
+     *               to, or null
      */
     Map<DishIngredient, ReferenceFoodMeasure> measuresOf(List<DishIngredient> ingredients,
-                                                         Function<DishIngredient, BedcaFood> foodOf,
+                                                         Function<DishIngredient, CompositionFood> foodOf,
                                                          Long dietId, String profile);
 
     /** The measure one food written in one unit may be weighed by, keeping {@code preferred} when it fits. */
-    MeasureChoiceDto choose(BedcaFood food, String unit, PortionSize size, Long preferred, Long dietId,
+    MeasureChoiceDto choose(CompositionFood food, String unit, PortionSize size, Long preferred, Long dietId,
                             String profile);
 
     /** The managed row behind a chosen measure, or null. */

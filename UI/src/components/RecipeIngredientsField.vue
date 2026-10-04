@@ -53,7 +53,7 @@ function keepFormUnsent(event: KeyboardEvent): void {
       <li v-for="(ingredient, index) in ingredients" :key="index">
         <span>{{ ingredient.name }}</span>
         <span class="num qty">{{ amountText(ingredient) }}</span>
-        <span class="chip" :class="{ linked: ingredient.bedcaFoodId !== null || ingredient.foodItemId !== null }">
+        <span class="chip" :class="{ linked: ingredient.compositionFoodId !== null || ingredient.foodItemId !== null }">
           {{ ingredient.matchedName ?? 'Sin vincular' }}
         </span>
       </li>

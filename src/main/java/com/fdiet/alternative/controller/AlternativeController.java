@@ -37,7 +37,7 @@ public class AlternativeController {
     }
 
     @GetMapping("/{foodId}")
-    @Operation(summary = "Alternatives to one composition-database food, best first. Only foods "
+    @Operation(summary = "Alternatives to one CIQUAL or BLS food, best first. Only foods "
             + "of the same family are offered — a grilled chicken is answered with meats and "
             + "fish and never with a vegetable, however close the figures — and the order "
             + "within the family is how near the composition is. Pass grams to be told how "
@@ -57,7 +57,7 @@ public class AlternativeController {
 
     @GetMapping
     @Operation(summary = "The same, for a food named the way a diet names it. The name must be "
-            + "one the composition database carries, matched exactly but case- and "
+            + "a Spanish name or alias of the CIQUAL / BLS crosswalk, matched exactly but case- and "
             + "accent-insensitively; anything less is a 404 rather than a guess, and is "
             + "resolved by a person through the diet's ingredient fix-up list first")
     public FoodAlternativesDto byName(

@@ -5,7 +5,7 @@ import com.fdiet.diet.dto.DishIngredient;
 import com.fdiet.diet.model.PlannedDish;
 import com.fdiet.diet.model.Recipe;
 import com.fdiet.diet.model.RecipeIngredient;
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.dto.YieldFactorDto;
 import com.fdiet.diet.service.IDietNutritionService;
@@ -66,9 +66,9 @@ class DietMapperTest {
     /** 150 g of raw breast priced against grilled breast: 108 g cooked, by USDA's 72 %, offered. */
     @Test
     void offersAYieldWhenTheTextAndTheFoodDisagreeAboutCooking() {
-        BedcaFood grilled = new BedcaFood();
+        CompositionFood grilled = new CompositionFood();
         grilled.setId(2297L);
-        grilled.setName("Pollo, pechuga, plancha");
+        grilled.setNameEs("Pollo, pechuga, plancha");
         RecipeIngredient raw = new RecipeIngredient("pechuga de pollo", null, grilled,
                 new BigDecimal("150"), "g");
         raw.setState(FoodState.RAW);
@@ -95,9 +95,9 @@ class DietMapperTest {
 
     @Test
     void asksForNoYieldWhenNothingDisagrees() {
-        BedcaFood grilled = new BedcaFood();
+        CompositionFood grilled = new CompositionFood();
         grilled.setId(2297L);
-        grilled.setName("Pollo, pechuga, plancha");
+        grilled.setNameEs("Pollo, pechuga, plancha");
         RecipeIngredient plain = new RecipeIngredient("pechuga de pollo", null, grilled,
                 new BigDecimal("120"), "g");
 

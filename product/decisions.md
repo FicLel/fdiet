@@ -67,3 +67,10 @@ Append-only. Newest at the bottom. A reversed decision gets a new entry naming t
 - **2026-10-03** — Each BEDCA→CIQUAL/BLS pick for a reference row is a **machine prefill the user approves**, like the phase B crosswalk; foods missing from `links.csv` are added there with Spanish head-first names, `reviewed=false` until approved.
 - **2026-10-03** — Nutritionist criteria (diet and global) keyed on a BEDCA food are **re-keyed through the same approved mapping**; one without an equivalent is reported, never re-pointed by guess. (Dev DB holds none today.)
 - **2026-10-03** — FD-033 C mapping list approved as proposed: all 60 picks, incl. piña en su jugo → CIQUAL 13716 (crosswalk row now approved), melón → CIQUAL 13742 (honeydew), nectarina → CIQUAL 13148 (yellow), pomelo → BLS F604100 (kept over CIQUAL 13040), tomate triturado → CIQUAL 20169. Reason: user's call.
+
+## 2026-10-03 — FD-033 phase D (reset matches)
+
+- **2026-10-03** — After the reset, stored ingredients and extras are **re-matched by exact Spanish name/alias** against the crosswalk (same rule as a fresh import); BEDCA ids are never carried over, anything not exact stays unmatched with suggestions. Refines the 2026-10-02 reset decision. Reason: user's call — not a guess, saves hand re-matching.
+- **2026-10-03** — **Every consumer moves to composition foods in phase D** (matching, totals, rations, measures, yields, compose, alternatives, journal extras); phase E only deletes BEDCA.
+- **2026-10-03** — **No new BEDCA matches during D**: the API refuses `bedcaFoodId`, the UI searches CIQUAL/BLS only. Reason: matches made now would be wiped in E.
+- **2026-10-03** — The before/after totals report is a **one-off file** (`product/reports/FD-033-D-before-after.md`), not an app feature.

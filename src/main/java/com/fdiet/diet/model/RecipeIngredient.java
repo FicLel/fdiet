@@ -1,6 +1,6 @@
 package com.fdiet.diet.model;
 
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.model.FoodItem;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.PortionSize;
@@ -26,8 +26,9 @@ import java.math.BigDecimal;
  *
  * <p>{@code rawName} is what the diet calls the food and is always there. The
  * nutrition figures come from whichever half of the catalogue it was matched
- * to: {@link BedcaFood}, the generic foods a diet is normally written in, or
- * {@link FoodItem} when the diet names a branded product. Both are null until
+ * to: {@link CompositionFood} (CIQUAL 2025 / BLS 4.0), the generic foods a diet
+ * is normally written in, or {@link FoodItem} when the diet names a branded
+ * product. Both are null until
  * a match has been made — an ingredient nobody could match is kept as written
  * and matched later rather than dropped, which would silently lose part of the
  * week.
@@ -56,13 +57,16 @@ public class RecipeIngredient {
     private FoodItem foodItem;
 
     /**
-     * The generic food of the composition database — the usual match, since a
-     * diet says "lechuga" and that is what {@code bedca_foods} is full of. Null
-     * alongside {@link #foodItem} means the ingredient is still unmatched.
+     * The generic composition food — the usual match, since a diet says
+     * "lechuga" and that is what fdiet's Spanish crosswalk names. Null alongside
+     * {@link #foodItem} means the ingredient is still unmatched.
+     *
+     * <p>{@code bedca_food_id} stays in the table, null on every row, until FD-033
+     * phase E drops it; nothing maps it.
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "bedca_food_id")
-    private BedcaFood bedcaFood;
+    @JoinColumn(name = "composition_food_id")
+    private CompositionFood compositionFood;
 
     /**
      * The household measure that weighs a quantity written in one ("1 cdta",
@@ -110,12 +114,12 @@ public class RecipeIngredient {
 
     public RecipeIngredient(String rawName,
                              FoodItem foodItem,
-                             BedcaFood bedcaFood,
+                             CompositionFood compositionFood,
                              BigDecimal quantity,
                              String unit) {
         this.rawName = rawName;
         this.foodItem = foodItem;
-        this.bedcaFood = bedcaFood;
+        this.compositionFood = compositionFood;
         this.quantity = quantity;
         this.unit = unit;
     }
@@ -127,17 +131,15 @@ public class RecipeIngredient {
 
     /** True once the ingredient points at a food, whichever half it came from. */
     public boolean isMatched() {
-        return foodItem != null || bedcaFood != null;
+        return foodItem != null || compositionFood != null;
     }
 
     /**
-     * The composition food (CIQUAL 2025 / BLS 4.0) the ingredient is matched to:
-     * none yet, because every match is to BEDCA until FD-033 phase D re-matches
-     * ingredients against that table. A reference row or a criterion names a
-     * composition food and is compared with this, never with the BEDCA food's id;
-     * phase D answers it from the ingredient's own column.
+     * The id of the composition food the ingredient is matched to, or null. A
+     * reference row or a measure criterion names a composition food and is
+     * compared with this. Reading the id of a lazy reference loads nothing.
      */
     public Long compositionFoodId() {
-        return null;
+        return compositionFood == null ? null : compositionFood.getId();
     }
 }

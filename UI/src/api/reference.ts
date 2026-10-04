@@ -13,14 +13,12 @@ import type {
 const CRITERIA = '/reference/criteria'
 
 /**
- * Which food a reference question is about: exactly one of the two keys (both
- * is a 400). The reference rows and criteria name composition foods (CIQUAL /
- * BLS); `bedcaFoodId` is the transitional key for the callers still holding a
- * BEDCA match (ingredients, extras, the composer) until those are re-matched.
- * Asked by a BEDCA food, only family + keyword rows answer: no per-food row and
- * no criterion.
+ * Which food a reference question is about: a CIQUAL / BLS food, the same id
+ * ingredients, extras and criteria are matched by.
  */
-export type ReferenceFoodKey = { compositionFoodId: number } | { bedcaFoodId: number }
+export interface ReferenceFoodKey {
+  compositionFoodId: number
+}
 
 /**
  * The reference layer: which populations a diet can be read against, the

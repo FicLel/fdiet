@@ -51,3 +51,15 @@
 - 2026-10-03 — FD-033 phase C tech-lead UI fixes re-verified live (composer keeps chosen measure and panel open after saving a global criterion; diet criterion edit creates no second row; no console errors; test data cleaned). Remaining: user approval of the mapping list, then commit.
 - 2026-10-03 — FD-033 phase C mapping approved by the user (1 LOW, 4 MEDIUM as proposed). Handed to backend: approve piña row in `links.csv`, add 1167→13716 to V16, tests.
 - 2026-10-03 — FD-033 C piña row done: `links.csv` 13716 reviewed, 1167→13716 in V16 (edited in place, `flywayRepair` on dev DB), composition re-synced, 313 tests green. Uncommitted; awaiting user "commit". Fresh-DB run of edited V16 not verified.
+- 2026-10-03 — FD-033 phase C done (committed 901f635).
+- 2026-10-03 — FD-033 phase D refining; questions to user.
+- 2026-10-03 — FD-033 phase D refined (decisions 19–22: exact-name re-match, all consumers move, no new BEDCA matches, report as file); FD-039 folded in. Ready; hand-off prompts in story.
+- 2026-10-03 — FD-033 phase D backend done (V17 SQL + V18 Java re-match applied to dev DB; dump `C:\Users\victo\fdiet-backups\fdiet-before-FD-033-D-20261003.sql`; 328 tests green; example-ui.xlsx 144/210 outright; stored generic matches 158 → 452; report `product/reports/FD-033-D-before-after.md`). Uncommitted. Backend on 5000 needs restart. Handed to frontend.
+- 2026-10-03 — FD-043 (re-parse stored names that kept their quantity), FD-044 (`bootRun` port override), FD-045 (fix-up page fetches measures lazily) created from FD-033 D backend.
+- 2026-10-03 — FD-033 phase D frontend done (every picker on CIQUAL/BLS, `compositionFoodId` sent, `BedcaFoodSearch.vue` deleted, `pnpm build` clean). Uncommitted. Live check waits on backend restart on 5000. Handed to tech-lead.
+- 2026-10-03 — FD-046 (source on ingredient chips), FD-047 (criteria panels offer the known food instead of a new search) created from FD-033 D frontend. FD-041 flagged: CIQUAL/BLS attribution missing now that totals use them.
+- 2026-10-03 — FD-033 D tech-lead review stopped by usage limit mid-run; resumed after reset.
+- 2026-10-03 — FD-033 D tech-lead review done: fixed Gradle `flyway*` tasks not seeing Java V18 (`build.gradle`), added `RetiredFieldsWebTest` (9 tests, `bedcaFoodId` 400s); 337 tests green, `pnpm build` clean. Uncommitted. Left: live check after 5000 restart, commit.
+- 2026-10-03 — FD-048 (composed food loses its pin on publish), FD-049 (V18 re-match silent on unsynced crosswalk), FD-050 (`matchedSourceLabel` in DTOs), FD-051 (uniform retired-field 400) created from FD-033 D review.
+- 2026-10-03 — FD-033 D live check on 5000/5173 passed: diet 9 at 4600 kcal / 90 of 211 counted (657 kcal weekly average), fix-up panel offers CIQUAL candidates, composer adds by rations with the source shown, a patient extra logs against CIQUAL (test extra deleted), `bedcaFoodId` is a 400, no console errors. The only BEDCA text left is the footer (FD-041).
+- 2026-10-03 — FD-052 created from the D live check: a bracket state that contradicts the name is dropped, and composed `Lenteja, cocida (55 g en seco)` is counted as cooked.

@@ -1,6 +1,6 @@
 # FD-033 Open data only — replace and remove BEDCA and every non-open source
 
-Status: in progress (A done; B done, committed 2e999db; C mapping approved 2026-10-03, piña row wired, 313 tests green, ready to commit) · Size: L (epic — phases below become their own ids when refined) · Created: 2026-10-02
+Status: in progress (A done; B done, committed 2e999db; C done, committed 901f635; D ready 2026-10-03, decisions 19–22) · Size: L (epic — phases below become their own ids when refined) · Created: 2026-10-02
 For: nutritionist (and anyone who installs or reuses fdiet)
 
 ## Problem
@@ -77,7 +77,7 @@ suggestion index (`NameMatcher`), `FoodCategoriser` (956/957 names), `FoodState`
   Notes from C review: `attachDietMeasure` must pass the ingredient's Spanish name (`foodName` null today);
   drop the wasted `criteria.dietRows` query for BEDCA foods; the composer's range measure becomes writable in
   units once ingredients carry composition ids. FD-039 (picked measure dropped on save) may be folded in here.
-- **E — Remove (M):** `bedca_foods.csv`, `BEDCA-ATTRIBUTION.txt`, the table, columns, FKs, `/api/bedca`,
+- **E — Remove (M):** also delete `IBedcaFoodService.suggest` / `entitiesAll`, `FoodSuggestionDto`; reword `FoodCategoriser` / `FoodState` comments off BEDCA. `bedca_foods.csv`, `BEDCA-ATTRIBUTION.txt`, the table, columns, FKs, `/api/bedca`,
   the BEDCA footer line; migration drops them. FD-041 (footer credits CIQUAL / BLS) may be done here. Verify no gated source anywhere; licence audit table.
 
 ## Acceptance criteria
@@ -167,10 +167,64 @@ suggestion index (`NameMatcher`), `FoodCategoriser` (956/957 names), `FoodState`
 18. Mapping list `product/spikes/FD-033-C-rekey-mapping.md` approved as proposed (2026-10-03): piña en su jugo → CIQUAL 13716
     (row `reviewed=true`), melón → CIQUAL 13742, nectarina → CIQUAL 13148, pomelo → BLS F604100, tomate triturado → CIQUAL 20169.
 
+## Decisions (user, 2026-10-03 — phase D)
+19. After the reset, stored ingredients and extras are **re-matched by exact Spanish name/alias** against the
+    crosswalk — the same rule a fresh import uses. Old BEDCA ids are never carried over; anything not exact
+    stays unmatched with suggestions. Refines decision 2 (reset kept; no BEDCA→composition carry-over).
+20. **Every consumer moves in D**: matching, totals, rations, measures, yields, compose, alternatives, journal
+    extras. Phase E only deletes BEDCA.
+21. **No new BEDCA matches in D**: API refuses `bedcaFoodId`; UI searches CIQUAL/BLS only.
+22. Before/after report is a **one-off file** `product/reports/FD-033-D-before-after.md` from the dev DB.
+
+## Phase D — refined 2026-10-03 (size L, one story; backend then frontend)
+Defaults (proposed by PO, not asked): branded matches (`food_item_id`) untouched; `food_measure_id` kept and
+re-chosen by the resolver where it no longer fits; FD-039 folded in; FD-041 (footer) stays in E; dev DB dumped
+(`mysqldump`) before the migration; `bedca_food_id` columns stay (null) until E drops them.
+
+Acceptance criteria:
+- [x] D1 `recipe_ingredients` and `extra_foods` carry `composition_food_id` (FK); every `bedca_food_id` is null after migration; `raw_name` unchanged.
+- [x] D2 Stored ingredients/extras re-matched by exact Spanish name/alias only (decision 19); counts reported per diet.
+- [x] D3 Re-importing `example-ui.xlsx` matches ≥ 144/210 outright (≥ 41 floor); `ExampleDietCompositionMatchTest` still measures it.
+- [x] D4 `PATCH …/ingredients/{id}` and `POST …/extras` take `compositionFoodId`; `bedcaFoodId` is a 400.
+- [x] D5 Fix-up list suggestions, `POST /diets/parse`, `POST /diets/compose` and import come from composition foods.
+- [x] D6 Totals, rations, household measures (incl. diet/global criteria naming a food), yields and alternatives work on composition ids; `byNameOnly` workaround gone; a food with null `edible_portion` refuses a gross measure.
+- [x] D7 `/api/alternatives/{foodId}` and `/api/reference/{rations,measures,yields}` take composition ids only; `bedcaFoodId` param removed.
+- [x] D8 FD-039: after a `PUT`, an ingredient keeps its picked `food_measure_id` while the row is still live for that measure.
+- [x] D9 Report `product/reports/FD-033-D-before-after.md`: per diet, kcal + counted/unmatched/unmeasured before and after, and how many matches came back by exact name.
+- [x] D10 UI: composer, fix-up panel, recipe library and patient extras search and show CIQUAL/BLS foods only (source label per food); no Spanish copy says BEDCA except the footer.
+- [x] D11 CLAUDE.md updated; tests green; `pnpm build` clean; tech-lead review done.
+
+Tasks: backend — migration (column, FK, reset, re-match) + all consumers + report (**migration: restart 5000 after;
+`gradlew test` migrates the `.env` DB — dump first**). frontend — every food picker and label on composition foods.
+tech-lead — review after both.
+
 ## Open questions
 _None blocking. (Edible portion closed 2026-10-03 — decision 11.)_
 
 ## Hand-off prompts
+### backend — phase D (2026-10-03)
+FD-033 phase D, story `product/stories/FD-033-open-data-only.md` (section "Phase D — refined", decisions 19–22,
+AC D1–D9, D11). Point recipe ingredients and journal extras at `composition_foods` and move every consumer off
+BEDCA. Before any migration or `gradlew test`, `mysqldump` the `.env` database to a file outside the repo and
+report its path. Migration: add `composition_food_id` (FK) to `recipe_ingredients` and `extra_foods`, null every
+`bedca_food_id` (keep the columns; E drops them), keep `raw_name` and `food_item_id`. Re-match stored rows by exact
+Spanish name/alias through the crosswalk only — same rule as import, never similarity, never BEDCA id carry-over
+(decide whether that runs in the migration or a one-off startup/endpoint step; state which). Move matching, fix-up
+suggestions, parse, compose, import, nutrition totals, rations, household measures (diet + global criteria now
+reachable by food id; remove the `byNameOnly` / `bedcaFoodId` workarounds), yields, alternatives and journal extras
+to composition ids; `bedcaFoodId` in requests becomes a 400. Fold in FD-039 (picked measure kept after `PUT`) and
+the C-review notes in the story's phase D bullet. Capture each diet's totals and counts before the migration and
+after, and write `product/reports/FD-033-D-before-after.md`. Update CLAUDE.md. Report: API changes for frontend
+(every request/response field renamed or removed), outright match count on example-ui.xlsx, test count. List
+out-of-scope bugs; do not fix them.
+
+### frontend — phase D (send after backend reports)
+FD-033 phase D, AC D10–D11 in `product/stories/FD-033-open-data-only.md`. Against the backend's reported API:
+every food picker (composer, fix-up panel, recipe library, patient extras) searches and shows CIQUAL/BLS
+composition foods only, with the source label; send `compositionFoodId` wherever `bedcaFoodId` was sent; drop
+BEDCA wording from Spanish copy except the attribution footer (E). Remove `BedcaFoodSearch.vue` if nothing uses it.
+`pnpm build` clean; check live on 5173 against the backend on 5000. List out-of-scope bugs; do not fix them.
+
 ### backend — phase A (sent by the coordinator 2026-10-02)
 Spike only, no production code or migration: map the 210 `example-ui.xlsx` ingredients and every
 `bedca_food_id` in use against CIQUAL 2025 and BLS 4.0. Report match rate per source and combined,
@@ -182,3 +236,8 @@ the two combine (which answers first, how gaps fill, per food family).
   has `name_reviewed = false` until a re-sync (`POST /api/composition/sync`). Review follow-ups → FD-038.
 - FD-034 (repeatable data loading) is the manifest/snapshot side; its composition snapshot waits on B.
 - The datos.gob.es open-BEDCA request is unanswered since 2026-04-14; if AESAN ever opens BEDCA, revisit.
+- Phase D status 2026-10-03: backend (V17 SQL + V18 Java), frontend and tech-lead review done, 337 tests green,
+  `pnpm build` clean, **uncommitted**. Left: live check after the 5000 restart, then commit. V18 depends at compile
+  time on `ExactNames`, `NameIndex`, `CompositionIndexRow`, `Texts`, `PortionSize` (rule cannot drift) — renaming
+  them touches an applied migration. Follow-ups: FD-043–FD-051.
+- Live check 2026-10-03 (5000 restarted, UI on 5173): D10 confirmed. Diet 9 shows 4600 kcal with 90 of 211 counted. The fix-up panel ranks CIQUAL candidates. The composer shows "CIQUAL 2025" in search and on the picked food. A patient extra logs against CIQUAL; the test extra was deleted. `bedcaFoodId` is a 400. No console errors. The only BEDCA text left is the footer (FD-041). The check found FD-052: a composed dry ration on `Lenteja, cocida` is counted as cooked.

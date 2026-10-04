@@ -3,7 +3,7 @@ package com.fdiet.diet.service;
 import com.fdiet.diet.dto.DishIngredient;
 import com.fdiet.diet.exception.InvalidDietException;
 import com.fdiet.diet.helpers.IPortionScaler;
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.reference.domain.HouseholdMeasure;
 import com.fdiet.reference.domain.PortionSize;
 import com.fdiet.reference.dto.FoodMeasureDto;
@@ -44,19 +44,19 @@ public class MeasureResolverService implements IMeasureResolverService {
     @Override
     @Transactional(readOnly = true)
     public Map<DishIngredient, ReferenceFoodMeasure> measuresOf(
-            List<DishIngredient> ingredients, Function<DishIngredient, BedcaFood> foodOf,
+            List<DishIngredient> ingredients, Function<DishIngredient, CompositionFood> foodOf,
             Long dietId, String profile) {
         List<DishIngredient> written = new ArrayList<>();
         List<MeasureQueryDto> queries = new ArrayList<>();
         for (DishIngredient ingredient : ingredients) {
-            BedcaFood food = foodOf.apply(ingredient);
+            CompositionFood food = foodOf.apply(ingredient);
             if (food == null || portionScaler.weighsDirectly(ingredient.unit())
                     || HouseholdMeasure.ofUnit(ingredient.unit()).isEmpty()) {
                 continue;
             }
             written.add(ingredient);
-            queries.add(MeasureQueryDto.byNameOnly(food.getName(), ingredient.unit(),
-                    ingredient.size(), ingredient.foodMeasureId()));
+            queries.add(queryOf(food, ingredient.unit(), ingredient.size(),
+                    ingredient.foodMeasureId()));
         }
         if (queries.isEmpty()) {
             return Map.of();
@@ -79,13 +79,24 @@ public class MeasureResolverService implements IMeasureResolverService {
 
     @Override
     @Transactional(readOnly = true)
-    public MeasureChoiceDto choose(BedcaFood food, String unit, PortionSize size, Long preferred,
-                                   Long dietId, String profile) {
+    public MeasureChoiceDto choose(CompositionFood food, String unit, PortionSize size,
+                                   Long preferred, Long dietId, String profile) {
         if (food == null || portionScaler.weighsDirectly(unit)) {
             return MeasureChoiceDto.NONE;
         }
-        return referenceService.chooseMeasures(List.of(MeasureQueryDto.byNameOnly(food.getName(),
-                unit, size, preferred)), dietId, profile).get(0);
+        return referenceService.chooseMeasures(List.of(queryOf(food, unit, size, preferred)),
+                dietId, profile).get(0);
+    }
+
+    /**
+     * A composition food is asked about by id — which reaches the rows and the
+     * diet and global criteria naming it — and by its Spanish name, which reaches
+     * the family rows; a food the crosswalk names in no Spanish reaches only the
+     * first.
+     */
+    private static MeasureQueryDto queryOf(CompositionFood food, String unit, PortionSize size,
+                                           Long preferred) {
+        return new MeasureQueryDto(food.getId(), food.getNameEs(), unit, size, preferred);
     }
 
     @Override

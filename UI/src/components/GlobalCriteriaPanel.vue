@@ -3,7 +3,7 @@ import { ref, shallowRef } from 'vue'
 import type { CompositionFood } from '@/api/compositionTypes'
 import { referenceApi } from '@/api/reference'
 import type { FoodMeasure } from '@/api/types'
-import { CRITERIA_PENDING_NOTE, compositionFoodName } from '@/domain/compositionFood'
+import { compositionFoodName } from '@/domain/compositionFood'
 import CompositionFoodSearch from './CompositionFoodSearch.vue'
 import MeasureCriteriaList from './MeasureCriteriaList.vue'
 import MeasureCriterionForm from './MeasureCriterionForm.vue'
@@ -13,9 +13,8 @@ import MeasureCriterionForm from './MeasureCriterionForm.vue'
  * food: pick the food, see the criteria she already holds for it, change or
  * remove one, or write a new one.
  *
- * A criterion names a composition food, not the BEDCA food the composer is
- * writing, so the food is chosen here — the search starts from `hint` (the
- * composer's food) and nothing is picked on its own. With `from`, the form
+ * A criterion names one composition food, chosen here — the search starts
+ * from `hint` (the composer's food) and nothing is picked on its own. With `from`, the form
  * opens on that published range as soon as the food is chosen.
  */
 const props = defineProps<{
@@ -78,7 +77,6 @@ function onSaved(criterion: FoodMeasure): void {
       <span class="title">Tus criterios</span>
       <button class="link" type="button" @click="emit('close')">Cerrar</button>
     </div>
-    <p class="pending">{{ CRITERIA_PENDING_NOTE }}</p>
 
     <CompositionFoodSearch v-if="!food" :initial-term="hint" @pick="pick" />
 
@@ -150,13 +148,6 @@ function onSaved(criterion: FoodMeasure): void {
 
 .food-source {
   font-size: 10.5px;
-  color: var(--ink-muted);
-}
-
-.pending {
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.45;
   color: var(--ink-muted);
 }
 

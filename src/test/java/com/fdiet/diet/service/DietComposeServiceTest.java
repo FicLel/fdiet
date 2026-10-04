@@ -5,8 +5,8 @@ import com.fdiet.diet.dto.ComposedFragmentDto;
 import com.fdiet.diet.dto.DishIngredient;
 import com.fdiet.diet.dto.RecipeDto;
 import com.fdiet.diet.exception.InvalidDietException;
-import com.fdiet.food.model.BedcaFood;
-import com.fdiet.food.service.IBedcaFoodService;
+import com.fdiet.food.model.CompositionFood;
+import com.fdiet.food.service.ICompositionFoodService;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.HouseholdMeasure;
 import com.fdiet.reference.domain.PortionSize;
@@ -44,14 +44,14 @@ class DietComposeServiceTest {
     private static final long CRITERION_ID = 40L;
 
     private final IRecipeService recipeService = mock(IRecipeService.class);
-    private final IBedcaFoodService bedcaFoodService = mock(IBedcaFoodService.class);
+    private final ICompositionFoodService compositionFoodService = mock(ICompositionFoodService.class);
     private final IReferenceService referenceService = mock(IReferenceService.class);
     private final IMeasureResolverService measureResolver = mock(IMeasureResolverService.class);
 
     private final DietComposeService composeService = new DietComposeService(
             mock(IDietService.class),
             recipeService,
-            bedcaFoodService,
+            compositionFoodService,
             referenceService,
             measureResolver);
 
@@ -60,13 +60,13 @@ class DietComposeServiceTest {
 
     @BeforeEach
     void stubs() {
-        BedcaFood egg = new BedcaFood();
+        CompositionFood egg = new CompositionFood();
         egg.setId(EGG);
-        egg.setName("Huevo, entero, crudo");
-        when(bedcaFoodService.entityById(EGG)).thenReturn(egg);
+        egg.setNameEs("Huevo, entero, crudo");
+        when(compositionFoodService.entityById(EGG)).thenReturn(egg);
         when(referenceService.measureEntities(List.of(CRITERION_ID))).thenReturn(Map.of(CRITERION_ID, criterion));
         when(referenceService.describe(criterion)).thenReturn(described);
-        when(recipeService.read(anyString(), anyString(), isNull(), isNull(), eq(CRITERION_ID)))
+        when(recipeService.read(anyString(), anyString(), isNull(), isNull(), eq(EGG), eq(CRITERION_ID)))
                 .thenReturn(new RecipeDto(null, "Huevo", false, null, null,
                         List.of(mock(DishIngredient.class)), null));
     }
@@ -81,7 +81,7 @@ class DietComposeServiceTest {
 
         assertThat(composed.fragment()).isEqualTo("Huevo, entero, crudo (2 unidades medianas)");
         verify(recipeService).read("Huevo, entero, crudo (2 unidades medianas)", "Huevo, entero, crudo",
-                null, null, CRITERION_ID);
+                null, null, EGG, CRITERION_ID);
     }
 
     @Test

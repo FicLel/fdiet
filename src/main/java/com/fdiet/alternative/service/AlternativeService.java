@@ -9,10 +9,11 @@ import com.fdiet.alternative.dto.RationEquivalentDto;
 import com.fdiet.alternative.helpers.IFoodCategoriser;
 import com.fdiet.alternative.helpers.INutritionSimilarity;
 import com.fdiet.food.dto.NutritionDto;
-import com.fdiet.food.exception.BedcaFoodNotFoundException;
+import com.fdiet.common.helper.Texts;
+import com.fdiet.food.exception.CompositionFoodNotFoundException;
 import com.fdiet.food.helpers.INameMatcher;
-import com.fdiet.food.model.BedcaFood;
-import com.fdiet.food.service.IBedcaFoodService;
+import com.fdiet.food.model.CompositionFood;
+import com.fdiet.food.service.ICompositionFoodService;
 import com.fdiet.food.service.INutritionService;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.dto.RationDto;
@@ -33,11 +34,12 @@ import java.util.Set;
  * Puts the shelf and the arithmetic together, in that order.
  *
  * <p>One pass over the catalogue answers a request: the category is read off
- * every name, foods on a different shelf are dropped before any figure is
- * looked at, and what survives is ordered by composition. The composition
- * database is 957 rows, so that pass is one query and a few thousand
- * comparisons — a hundredth of the work of asking the database a question per
- * candidate, and it needs no index of its own to fall stale after a sync.
+ * every Spanish name, foods on a different shelf are dropped before any figure is
+ * looked at, and what survives is ordered by composition. Only the composition
+ * foods fdiet's crosswalk names in Spanish can be read for a family at all
+ * (CIQUAL and BLS publish French, German and English names), so that pass is one
+ * query over the crosswalked foods — 123 today, FD-036 grows it — and it needs
+ * no index of its own to fall stale after a sync.
  */
 @Service
 public class AlternativeService implements IAlternativeService {
@@ -50,7 +52,7 @@ public class AlternativeService implements IAlternativeService {
     /** A diet is written in whole grams, so an equivalent portion is too. */
     private static final int GRAMS_SCALE = 0;
 
-    private final IBedcaFoodService bedcaFoodService;
+    private final ICompositionFoodService compositionFoodService;
     private final INutritionService nutritionService;
     private final IFoodCategoriser foodCategoriser;
     private final INutritionSimilarity nutritionSimilarity;
@@ -60,13 +62,13 @@ public class AlternativeService implements IAlternativeService {
     private final INameMatcher nameMatcher;
     private final IReferenceService referenceService;
 
-    public AlternativeService(IBedcaFoodService bedcaFoodService,
+    public AlternativeService(ICompositionFoodService compositionFoodService,
                               INutritionService nutritionService,
                               IFoodCategoriser foodCategoriser,
                               INutritionSimilarity nutritionSimilarity,
                               INameMatcher nameMatcher,
                               IReferenceService referenceService) {
-        this.bedcaFoodService = bedcaFoodService;
+        this.compositionFoodService = compositionFoodService;
         this.nutritionService = nutritionService;
         this.foodCategoriser = foodCategoriser;
         this.nutritionSimilarity = nutritionSimilarity;
@@ -78,17 +80,17 @@ public class AlternativeService implements IAlternativeService {
     @Transactional(readOnly = true)
     public FoodAlternativesDto forFoodId(Long foodId, AlternativeQueryDto query) {
         requireProfile(query.profileCode());
-        return alternativesTo(bedcaFoodService.entityById(foodId), query);
+        return alternativesTo(compositionFoodService.entityById(foodId), query);
     }
 
     @Override
     @Transactional(readOnly = true)
     public FoodAlternativesDto forName(String name, AlternativeQueryDto query) {
         requireProfile(query.profileCode());
-        BedcaFood food = bedcaFoodService.entitiesByName(List.of(name))
-                .get(IBedcaFoodService.normalise(name));
+        CompositionFood food = compositionFoodService.entitiesByName(List.of(name))
+                .get(Texts.normaliseName(name));
         if (food == null) {
-            throw new BedcaFoodNotFoundException(name);
+            throw new CompositionFoodNotFoundException(name);
         }
         return alternativesTo(food, query);
     }
@@ -102,9 +104,10 @@ public class AlternativeService implements IAlternativeService {
 
     /**
      * A food with no category is answered honestly and cheaply: the catalogue is
-     * never read, because there is no shelf to read it for.
+     * never read, because there is no shelf to read it for. A food the crosswalk
+     * names in no Spanish has none.
      */
-    private FoodAlternativesDto alternativesTo(BedcaFood reference, AlternativeQueryDto query) {
+    private FoodAlternativesDto alternativesTo(CompositionFood reference, AlternativeQueryDto query) {
         BigDecimal grams = query.grams();
         EquivalenceBasis basis = query.basis();
         String profile = query.profileCode();
@@ -113,18 +116,18 @@ public class AlternativeService implements IAlternativeService {
         NutritionDto portion = portionFactor == null ? null : nutrition.scaled(portionFactor);
         RationEquivalentDto portionRations = rationsOf(profile, reference, grams);
 
-        FoodCategory category = foodCategoriser.of(reference.getName());
+        FoodCategory category = categoryOf(reference);
         if (category == null) {
-            return new FoodAlternativesDto(reference.getId(), reference.getName(),
+            return new FoodAlternativesDto(reference.getId(), reference.label(), reference.getSource(),
                     null, null, nutrition, grams, portion, basis, profile, portionRations,
                     0, 0, List.of());
         }
 
-        String head = query.sameFood() ? null : headOf(reference.getName());
-        List<BedcaFood> eligible = eligible(reference, category, head);
+        String head = query.sameFood() ? null : headOf(reference.getNameEs());
+        List<CompositionFood> eligible = eligible(reference, category, head);
 
         List<AlternativeDto> ranked = new ArrayList<>();
-        for (BedcaFood candidate : eligible) {
+        for (CompositionFood candidate : eligible) {
             NutritionDto theirs = nutritionService.per100g(candidate);
             Integer score = nutritionSimilarity.score(nutrition, theirs);
             if (score == null) {
@@ -136,7 +139,8 @@ public class AlternativeService implements IAlternativeService {
                 .thenComparing(AlternativeDto::name));
 
         return new FoodAlternativesDto(
-                reference.getId(), reference.getName(), category, category.label(),
+                reference.getId(), reference.label(), reference.getSource(), category,
+                category.label(),
                 nutrition, grams, portion, basis, profile, portionRations,
                 eligible.size(), ranked.size(),
                 ranked.stream().limit(query.limit()).toList());
@@ -148,12 +152,13 @@ public class AlternativeService implements IAlternativeService {
      * word is what makes {@code Pollo, muslo, asado} another cut of the same
      * bird rather than an answer to {@code Pollo, pechuga, plancha}.
      */
-    private List<BedcaFood> eligible(BedcaFood reference, FoodCategory category, String head) {
-        List<BedcaFood> eligible = new ArrayList<>();
-        for (BedcaFood candidate : bedcaFoodService.entitiesAll()) {
+    private List<CompositionFood> eligible(CompositionFood reference, FoodCategory category,
+                                           String head) {
+        List<CompositionFood> eligible = new ArrayList<>();
+        for (CompositionFood candidate : compositionFoodService.entitiesNamed()) {
             if (Objects.equals(candidate.getId(), reference.getId())
-                    || category != foodCategoriser.of(candidate.getName())
-                    || (head != null && head.equals(headOf(candidate.getName())))) {
+                    || category != categoryOf(candidate)
+                    || (head != null && head.equals(headOf(candidate.getNameEs())))) {
                 continue;
             }
             eligible.add(candidate);
@@ -161,7 +166,7 @@ public class AlternativeService implements IAlternativeService {
         return eligible;
     }
 
-    private AlternativeDto offer(BedcaFood candidate,
+    private AlternativeDto offer(CompositionFood candidate,
                                  NutritionDto theirs,
                                  int score,
                                  NutritionDto reference,
@@ -171,7 +176,7 @@ public class AlternativeService implements IAlternativeService {
         BigDecimal equivalentGrams = equivalentGrams(reference, theirs, grams, basis);
         BigDecimal equivalentFactor = factorOf(equivalentGrams);
         return new AlternativeDto(
-                candidate.getId(), candidate.getName(), score, theirs,
+                candidate.getId(), candidate.label(), candidate.getSource(), score, theirs,
                 equivalentGrams,
                 equivalentFactor == null ? null : theirs.scaled(equivalentFactor),
                 rationsOf(profile, candidate, equivalentGrams));
@@ -179,8 +184,8 @@ public class AlternativeService implements IAlternativeService {
 
     /**
      * How much of the alternative carries the same figure as the portion asked
-     * about: energy by default, because it is the figure BEDCA publishes for
-     * every food, or the grams of one macronutrient. Not every source does — 145
+     * about: energy by default, because it is the figure nearly every food
+     * publishes, or the grams of one macronutrient. Not every source does — 145
      * CIQUAL foods publish no energy — so a food that leaves the figure
      * unpublished, either side, or carries too little of it to be weighed against
      * (the protein of a lettuce), gets no equivalent weight rather than an
@@ -202,14 +207,13 @@ public class AlternativeService implements IAlternativeService {
      * no weight, or a ration defined in another state than the food (a cooked
      * food against a dry ration), which would need a yield somebody has to choose.
      */
-    private RationEquivalentDto rationsOf(String profile, BedcaFood food, BigDecimal grams) {
+    private RationEquivalentDto rationsOf(String profile, CompositionFood food, BigDecimal grams) {
         if (profile == null || grams == null || grams.signum() <= 0) {
             return null;
         }
-        // A BEDCA food is counted by its name only: its id is not a composition id.
-        RationDto ration = referenceService.countingRation(profile, null, food.getName());
+        RationDto ration = referenceService.countingRation(profile, food.getId(), food.getNameEs());
         if (ration == null
-                || FoodState.disagree(FoodState.ofFoodName(food.getName()), ration.state())) {
+                || FoodState.disagree(FoodState.ofFoodName(food.getNameEs()), ration.state())) {
             return null;
         }
         BigDecimal[] weight = ration.edibleWeight(food.getEdiblePortion());
@@ -220,6 +224,11 @@ public class AlternativeService implements IAlternativeService {
                 grams.divide(weight[1], RATIONS_SCALE, RoundingMode.HALF_UP),
                 grams.divide(weight[0], RATIONS_SCALE, RoundingMode.HALF_UP),
                 ration.sourceShortName(), ration.pageRef());
+    }
+
+    /** The family a food's Spanish name reads as; null for a food the crosswalk does not name. */
+    private FoodCategory categoryOf(CompositionFood food) {
+        return food.getNameEs() == null ? null : foodCategoriser.of(food.getNameEs());
     }
 
     /** What to multiply a per-100 g figure by to get it for {@code grams}. */
@@ -236,6 +245,9 @@ public class AlternativeService implements IAlternativeService {
      * here as they are when an ingredient is matched.
      */
     private String headOf(String name) {
+        if (name == null) {
+            return null;
+        }
         Set<String> tokens = nameMatcher.tokens(name);
         return tokens.isEmpty() ? null : tokens.iterator().next();
     }

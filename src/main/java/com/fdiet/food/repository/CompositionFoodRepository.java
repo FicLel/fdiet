@@ -17,4 +17,7 @@ public interface CompositionFoodRepository
     @Query("select new com.fdiet.food.dto.CompositionIndexRow(f.id, f.source, f.sourceCode, f.nameEs, "
             + "f.nameAliases, f.namePreferred, f.nameEn, f.nameOriginal) from CompositionFood f")
     List<CompositionIndexRow> findAllIndexRows();
+
+    /** The foods the crosswalk names in Spanish. */
+    List<CompositionFood> findByNameEsIsNotNull();
 }

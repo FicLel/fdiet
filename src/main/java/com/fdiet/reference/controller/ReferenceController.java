@@ -1,5 +1,6 @@
 package com.fdiet.reference.controller;
 
+import com.fdiet.common.helper.RetiredFields;
 import com.fdiet.reference.dto.ExchangeSystemDto;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.HouseholdMeasureDto;
@@ -14,6 +15,7 @@ import com.fdiet.reference.service.IReferenceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Null;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -65,36 +67,39 @@ public class ReferenceController {
     }
 
     @GetMapping("/rations")
-    @Operation(summary = "Rations. With compositionFoodId, the ones covering that food: the "
-            + "profile's own first, then published per-food rations of other sources. "
-            + "bedcaFoodId instead, until FD-033 phase D: only the family rows its name fits")
-    public List<RationDto> rations(@RequestParam(required = false) String profile,
-                                   @RequestParam(required = false) Long compositionFoodId,
-                                   @RequestParam(required = false) Long bedcaFoodId) {
-        return referenceService.rationsForFood(profile, compositionFoodId, bedcaFoodId);
+    @Operation(summary = "Rations. With compositionFoodId (a CIQUAL or BLS food), the ones "
+            + "covering that food: the profile's own first, then published per-food rations of "
+            + "other sources. bedcaFoodId is retired: a value there is a 400")
+    public List<RationDto> rations(
+            @RequestParam(required = false) String profile,
+            @RequestParam(required = false) Long compositionFoodId,
+            @RequestParam(required = false) @Null(message = RetiredFields.BEDCA_FOOD_ID) Long bedcaFoodId) {
+        return referenceService.rationsForFood(profile, compositionFoodId);
     }
 
     @GetMapping("/measures")
-    @Operation(summary = "The household measures that can weigh a food, narrowed to one written "
-            + "unit when given. With dietId, that diet's own criteria come first. The food is "
-            + "compositionFoodId or, until FD-033 phase D, bedcaFoodId (family rows only)")
-    public List<FoodMeasureDto> measures(@RequestParam(required = false) Long compositionFoodId,
-                                         @RequestParam(required = false) Long bedcaFoodId,
-                                         @RequestParam(required = false) String unit,
-                                         @RequestParam(required = false) Long dietId,
-                                         @RequestParam(required = false) String profile) {
-        return referenceService.measuresForFood(compositionFoodId, bedcaFoodId, unit, dietId,
-                profile);
+    @Operation(summary = "The household measures that can weigh a CIQUAL or BLS food, narrowed "
+            + "to one written unit when given: the diet's own criteria first (with dietId), then "
+            + "the nutritionist's global criteria, then published rows. bedcaFoodId is retired: "
+            + "a value there is a 400")
+    public List<FoodMeasureDto> measures(
+            @RequestParam Long compositionFoodId,
+            @RequestParam(required = false) String unit,
+            @RequestParam(required = false) Long dietId,
+            @RequestParam(required = false) String profile,
+            @RequestParam(required = false) @Null(message = RetiredFields.BEDCA_FOOD_ID) Long bedcaFoodId) {
+        return referenceService.measuresForFood(compositionFoodId, unit, dietId, profile);
     }
 
     @GetMapping("/yields")
     @Operation(summary = "Published cooking yields that could say what a food weighs raw or "
             + "cooked, most specific first and those whose method the food's name states ahead "
-            + "of the rest. Offers only: nothing converts a quantity by them. The food is "
-            + "compositionFoodId or, until FD-033 phase D, bedcaFoodId")
-    public List<YieldFactorDto> yields(@RequestParam(required = false) Long compositionFoodId,
-                                       @RequestParam(required = false) Long bedcaFoodId) {
-        return referenceService.yieldFactorsForFood(compositionFoodId, bedcaFoodId);
+            + "of the rest. Offers only: nothing converts a quantity by them. The food is a "
+            + "CIQUAL or BLS compositionFoodId; bedcaFoodId is retired: a value there is a 400")
+    public List<YieldFactorDto> yields(
+            @RequestParam Long compositionFoodId,
+            @RequestParam(required = false) @Null(message = RetiredFields.BEDCA_FOOD_ID) Long bedcaFoodId) {
+        return referenceService.yieldFactorsForFood(compositionFoodId);
     }
 
     @GetMapping("/vocabulary")

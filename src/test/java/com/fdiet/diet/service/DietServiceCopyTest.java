@@ -15,9 +15,7 @@ import com.fdiet.diet.repository.DietRepository;
 import com.fdiet.diet.repository.PlannedDishRepository;
 import com.fdiet.diet.repository.RecipeIngredientRepository;
 import com.fdiet.diet.repository.RecipeRepository;
-import com.fdiet.food.model.BedcaFood;
-import com.fdiet.food.service.IBedcaFoodService;
-import com.fdiet.food.service.IFoodItemService;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.patient.model.Patient;
 import com.fdiet.patient.service.IPatientService;
 import com.fdiet.reference.service.IReferenceService;
@@ -62,12 +60,9 @@ class DietServiceCopyTest {
             mock(RecipeIngredientRepository.class),
             mock(IDietMapper.class),
             mock(IMealTextParser.class),
-            mock(IFoodResolverService.class),
-            mock(IFoodItemService.class),
-            mock(IBedcaFoodService.class),
+            mock(IIngredientFoodService.class),
             mock(IReferenceService.class),
-            mock(IMeasureResolverService.class),
-            5);
+            mock(IMeasureResolverService.class));
 
     private final DietService dietService = new DietService(
             dietRepository,
@@ -140,7 +135,7 @@ class DietServiceCopyTest {
         assertThat(lettuce.getUnit()).isEqualTo("gr");
         assertThat(lettuce.getPosition()).isZero();
         // The match a person made by hand is the work worth carrying over.
-        assertThat(lettuce.getBedcaFood()).isSameAs(sourceIngredient(source, 0).getBedcaFood());
+        assertThat(lettuce.getCompositionFood()).isSameAs(sourceIngredient(source, 0).getCompositionFood());
 
         // One nobody matched stays unmatched rather than being guessed at.
         assertThat(dish.getIngredients().get(1).isMatched()).isFalse();
@@ -227,9 +222,9 @@ class DietServiceCopyTest {
         recipe.setId(7L);
         meal.addDish(new PlannedDish("Ensalada", recipe, new BigDecimal("1.5")));
 
-        BedcaFood lettuce = new BedcaFood();
+        CompositionFood lettuce = new CompositionFood();
         lettuce.setId(42L);
-        lettuce.setName("Lechuga");
+        lettuce.setNameEs("Lechuga");
         recipe.addIngredient(new RecipeIngredient(
                 "lechuga", null, lettuce, new BigDecimal("80"), "gr"));
         recipe.addIngredient(new RecipeIngredient(

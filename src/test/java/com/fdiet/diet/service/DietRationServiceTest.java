@@ -11,7 +11,7 @@ import com.fdiet.diet.model.PlannedDish;
 import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.diet.model.PlannedMeal;
 import com.fdiet.diet.model.Recipe;
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.model.NutrientValue;
 import com.fdiet.food.service.NutritionService;
 import com.fdiet.reference.domain.ExchangeNutrient;
@@ -35,7 +35,6 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -74,7 +73,7 @@ class DietRationServiceTest {
                 "Ración de hidratos de carbono", ExchangeNutrient.CARBOHYDRATE, BigDecimal.TEN, true,
                 "FUNDACION-DIABETES-HC", "Raciones de HC", null)));
         when(reference.sources()).thenReturn(List.of());
-        when(reference.countingRation(eq(PROFILE), isNull(), anyString())).thenAnswer(call -> {
+        when(reference.countingRation(eq(PROFILE), any(), anyString())).thenAnswer(call -> {
             String name = call.getArgument(2);
             return name.startsWith("Lenteja") ? LEGUMES : name.startsWith("Manzana") ? FRUIT : null;
         });
@@ -195,7 +194,7 @@ class DietRationServiceTest {
     void countsNothingWithoutAProfile() {
         DietPlan plan = plan(false, ingredient("manzana", "160", "g", null, food(2L, "Manzana", "12")));
         plan.setReferenceProfileCode(null);
-        when(reference.countingRation(any(), isNull(), anyString())).thenReturn(null);
+        when(reference.countingRation(any(), any(), anyString())).thenReturn(null);
 
         DietRationsDto week = service.account(plan, null);
 
@@ -229,17 +228,17 @@ class DietRationServiceTest {
     }
 
     private static RecipeIngredient ingredient(String name, String quantity, String unit,
-                                                FoodState state, BedcaFood food) {
+                                                FoodState state, CompositionFood food) {
         RecipeIngredient ingredient =
                 new RecipeIngredient(name, null, food, new BigDecimal(quantity), unit);
         ingredient.setState(state);
         return ingredient;
     }
 
-    private static BedcaFood food(Long id, String name, String carbohydrates) {
-        BedcaFood food = new BedcaFood();
+    private static CompositionFood food(Long id, String name, String carbohydrates) {
+        CompositionFood food = new CompositionFood();
         food.setId(id);
-        food.setName(name);
+        food.setNameEs(name);
         food.setEnergy(new NutrientValue(new BigDecimal("200"), "kJ"));
         food.setCarbohydrates(new NutrientValue(new BigDecimal(carbohydrates), "g"));
         return food;

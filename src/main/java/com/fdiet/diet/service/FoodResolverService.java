@@ -1,11 +1,11 @@
 package com.fdiet.diet.service;
 
 import com.fdiet.common.helper.Texts;
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.diet.helpers.ExactNames;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.model.FoodItem;
-import com.fdiet.food.service.IBedcaFoodService;
+import com.fdiet.food.service.ICompositionFoodService;
 import com.fdiet.food.service.IFoodItemService;
-import com.fdiet.reference.domain.PortionSize;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -18,72 +18,55 @@ import java.util.Objects;
 import java.util.function.Function;
 
 /**
- * Resolves ingredient names against both halves of the catalogue, in six
+ * Resolves ingredient names against both halves of the catalogue, in four
  * batched queries at most, whatever the size of the week.
  *
- * <p>The composition database is asked first: it holds the generic foods a diet
- * is written in, and it is the half that actually answers. Only the names it
- * does not carry are put to the branded catalogue, where a diet occasionally
- * names a product outright.
+ * <p>The composition foods are asked first: CIQUAL 2025 and BLS 4.0, through
+ * fdiet's Spanish crosswalk, hold the generic foods a diet is written in, and
+ * they are the half that actually answers. They are matched by
+ * {@link ExactNames} — exactly, and once more without size words — each pass one
+ * {@code findAllById}, the names answered from the composition service's
+ * in-memory index. Only the names they do not carry are put to the branded
+ * catalogue, where a diet occasionally names a product outright.
  *
- * <p>The caches hold <strong>names against ids, never entities</strong>: an
- * entity cached across a transaction is detached, and reattaching it later is
+ * <p>The branded cache holds <strong>names against ids, never entities</strong>:
+ * an entity cached across a transaction is detached, and reattaching it later is
  * exactly the bug this class would otherwise introduce. The ids are turned back
  * into managed entities by {@code entitiesByIds} inside the caller's
- * transaction.
+ * transaction. It is a plain bounded map in access order rather than a cache
+ * manager: one process, one catalogue, and a miss costs one query.
  *
- * <p>They are plain bounded maps in access order rather than a cache manager:
- * one process, one catalogue, and a miss costs one query.
+ * <p>The composition half keeps no cache here: its index already is one, and it
+ * is dropped on every sync, which a second copy in this class would not be.
  */
 @Service
 public class FoodResolverService implements IFoodResolverService {
 
-    private final CachedLookup<BedcaFood> generic;
+    private final ICompositionFoodService compositionFoodService;
     private final CachedLookup<FoodItem> branded;
 
-    public FoodResolverService(IBedcaFoodService bedcaFoodService,
+    public FoodResolverService(ICompositionFoodService compositionFoodService,
                                IFoodItemService foodItemService,
                                @Value("${fdiet.diet.food-cache-size:5000}") int cacheSize) {
-        this.generic = new CachedLookup<>(cacheSize,
-                bedcaFoodService::entitiesByName, bedcaFoodService::entitiesByIds, BedcaFood::getId);
+        this.compositionFoodService = compositionFoodService;
         this.branded = new CachedLookup<>(cacheSize,
                 foodItemService::entitiesByName, foodItemService::entitiesByIds, FoodItem::getId);
     }
 
+    /** O(n) in the names, two composition lookups and one branded one at most. */
     @Override
     public Map<String, FoodMatch> resolve(Collection<String> names) {
-        List<String> wanted = names.stream()
+        Map<String, FoodMatch> resolved = new LinkedHashMap<>();
+        Map<String, CompositionFood> generic =
+                ExactNames.resolve(names, compositionFoodService::entitiesByName);
+        generic.forEach((name, food) -> resolved.put(name, FoodMatch.of(food)));
+
+        List<String> rest = names.stream()
                 .map(Texts::normaliseName)
                 .filter(Objects::nonNull)
+                .filter(name -> !resolved.containsKey(name))
                 .distinct()
                 .toList();
-        if (wanted.isEmpty()) {
-            return Map.of();
-        }
-
-        Map<String, FoodMatch> resolved = new LinkedHashMap<>();
-        generic.resolve(wanted).forEach((name, food) -> resolved.put(name, FoodMatch.of(food)));
-
-        // "kiwi mediano" is a kiwi: a size says how big the piece is, not which
-        // food it is. Still an exact match, on the name without that one word.
-        Map<String, String> sizeless = new LinkedHashMap<>();
-        wanted.stream().filter(name -> !resolved.containsKey(name)).forEach(name -> {
-            String stripped = Texts.normaliseName(PortionSize.withoutSize(name));
-            if (stripped != null) {
-                sizeless.put(name, stripped);
-            }
-        });
-        if (!sizeless.isEmpty()) {
-            Map<String, BedcaFood> found = generic.resolve(sizeless.values().stream().distinct().toList());
-            sizeless.forEach((name, stripped) -> {
-                BedcaFood food = found.get(stripped);
-                if (food != null) {
-                    resolved.put(name, FoodMatch.of(food));
-                }
-            });
-        }
-
-        List<String> rest = wanted.stream().filter(name -> !resolved.containsKey(name)).toList();
         if (!rest.isEmpty()) {
             branded.resolve(rest).forEach((name, item) -> resolved.put(name, FoodMatch.of(item)));
         }
@@ -91,9 +74,8 @@ public class FoodResolverService implements IFoodResolverService {
     }
 
     /**
-     * One catalogue's worth of "name to id", and the two batched calls that
-     * turn a set of names into entities. Both halves work the same way, so they
-     * share this rather than each having their own copy of it.
+     * The branded catalogue's "name to id", and the two batched calls that turn a
+     * set of names into entities.
      */
     private static final class CachedLookup<T> {
 

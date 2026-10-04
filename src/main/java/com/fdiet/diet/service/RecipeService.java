@@ -13,12 +13,6 @@ import com.fdiet.diet.model.Recipe;
 import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.diet.repository.RecipeIngredientRepository;
 import com.fdiet.diet.repository.RecipeRepository;
-import com.fdiet.food.dto.FoodSuggestionDto;
-import com.fdiet.food.model.BedcaFood;
-import com.fdiet.food.model.FoodItem;
-import com.fdiet.food.service.IBedcaFoodService;
-import com.fdiet.food.service.IFoodItemService;
-import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.HouseholdMeasure;
 import com.fdiet.reference.domain.MeasureUser;
 import com.fdiet.reference.dto.FoodMeasureDto;
@@ -27,7 +21,6 @@ import com.fdiet.reference.dto.MeasureQueryDto;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
 import com.fdiet.reference.service.IMeasureUsageCounter;
 import com.fdiet.reference.service.IReferenceService;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -38,7 +31,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -64,9 +56,6 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
 
     private static final Sort BY_ID = Sort.by(Sort.Direction.ASC, "id");
 
-    /** How many more candidates are ranked than shown, so a state disagreement can sink. */
-    private static final int SUGGESTION_POOL = 3;
-
     private static final int NAME_MAX = 255;
     private static final int STEPS_MAX = 4000;
     private static final int TEXT_MAX = 1000;
@@ -75,33 +64,24 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
     private final RecipeIngredientRepository ingredientRepository;
     private final IDietMapper dietMapper;
     private final IMealTextParser mealTextParser;
-    private final IFoodResolverService foodResolverService;
-    private final IFoodItemService foodItemService;
-    private final IBedcaFoodService bedcaFoodService;
+    private final IIngredientFoodService ingredientFoods;
     private final IReferenceService referenceService;
     private final IMeasureResolverService measureResolver;
-    private final int suggestionLimit;
 
     public RecipeService(RecipeRepository recipeRepository,
                          RecipeIngredientRepository ingredientRepository,
                          IDietMapper dietMapper,
                          IMealTextParser mealTextParser,
-                         IFoodResolverService foodResolverService,
-                         IFoodItemService foodItemService,
-                         IBedcaFoodService bedcaFoodService,
+                         IIngredientFoodService ingredientFoods,
                          IReferenceService referenceService,
-                         IMeasureResolverService measureResolver,
-                         @Value("${fdiet.diet.suggestion-limit:5}") int suggestionLimit) {
+                         IMeasureResolverService measureResolver) {
         this.recipeRepository = recipeRepository;
         this.ingredientRepository = ingredientRepository;
         this.dietMapper = dietMapper;
         this.mealTextParser = mealTextParser;
-        this.foodResolverService = foodResolverService;
-        this.foodItemService = foodItemService;
-        this.bedcaFoodService = bedcaFoodService;
+        this.ingredientFoods = ingredientFoods;
         this.referenceService = referenceService;
         this.measureResolver = measureResolver;
-        this.suggestionLimit = suggestionLimit;
     }
 
     @Override
@@ -185,9 +165,9 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
             written.add(ingredientsOf(content, name));
         }
         List<DishIngredient> all = written.stream().flatMap(List::stream).toList();
-        Foods foods = foodsOf(all);
+        IngredientFoods foods = ingredientFoods.foodsOf(all);
         Map<DishIngredient, ReferenceFoodMeasure> measures =
-                measureResolver.measuresOf(all, foods::bedcaFood, dietId, profile);
+                measureResolver.measuresOf(all, foods::compositionFood, dietId, profile);
         for (int at = 0; at < recipes.size(); at++) {
             for (DishIngredient ingredient : written.get(at)) {
                 recipes.get(at).addIngredient(dietMapper.toEntity(
@@ -224,7 +204,7 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
             RecipeIngredient copied = new RecipeIngredient(
                     ingredient.getRawName(),
                     ingredient.getFoodItem(),
-                    ingredient.getBedcaFood(),
+                    ingredient.getCompositionFood(),
                     ingredient.getQuantity(),
                     ingredient.getUnit());
             copied.setQuantityMax(ingredient.getQuantityMax());
@@ -265,7 +245,7 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
 
     /**
      * The candidates are asked for per ingredient but cost no query: the
-     * composition database is small enough to rank in memory, and only the page
+     * composition foods' Spanish names are ranked in memory, and only the page
      * being looked at is ranked.
      */
     @Override
@@ -292,9 +272,9 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
     public DishIngredient resolveIngredient(Collection<Long> recipeIds, Long ingredientId,
                                             ResolveIngredientDto change, Long dietId,
                                             String profile) {
-        if (change.foodItemId() != null && change.bedcaFoodId() != null) {
+        if (change.foodItemId() != null && change.compositionFoodId() != null) {
             throw new InvalidDietException(
-                    "An ingredient points at one food: send foodItemId or bedcaFoodId, not both");
+                    "An ingredient points at one food: send foodItemId or compositionFoodId, not both");
         }
         RecipeIngredient ingredient = recipeIds.isEmpty() ? null : ingredientRepository
                 .findByIdAndRecipeIdIn(ingredientId, recipeIds).orElse(null);
@@ -305,13 +285,13 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
 
         // Matching to one half of the catalogue releases the other, so the row
         // never carries two foods at once.
-        if (change.bedcaFoodId() != null) {
-            ingredient.setBedcaFood(bedcaFoodService.entityById(change.bedcaFoodId()));
+        if (change.compositionFoodId() != null) {
+            ingredient.setCompositionFood(ingredientFoods.compositionFood(change.compositionFoodId()));
             ingredient.setFoodItem(null);
         }
         if (change.foodItemId() != null) {
-            ingredient.setFoodItem(foodItemService.entityById(change.foodItemId()));
-            ingredient.setBedcaFood(null);
+            ingredient.setFoodItem(ingredientFoods.foodItem(change.foodItemId()));
+            ingredient.setCompositionFood(null);
         }
         if (change.name() != null) {
             ingredient.setRawName(change.name());
@@ -331,7 +311,7 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
         Long preferred = change.foodMeasureId() != null
                 ? change.foodMeasureId()
                 : ingredient.getFoodMeasure() == null ? null : ingredient.getFoodMeasure().getId();
-        MeasureChoiceDto choice = measureResolver.choose(ingredient.getBedcaFood(),
+        MeasureChoiceDto choice = measureResolver.choose(ingredient.getCompositionFood(),
                 ingredient.getUnit(), ingredient.getSize(), preferred,
                 shared ? null : dietId, shared ? null : profile);
         if (change.foodMeasureId() != null
@@ -352,18 +332,18 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
     @Override
     @Transactional(readOnly = true)
     public RecipeDto read(String text, String fallbackName, Long dietId, String profile,
-                          Long preferredMeasure) {
+                          Long compositionFoodId, Long preferredMeasure) {
         RecipeDto written = mealTextParser.parse(text, fallbackName);
         if (written == null) {
             throw new InvalidDietException("The text is blank; there is no recipe to read");
         }
         List<DishIngredient> ingredients = written.ingredients();
-        if (preferredMeasure != null && ingredients.size() == 1) {
-            ingredients = List.of(withMeasure(ingredients.get(0), preferredMeasure));
+        if (ingredients.size() == 1) {
+            ingredients = List.of(ingredients.get(0).pinnedTo(compositionFoodId, preferredMeasure));
         }
-        Foods foods = foodsOf(ingredients);
+        IngredientFoods foods = ingredientFoods.foodsOf(ingredients);
         Map<DishIngredient, ReferenceFoodMeasure> measures =
-                measureResolver.measuresOf(ingredients, foods::bedcaFood, dietId, profile);
+                measureResolver.measuresOf(ingredients, foods::compositionFood, dietId, profile);
 
         Recipe transientRecipe = new Recipe(written.name(), written.rawText(), null, false);
         for (DishIngredient ingredient : ingredients) {
@@ -392,8 +372,9 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
                         .filter(written -> written == measure).isPresent())
                 .toList();
         List<MeasureChoiceDto> choices = referenceService.chooseMeasures(candidates.stream()
-                .map(ingredient -> new MeasureQueryDto(ingredient.compositionFoodId(), null,
-                        ingredient.getUnit(), ingredient.getSize(), null))
+                .map(ingredient -> new MeasureQueryDto(ingredient.compositionFoodId(),
+                        ingredient.getCompositionFood().getNameEs(), ingredient.getUnit(),
+                        ingredient.getSize(), null))
                 .toList(), dietId, profile);
         Map<Long, ReferenceFoodMeasure> entities = referenceService.measureEntities(choices.stream()
                 .map(MeasureChoiceDto::chosen).filter(Objects::nonNull).map(FoodMeasureDto::id)
@@ -472,102 +453,21 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
     private void fill(Recipe recipe, List<DishIngredient> ingredients, Long dietId, String profile) {
         measureResolver.requireNoDietMeasures(ingredients.stream()
                 .map(DishIngredient::foodMeasureId).filter(Objects::nonNull).toList());
-        Foods foods = foodsOf(ingredients);
+        IngredientFoods foods = ingredientFoods.foodsOf(ingredients);
         Map<DishIngredient, ReferenceFoodMeasure> measures =
-                measureResolver.measuresOf(ingredients, foods::bedcaFood, dietId, profile);
+                measureResolver.measuresOf(ingredients, foods::compositionFood, dietId, profile);
         for (DishIngredient ingredient : ingredients) {
             recipe.addIngredient(dietMapper.toEntity(
                     ingredient, foods.of(ingredient), measures.get(ingredient)));
         }
     }
 
-    /**
-     * The composition database's best candidates, with any whose name states the
-     * other side of raw/cooked from the text moved to the end: {@code lentejas
-     * cocidas} is offered {@code Lenteja, hervida} before {@code Lenteja, seca,
-     * cruda}. Still only an order — nothing is matched by it.
-     */
+    /** The composition foods' best candidates for an ingredient nobody matched; only an order. */
     private DishIngredient withSuggestions(RecipeIngredient ingredient, boolean suggest) {
         DishIngredient dto = dietMapper.toDto(ingredient);
         if (!suggest || dto.resolved()) {
             return dto;
         }
-        List<FoodSuggestionDto> ranked =
-                bedcaFoodService.suggest(dto.name(), suggestionLimit * SUGGESTION_POOL);
-        FoodState written = ingredient.getState();
-        List<FoodSuggestionDto> ordered = new ArrayList<>(ranked);
-        ordered.sort(Comparator.comparing((FoodSuggestionDto suggestion) ->
-                FoodState.disagree(written, FoodState.ofFoodName(suggestion.name()))));
-        return dto.withSuggestions(ordered.stream().limit(suggestionLimit).toList());
-    }
-
-    private static DishIngredient withMeasure(DishIngredient ingredient, Long measureId) {
-        return new DishIngredient(ingredient.id(), ingredient.name(), ingredient.quantity(),
-                ingredient.quantityMax(), ingredient.unit(), ingredient.state(), ingredient.size(),
-                ingredient.foodItemId(), ingredient.bedcaFoodId(), measureId, ingredient.matchedName(),
-                ingredient.measure(), ingredient.stateMismatch(), ingredient.yieldHint(),
-                ingredient.nutrition(), ingredient.suggestions());
-    }
-
-    /**
-     * Every food these ingredients need, fetched in a handful of batched calls
-     * rather than one lookup per ingredient: the ones the caller named by id, and
-     * the ones that have to be matched by name.
-     */
-    private Foods foodsOf(List<DishIngredient> ingredients) {
-        Set<Long> itemIds = new LinkedHashSet<>();
-        Set<Long> bedcaIds = new LinkedHashSet<>();
-        Set<String> names = new LinkedHashSet<>();
-        for (DishIngredient ingredient : ingredients) {
-            if (ingredient.bedcaFoodId() != null) {
-                bedcaIds.add(ingredient.bedcaFoodId());
-            } else if (ingredient.foodItemId() != null) {
-                itemIds.add(ingredient.foodItemId());
-            } else {
-                names.add(ingredient.name());
-            }
-        }
-
-        Map<Long, FoodItem> items = foodItemService.entitiesByIds(itemIds);
-        requireAllFound(itemIds, items.keySet(), "food items");
-        Map<Long, BedcaFood> generic = bedcaFoodService.entitiesByIds(bedcaIds);
-        requireAllFound(bedcaIds, generic.keySet(), "composition-database foods");
-
-        return new Foods(items, generic, foodResolverService.resolve(names));
-    }
-
-    /** An id the caller made up is a mistake to report, not a food to guess at. */
-    private static void requireAllFound(Set<Long> asked, Set<Long> found, String what) {
-        List<Long> unknown = asked.stream().filter(id -> !found.contains(id)).toList();
-        if (!unknown.isEmpty()) {
-            throw new InvalidDietException("Unknown " + what + ": " + unknown);
-        }
-    }
-
-    /**
-     * The ways an ingredient finds its food: the id the caller gave, on either
-     * half of the catalogue, or its name matched against both. None may find
-     * one, and then the ingredient is stored unmatched.
-     */
-    private record Foods(Map<Long, FoodItem> items,
-                         Map<Long, BedcaFood> generic,
-                         Map<String, FoodMatch> byName) {
-
-        FoodMatch of(DishIngredient ingredient) {
-            if (ingredient.bedcaFoodId() != null) {
-                return FoodMatch.of(generic.get(ingredient.bedcaFoodId()));
-            }
-            if (ingredient.foodItemId() != null) {
-                return FoodMatch.of(items.get(ingredient.foodItemId()));
-            }
-            String key = Texts.normaliseName(ingredient.name());
-            return key == null ? null : byName.get(key);
-        }
-
-        /** The composition-database food the ingredient found, or null. */
-        BedcaFood bedcaFood(DishIngredient ingredient) {
-            FoodMatch match = of(ingredient);
-            return match == null ? null : match.bedcaFood();
-        }
+        return dto.withSuggestions(ingredientFoods.suggestionsFor(dto.name(), ingredient.getState()));
     }
 }

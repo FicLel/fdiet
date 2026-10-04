@@ -3,7 +3,7 @@ package com.fdiet.journal.service;
 import com.fdiet.diet.exception.DietNotFoundException;
 import com.fdiet.diet.helpers.IPortionScaler;
 import com.fdiet.diet.service.IDietService;
-import com.fdiet.food.service.IBedcaFoodService;
+import com.fdiet.food.service.ICompositionFoodService;
 import com.fdiet.food.service.IFoodItemService;
 import com.fdiet.journal.dto.JournalCountsDto;
 import com.fdiet.journal.mapper.IJournalMapper;
@@ -38,7 +38,7 @@ class JournalServiceCountsTest {
             mock(IJournalMapper.class),
             mock(IJournalNutritionService.class),
             dietService,
-            mock(IBedcaFoodService.class),
+            mock(ICompositionFoodService.class),
             mock(IFoodItemService.class),
             mock(IReferenceService.class),
             mock(IPortionScaler.class));

@@ -3,7 +3,7 @@ package com.fdiet.journal.service;
 import com.fdiet.diet.dto.NutritionSummaryDto;
 import com.fdiet.diet.helpers.PortionScaler;
 import com.fdiet.food.dto.NutritionDto;
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.model.FoodItem;
 import com.fdiet.food.model.NutrientValue;
 import com.fdiet.food.service.NutritionService;
@@ -115,10 +115,10 @@ class JournalNutritionServiceTest {
         assertThat(summary.totals().isEmpty()).isTrue();
     }
 
-    private static BedcaFood lechuga() {
-        BedcaFood food = new BedcaFood();
+    private static CompositionFood lechuga() {
+        CompositionFood food = new CompositionFood();
         food.setId(2399L);
-        food.setName("Lechuga");
+        food.setNameEs("Lechuga");
         food.setEnergy(new NutrientValue(new BigDecimal("65.125"), "kJ"));
         food.setProtein(new NutrientValue(new BigDecimal("1.125"), "g"));
         return food;
@@ -143,7 +143,7 @@ class JournalNutritionServiceTest {
         return measure;
     }
 
-    private static ExtraFood generic(BedcaFood food, String quantity, String unit) {
+    private static ExtraFood generic(CompositionFood food, String quantity, String unit) {
         return new ExtraFood(1L, DayOfWeek.TUESDAY, "lechuga",
                 new BigDecimal(quantity), unit, food, null);
     }

@@ -2,6 +2,7 @@ package com.fdiet.journal.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fdiet.food.dto.NutritionDto;
+import com.fdiet.food.model.CompositionSource;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.PortionSize;
 import com.fdiet.reference.domain.UnitWording;
@@ -16,7 +17,8 @@ import java.time.LocalDateTime;
  *
  * <p>{@code name} is what the patient wrote; {@code matchedName} is what the
  * catalogue calls the food it was matched to, null while it is matched to
- * nothing. {@code nutrition} is the catalogue's per-100 g figures scaled to the
+ * nothing; {@code matchedSource} the table a matched composition food comes from
+ * (CIQUAL or BLS), null for a branded product. {@code nutrition} is the catalogue's per-100 g figures scaled to the
  * quantity logged, worked out on read and never stored — null when nothing was
  * matched, or when the unit is one nothing can weigh. {@code measure} is the
  * household measure that weighed it, with its source, when one did.
@@ -31,9 +33,10 @@ public record ExtraFoodDto(
         String unit,
         FoodState state,
         PortionSize size,
-        Long bedcaFoodId,
+        Long compositionFoodId,
         Long foodItemId,
         String matchedName,
+        CompositionSource matchedSource,
         /** The maker, when the match came from the branded catalogue. */
         String brand,
         Long foodMeasureId,

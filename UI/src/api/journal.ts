@@ -15,7 +15,7 @@ export interface LogExtraFoodRequest {
   quantity: number
   unit: string
   /** One of the two, or neither — never both. */
-  bedcaFoodId?: number | null
+  compositionFoodId?: number | null
   foodItemId?: number | null
   /**
    * The household measure that weighs `1 cucharada` of a generic food. Left

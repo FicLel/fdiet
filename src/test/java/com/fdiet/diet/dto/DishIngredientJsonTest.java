@@ -1,6 +1,8 @@
 package com.fdiet.diet.dto;
 
 import com.fdiet.diet.helpers.MealTextParser;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -15,15 +17,30 @@ class DishIngredientJsonTest {
 
     private final JsonMapper mapper = JsonMapper.builder().build();
     private final MealTextParser parser = new MealTextParser();
+    private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
     @Test
     void readsAnIngredientThatLeavesTheOutgoingFieldsOut() {
         DishIngredient ingredient = mapper.readValue(
-                "{\"name\":\"lentejas\",\"quantity\":60,\"unit\":\"g\",\"bedcaFoodId\":1065}",
+                "{\"name\":\"lentejas\",\"quantity\":60,\"unit\":\"g\",\"compositionFoodId\":1065}",
                 DishIngredient.class);
 
         assertThat(ingredient.stateMismatch()).isFalse();
-        assertThat(ingredient.bedcaFoodId()).isEqualTo(1065L);
+        assertThat(ingredient.compositionFoodId()).isEqualTo(1065L);
+        assertThat(validator.validate(ingredient)).isEmpty();
+    }
+
+    /** FD-033: a BEDCA id is read only to be refused — never silently dropped, never written out. */
+    @Test
+    void refusesABedcaFoodIdAndNeverWritesOne() {
+        DishIngredient ingredient = mapper.readValue(
+                "{\"name\":\"lentejas\",\"quantity\":60,\"unit\":\"g\",\"bedcaFoodId\":1065}",
+                DishIngredient.class);
+
+        assertThat(validator.validate(ingredient))
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .containsExactly("bedcaFoodId");
+        assertThat(mapper.valueToTree(ingredient).has("bedcaFoodId")).isFalse();
     }
 
     @Test

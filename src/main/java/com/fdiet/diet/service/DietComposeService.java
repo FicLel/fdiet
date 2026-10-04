@@ -4,8 +4,8 @@ import com.fdiet.diet.dto.ComposeRequestDto;
 import com.fdiet.diet.dto.ComposedFragmentDto;
 import com.fdiet.diet.dto.RecipeDto;
 import com.fdiet.diet.exception.InvalidDietException;
-import com.fdiet.food.model.BedcaFood;
-import com.fdiet.food.service.IBedcaFoodService;
+import com.fdiet.food.model.CompositionFood;
+import com.fdiet.food.service.ICompositionFoodService;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.MeasureChoiceDto;
@@ -31,27 +31,29 @@ public class DietComposeService implements IDietComposeService {
 
     private final IDietService dietService;
     private final IRecipeService recipeService;
-    private final IBedcaFoodService bedcaFoodService;
+    private final ICompositionFoodService compositionFoodService;
     private final IReferenceService referenceService;
     private final IMeasureResolverService measureResolver;
 
     public DietComposeService(IDietService dietService,
                               IRecipeService recipeService,
-                              IBedcaFoodService bedcaFoodService,
+                              ICompositionFoodService compositionFoodService,
                               IReferenceService referenceService,
                               IMeasureResolverService measureResolver) {
         this.dietService = dietService;
         this.recipeService = recipeService;
-        this.bedcaFoodService = bedcaFoodService;
+        this.compositionFoodService = compositionFoodService;
         this.referenceService = referenceService;
         this.measureResolver = measureResolver;
     }
 
     /**
-     * The fragment is built from the food's own catalogue name, so the parser
-     * matches it exactly, and from a spelling of the measure the parser reads —
-     * then it is read back through that same parser, and what comes back is what
-     * the recipe will hold.
+     * The fragment is built from the food's own name — its Spanish one, or the
+     * source's for a food the crosswalk names in no Spanish — and from a spelling
+     * of the measure the parser reads; then it is read back through that same
+     * parser, pinned to the food asked for, and what comes back is what the recipe
+     * will hold. Pinned rather than matched by name, so a food without a Spanish
+     * name still comes back matched.
      */
     @Override
     @Transactional(readOnly = true)
@@ -60,8 +62,8 @@ public class DietComposeService implements IDietComposeService {
             throw new InvalidDietException(
                     "A composed food is a weight or a household measure: send grams or foodMeasureId");
         }
-        BedcaFood food = bedcaFoodService.entityById(request.bedcaFoodId());
-        String name = food.getName().replaceAll("[()+:]", " ").replaceAll("\\s+", " ").trim();
+        CompositionFood food = compositionFoodService.entityById(request.compositionFoodId());
+        String name = food.label().replaceAll("[()+:]", " ").replaceAll("\\s+", " ").trim();
         String profile = request.dietId() == null
                 ? null
                 : dietService.referenceProfileCode(request.dietId());
@@ -84,12 +86,12 @@ public class DietComposeService implements IDietComposeService {
                     measure.size(), measure.id(), request.dietId(), profile);
             if (choice.chosen() == null || !choice.chosen().id().equals(measure.id())) {
                 throw new InvalidDietException("Household measure " + measure.id()
-                        + " does not weigh " + food.getName());
+                        + " does not weigh " + food.label());
             }
         }
 
         RecipeDto read = recipeService.read(fragment, name, request.dietId(), profile,
-                request.foodMeasureId());
+                food.getId(), request.foodMeasureId());
         return new ComposedFragmentDto(fragment, read.ingredients().get(0));
     }
 

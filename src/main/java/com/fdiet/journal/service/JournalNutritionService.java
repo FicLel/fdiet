@@ -41,8 +41,8 @@ public class JournalNutritionService implements IJournalNutritionService {
         if (weighed == null) {
             return null;
         }
-        NutritionDto per100g = extra.getBedcaFood() != null
-                ? nutritionService.per100g(extra.getBedcaFood())
+        NutritionDto per100g = extra.getCompositionFood() != null
+                ? nutritionService.per100g(extra.getCompositionFood())
                 : nutritionService.per100g(extra.getFoodItem());
         return per100g.isEmpty() ? null : per100g.scaled(weighed.factor());
     }
@@ -81,6 +81,6 @@ public class JournalNutritionService implements IJournalNutritionService {
             return null;
         }
         return portionScaler.weigh(extra.getQuantity(), extra.getUnit(), extra.getFoodMeasure(),
-                extra.getBedcaFood() == null ? null : extra.getBedcaFood().getEdiblePortion());
+                extra.getCompositionFood() == null ? null : extra.getCompositionFood().getEdiblePortion());
     }
 }

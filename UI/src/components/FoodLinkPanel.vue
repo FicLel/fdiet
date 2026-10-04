@@ -5,6 +5,7 @@ import { integer, NO_VALUE } from '@/domain/format'
 import { measureSource, measureText, perMeasure, stateWord } from '@/domain/rations'
 import { amountText } from '@/domain/dishText'
 import { dayName } from '@/domain/week'
+import { compositionSourceLabel } from '@/domain/compositionFood'
 import DietCriterionPanel from './DietCriterionPanel.vue'
 
 /**
@@ -14,9 +15,8 @@ import DietCriterionPanel from './DietCriterionPanel.vue'
  * whole of what the nutritionist is doing at that moment and the dish's figures
  * are exactly what it is about to change.
  *
- * The ranked candidates come first and the search box below them, in that
- * order: the backend has already scored all 957 generic names against these
- * words, and most of the time the answer is in the first three.
+ * The ranked candidates come first and the search box below them: the backend
+ * has scored the CIQUAL / BLS Spanish names already; the answer is mostly in the top three.
  */
 
 const link = useFoodLink()
@@ -112,7 +112,7 @@ watch(
         </div>
         <div class="where">{{ where }}</div>
         <div v-if="at.matchedName" class="current">
-          Ahora vinculado a <strong>{{ at.matchedName }}</strong>
+          Ahora vinculado a <strong>{{ at.matchedName }}</strong><template v-if="at.matchedSource"> · {{ compositionSourceLabel(at.matchedSource) }}</template>
         </div>
         <div v-if="at.stateMismatch" class="current warn">
           Escrito en otro estado que el alimento vinculado (crudo frente a cocinado). Sus pesos no
@@ -216,8 +216,8 @@ watch(
         <div class="halves" role="group" aria-label="Mitad del catálogo">
           <button
             type="button"
-            :class="{ on: link.half.value === 'bedca' }"
-            @click="link.useHalf('bedca')"
+            :class="{ on: link.half.value === 'composition' }"
+            @click="link.useHalf('composition')"
           >
             Genéricos
           </button>
@@ -239,7 +239,7 @@ watch(
             ref="box"
             :value="link.term.value"
             :placeholder="
-              link.half.value === 'bedca' ? 'Buscar en el catálogo' : 'Buscar un producto'
+              link.half.value === 'composition' ? 'Buscar en CIQUAL o BLS' : 'Buscar un producto'
             "
             aria-label="Buscar en el catálogo"
             @input="link.search(($event.target as HTMLInputElement).value)"

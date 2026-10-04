@@ -2,11 +2,17 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { catalogueApi } from '@/api/catalogue'
 import { referenceApi } from '@/api/reference'
-import type { BedcaFood, DayOfWeek, FoodItem, FoodMeasure } from '@/api/types'
+import type { DayOfWeek, FoodMeasure } from '@/api/types'
 import { usePatientWeek } from '@/stores/patientWeek'
 import { useReference } from '@/stores/reference'
 import { integer, NO_VALUE } from '@/domain/format'
 import { measureSource, perMeasure } from '@/domain/rations'
+import {
+  brandedResult,
+  compositionResult,
+  type CatalogueHalf,
+  type CatalogueResult,
+} from '@/domain/catalogueResult'
 
 /**
  * Adding something the plan did not prescribe.
@@ -44,29 +50,14 @@ const SEARCH_SIZE = 20
 /** What a portion is when nobody said — the figure every label is written for. */
 const DEFAULT_GRAMS = 100
 
-type Half = 'branded' | 'bedca'
-
-/** A candidate from either half, in the one shape the list draws. */
-interface Candidate {
-  key: string
-  bedcaFoodId: number | null
-  foodItemId: number | null
-  name: string
-  /** The brand for a product, the food group for a generic food. */
-  note: string | null
-  /** The EAN, which only a branded product has. */
-  code: string | null
-  kcalPer100: number | null
-}
-
-const half = ref<Half>('branded')
+const half = ref<CatalogueHalf>('branded')
 const term = ref('')
-const results = ref<Candidate[]>([])
+const results = ref<CatalogueResult[]>([])
 const searching = ref(false)
 const searchError = ref<string | null>(null)
 
 /** The food picked, waiting for a quantity before it is logged. */
-const chosen = ref<Candidate | null>(null)
+const chosen = ref<CatalogueResult | null>(null)
 const amount = ref(String(DEFAULT_GRAMS))
 const unit = ref('g')
 
@@ -87,30 +78,6 @@ const count = computed(() => {
     : `${results.value.length} resultados en el catálogo`
 })
 
-function brandedCandidate(item: FoodItem): Candidate {
-  return {
-    key: `item-${item.id}`,
-    bedcaFoodId: null,
-    foodItemId: item.id,
-    name: item.commercialName ?? item.legalName ?? `EAN ${item.ean ?? item.id}`,
-    note: item.brand,
-    code: item.ean,
-    kcalPer100: item.energyKcal,
-  }
-}
-
-function bedcaCandidate(food: BedcaFood): Candidate {
-  return {
-    key: `bedca-${food.id}`,
-    bedcaFoodId: food.id,
-    foodItemId: null,
-    name: food.name,
-    note: food.foodGroup,
-    code: null,
-    kcalPer100: food.nutrition?.energyKcal ?? null,
-  }
-}
-
 async function run(query: string): Promise<void> {
   const mine = ++token
   searching.value = true
@@ -118,8 +85,8 @@ async function run(query: string): Promise<void> {
   try {
     const page =
       half.value === 'branded'
-        ? (await catalogueApi.branded(query, 0, SEARCH_SIZE)).content.map(brandedCandidate)
-        : (await catalogueApi.bedca(query, 0, SEARCH_SIZE)).content.map(bedcaCandidate)
+        ? (await catalogueApi.branded(query, 0, SEARCH_SIZE)).content.map(brandedResult)
+        : (await catalogueApi.composition(query, 0, SEARCH_SIZE)).content.map(compositionResult)
     // The term may have moved on while the request was in flight.
     if (mine === token) {
       results.value = page
@@ -158,7 +125,7 @@ watch(half, () => {
 
 onBeforeUnmount(() => clearTimeout(timer))
 
-function choose(candidate: Candidate): void {
+function choose(candidate: CatalogueResult): void {
   chosen.value = candidate
   amount.value = String(DEFAULT_GRAMS)
   unit.value = 'g'
@@ -184,11 +151,11 @@ watch([chosen, measureWord], async ([food, word]) => {
   pickedMeasure.value = null
   measures.value = []
   const plan = week.diet.value
-  if (!food || food.bedcaFoodId === null || !word || !plan) {
+  if (!food || food.compositionFoodId === null || !word || !plan) {
     return
   }
   try {
-    const rows = await referenceApi.measures({ bedcaFoodId: food.bedcaFoodId }, {
+    const rows = await referenceApi.measures({ compositionFoodId: food.compositionFoodId }, {
       unit: unit.value.trim(),
       dietId: plan.id,
       profile: plan.referenceProfileCode,
@@ -235,7 +202,7 @@ async function add(): Promise<void> {
     name: food.name,
     quantity: parsedAmount.value,
     unit: unit.value.trim(),
-    bedcaFoodId: food.bedcaFoodId,
+    compositionFoodId: food.compositionFoodId,
     foodItemId: food.foodItemId,
     foodMeasureId: measureWord.value === null ? null : pickedMeasure.value,
   })
@@ -299,11 +266,11 @@ async function addAsWritten(): Promise<void> {
       </button>
       <button
         class="tab"
-        :class="{ current: half === 'bedca' }"
+        :class="{ current: half === 'composition' }"
         type="button"
         role="tab"
-        :aria-selected="half === 'bedca'"
-        @click="half = 'bedca'"
+        :aria-selected="half === 'composition'"
+        @click="half = 'composition'"
       >
         Genéricos
       </button>
@@ -383,7 +350,7 @@ async function addAsWritten(): Promise<void> {
         </button>
       </div>
       <!-- Written in a household measure: which published weight stands for it. -->
-      <div v-if="chosen.bedcaFoodId !== null && measureWord !== null" class="measures">
+      <div v-if="chosen.compositionFoodId !== null && measureWord !== null" class="measures">
         <button
           v-for="measure in measures"
           :key="measure.id"

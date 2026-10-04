@@ -17,10 +17,10 @@ import java.util.Optional;
  */
 public interface ExtraFoodRepository extends JpaRepository<ExtraFood, Long> {
 
-    @EntityGraph(attributePaths = {"bedcaFood", "foodItem", "foodMeasure"})
+    @EntityGraph(attributePaths = {"compositionFood", "foodItem", "foodMeasure"})
     List<ExtraFood> findByDietIdOrderByLoggedAtAsc(Long dietId);
 
-    @EntityGraph(attributePaths = {"bedcaFood", "foodItem", "foodMeasure"})
+    @EntityGraph(attributePaths = {"compositionFood", "foodItem", "foodMeasure"})
     Optional<ExtraFood> findWithFoodById(Long id);
 
     long countByDietId(Long dietId);

@@ -1,4 +1,4 @@
-import type { CompositionFood } from '@/api/compositionTypes'
+import type { CompositionFood, CompositionSource } from '@/api/compositionTypes'
 
 /**
  * How a CIQUAL / BLS food is named on screen: fdiet's Spanish name when the
@@ -9,12 +9,15 @@ export function compositionFoodName(food: CompositionFood): string {
 }
 
 /**
- * The phase between re-keying and re-matching (FD-033 C → D): the criteria
- * name CIQUAL / BLS foods while every ingredient and extra is still matched to
- * BEDCA, so a criterion saved now weighs nothing yet. Said plainly, not shown
- * as an error.
+ * The edition of each table, as the backend's `sourceLabel` writes it. Used
+ * where only the `matchedSource` code travels — an ingredient or an extra
+ * already matched — so a match still says which table its figures come from.
  */
-export const CRITERIA_PENDING_NOTE =
-  'Tus criterios se guardan sobre un alimento de CIQUAL o BLS. Los ingredientes y extras siguen ' +
-  'vinculados a BEDCA, así que todavía no pesan ninguno: se aplicarán cuando se vuelvan a vincular ' +
-  'en la próxima fase.'
+const SOURCE_LABELS: Record<CompositionSource, string> = {
+  CIQUAL: 'CIQUAL 2025',
+  BLS: 'BLS 4.0',
+}
+
+export function compositionSourceLabel(source: CompositionSource | null | undefined): string | null {
+  return source ? SOURCE_LABELS[source] : null
+}

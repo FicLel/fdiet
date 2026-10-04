@@ -267,7 +267,7 @@ function mealName(type: string): string {
               </ul>
             </div>
             <p class="note">
-              Sobre los gramos de lo que cuenta en kcal, calculados con BEDCA; lo que no cuenta, no
+              Sobre los gramos de lo que cuenta en kcal, calculados con CIQUAL y BLS; lo que no cuenta, no
               suma. Por plato, en el panel del plato.
             </p>
           </template>

@@ -4,9 +4,9 @@ import com.fdiet.diet.dto.MealType;
 import com.fdiet.diet.exception.DietNotFoundException;
 import com.fdiet.diet.helpers.IPortionScaler;
 import com.fdiet.diet.service.IDietService;
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.model.FoodItem;
-import com.fdiet.food.service.IBedcaFoodService;
+import com.fdiet.food.service.ICompositionFoodService;
 import com.fdiet.food.service.IFoodItemService;
 import com.fdiet.journal.dto.DayExtrasDto;
 import com.fdiet.journal.dto.DietJournalDto;
@@ -53,7 +53,7 @@ public class JournalService implements IJournalService, IMeasureUsageCounter {
     private final IJournalMapper journalMapper;
     private final IJournalNutritionService journalNutritionService;
     private final IDietService dietService;
-    private final IBedcaFoodService bedcaFoodService;
+    private final ICompositionFoodService compositionFoodService;
     private final IFoodItemService foodItemService;
     private final IReferenceService referenceService;
     private final IPortionScaler portionScaler;
@@ -63,7 +63,7 @@ public class JournalService implements IJournalService, IMeasureUsageCounter {
                           IJournalMapper journalMapper,
                           IJournalNutritionService journalNutritionService,
                           IDietService dietService,
-                          IBedcaFoodService bedcaFoodService,
+                          ICompositionFoodService compositionFoodService,
                           IFoodItemService foodItemService,
                           IReferenceService referenceService,
                           IPortionScaler portionScaler) {
@@ -72,7 +72,7 @@ public class JournalService implements IJournalService, IMeasureUsageCounter {
         this.journalMapper = journalMapper;
         this.journalNutritionService = journalNutritionService;
         this.dietService = dietService;
-        this.bedcaFoodService = bedcaFoodService;
+        this.compositionFoodService = compositionFoodService;
         this.foodItemService = foodItemService;
         this.referenceService = referenceService;
         this.portionScaler = portionScaler;
@@ -144,16 +144,16 @@ public class JournalService implements IJournalService, IMeasureUsageCounter {
     @Transactional
     public ExtraFoodDto logExtra(Long dietId, LogExtraFoodRequestDto request) {
         requireDiet(dietId);
-        if (request.bedcaFoodId() != null && request.foodItemId() != null) {
+        if (request.compositionFoodId() != null && request.foodItemId() != null) {
             throw new InvalidJournalEntryException(
-                    "An extra points at one food or at none: give bedcaFoodId or foodItemId, "
+                    "An extra points at one food or at none: give compositionFoodId or foodItemId, "
                             + "not both");
         }
         // Through the owning services, so an id nothing carries comes back as
         // that module's 404 rather than as a foreign key violation.
-        BedcaFood bedca = request.bedcaFoodId() == null
+        CompositionFood food = request.compositionFoodId() == null
                 ? null
-                : bedcaFoodService.entityById(request.bedcaFoodId());
+                : compositionFoodService.entityById(request.compositionFoodId());
         FoodItem item = request.foodItemId() == null
                 ? null
                 : foodItemService.entityById(request.foodItemId());
@@ -165,11 +165,11 @@ public class JournalService implements IJournalService, IMeasureUsageCounter {
                 request.name().trim(),
                 request.quantity(),
                 unit,
-                bedca,
+                food,
                 item);
         extra.setState(request.state());
         extra.setSize(request.size());
-        extra.setFoodMeasure(measureFor(dietId, bedca, unit, request));
+        extra.setFoodMeasure(measureFor(dietId, food, unit, request));
         return journalMapper.toDto(extraRepository.save(extra));
     }
 
@@ -193,7 +193,7 @@ public class JournalService implements IJournalService, IMeasureUsageCounter {
      * plan weighs what it weighs inside it. A measure asked for that does not weigh this food in this unit is
      * refused rather than quietly ignored.
      */
-    private ReferenceFoodMeasure measureFor(Long dietId, BedcaFood food, String unit,
+    private ReferenceFoodMeasure measureFor(Long dietId, CompositionFood food, String unit,
                                             LogExtraFoodRequestDto request) {
         if (food == null || portionScaler.weighsDirectly(unit)
                 || HouseholdMeasure.ofUnit(unit).isEmpty()) {
@@ -204,7 +204,7 @@ public class JournalService implements IJournalService, IMeasureUsageCounter {
             return null;
         }
         MeasureChoiceDto choice = referenceService.chooseMeasures(
-                List.of(MeasureQueryDto.byNameOnly(food.getName(), unit, request.size(),
+                List.of(new MeasureQueryDto(food.getId(), food.getNameEs(), unit, request.size(),
                         request.foodMeasureId())),
                 dietId, dietService.referenceProfileCode(dietId)).get(0);
         FoodMeasureDto chosen = choice.chosen();

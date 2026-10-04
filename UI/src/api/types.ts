@@ -4,6 +4,8 @@
  * out crosses as null, which is not the same as zero and is never coerced to it.
  */
 
+import type { CompositionSource } from './compositionTypes'
+
 export type DietStatus = 'ACTIVE' | 'ARCHIVED'
 
 export type MealType =
@@ -67,10 +69,12 @@ export interface NutritionSummary {
   countedByMeasure: number
 }
 
+/** A ranked CIQUAL / BLS candidate for an unmatched ingredient, by name alone. */
 export interface FoodSuggestion {
-  bedcaFoodId: number
+  compositionFoodId: number
   name: string
-  foodGroup: string | null
+  source: CompositionSource
+  sourceLabel: string
   score: number
 }
 
@@ -78,25 +82,6 @@ export interface FoodSuggestion {
 export interface Nutrient {
   value: number
   unit: string
-}
-
-/**
- * A generic food of the composition database — the half a diet is normally
- * written in. `nutrition` is the published figures converted to one set of
- * units, per 100 g; it is derived on the way out and never stored, which is why
- * `nutrients` keeps each figure beside the unit it was published in.
- */
-export interface BedcaFood {
-  id: number
-  name: string
-  englishName: string | null
-  scientificName: string | null
-  foodGroup: string | null
-  foodSubgroup: string | null
-  origin: string | null
-  ediblePortion: number | null
-  nutrients: Record<string, Nutrient>
-  nutrition: Nutrition
 }
 
 /**
@@ -150,7 +135,10 @@ export interface DishIngredient {
   /** The size the text names — `1 kiwi mediano` — or null. */
   size: PortionSize | null
   foodItemId: number | null
-  bedcaFoodId: number | null
+  /** The CIQUAL / BLS food it is matched to; at most one of this and `foodItemId`. */
+  compositionFoodId: number | null
+  /** Which table that food comes from; null for a branded or no match. */
+  matchedSource: CompositionSource | null
   /** The household measure that weighs `1 cdta`, when one is attached. */
   foodMeasureId: number | null
   /** The catalogue's own name for the food, once matched. */

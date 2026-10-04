@@ -37,7 +37,7 @@ const missing = computed(() => {
   if (kcal.value !== null) {
     return ''
   }
-  return props.extra.bedcaFoodId === null && props.extra.foodItemId === null
+  return props.extra.compositionFoodId === null && props.extra.foodItemId === null
     ? 'sin vincular a un alimento'
     : 'no se puede pesar'
 })

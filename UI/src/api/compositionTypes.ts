@@ -3,10 +3,9 @@
  * Rubner-Institut), both CC BY 4.0, served from one table by
  * `/api/composition`.
  *
- * BEDCA's replacement in waiting: the nutritionist's measure criteria and the
- * published reference rows already name these foods; ingredients and extras
- * still point at BEDCA until they are re-matched. Kept apart from `types.ts`
- * so neither file outgrows the limit.
+ * The generic foods a diet is matched to: ingredients, extras, the measure
+ * criteria and the published reference rows all name these foods (FD-033
+ * phase D). Kept apart from `types.ts` so neither file outgrows the limit.
  * ------------------------------------------------------------------------- */
 
 import type { Nutrient, Nutrition } from './types'

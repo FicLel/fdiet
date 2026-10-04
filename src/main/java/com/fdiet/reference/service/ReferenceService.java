@@ -3,7 +3,6 @@ package com.fdiet.reference.service;
 import com.fdiet.alternative.domain.FoodCategory;
 import com.fdiet.alternative.helpers.IFoodCategoriser;
 import com.fdiet.food.model.CompositionFood;
-import com.fdiet.food.service.IBedcaFoodService;
 import com.fdiet.food.service.ICompositionFoodService;
 import com.fdiet.reference.domain.HouseholdMeasure;
 import com.fdiet.reference.dto.ExchangeSystemDto;
@@ -52,7 +51,6 @@ public class ReferenceService implements IReferenceService {
     private final ReferenceMatcher matcher;
     private final IFoodCategoriser categoriser;
     private final ICompositionFoodService compositionFoodService;
-    private final IBedcaFoodService bedcaFoodService;
     private final IMeasureCriterionService criteria;
     private final String defaultAdultProfile;
 
@@ -68,7 +66,6 @@ public class ReferenceService implements IReferenceService {
                             ReferenceMatcher matcher,
                             IFoodCategoriser categoriser,
                             ICompositionFoodService compositionFoodService,
-                            IBedcaFoodService bedcaFoodService,
                             IMeasureCriterionService criteria,
                             @Value("${fdiet.reference.default-adult-profile:AESAN-2022:ADULTOS}")
                             String defaultAdultProfile) {
@@ -77,7 +74,6 @@ public class ReferenceService implements IReferenceService {
         this.matcher = matcher;
         this.categoriser = categoriser;
         this.compositionFoodService = compositionFoodService;
-        this.bedcaFoodService = bedcaFoodService;
         this.criteria = criteria;
         this.defaultAdultProfile = defaultAdultProfile;
     }
@@ -160,12 +156,11 @@ public class ReferenceService implements IReferenceService {
      */
     @Override
     @Transactional(readOnly = true)
-    public List<RationDto> rationsForFood(String profileCode, Long compositionFoodId,
-                                          Long bedcaFoodId) {
-        if (compositionFoodId == null && bedcaFoodId == null) {
+    public List<RationDto> rationsForFood(String profileCode, Long compositionFoodId) {
+        if (compositionFoodId == null) {
             return rations(profileCode);
         }
-        LookedUpFood food = food(compositionFoodId, bedcaFoodId);
+        LookedUpFood food = food(compositionFoodId);
         FoodCategory category = categoryOf(food.name());
         ReferenceSnapshot current = snapshot();
 
@@ -261,8 +256,8 @@ public class ReferenceService implements IReferenceService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<YieldFactorDto> yieldFactorsForFood(Long compositionFoodId, Long bedcaFoodId) {
-        String name = food(compositionFoodId, bedcaFoodId).name();
+    public List<YieldFactorDto> yieldFactorsForFood(Long compositionFoodId) {
+        String name = food(compositionFoodId).name();
         return yieldFactors(name, name);
     }
 
@@ -275,14 +270,12 @@ public class ReferenceService implements IReferenceService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<FoodMeasureDto> measuresForFood(Long compositionFoodId, Long bedcaFoodId,
-                                                String unit, Long dietId, String profileCode) {
-        LookedUpFood food = food(compositionFoodId, bedcaFoodId);
+    public List<FoodMeasureDto> measuresForFood(Long compositionFoodId, String unit, Long dietId,
+                                                String profileCode) {
+        LookedUpFood food = food(compositionFoodId);
         ReferenceSnapshot current = snapshot();
         List<FoodMeasureDto> own = dietId == null ? List.of() : criteria.dietRows(dietId);
-        List<FoodMeasureDto> global = food.compositionFoodId() == null
-                ? List.of()
-                : criteria.globalRows(List.of(food.compositionFoodId()));
+        List<FoodMeasureDto> global = criteria.globalRows(List.of(food.compositionFoodId()));
         PopulationView profile = profileCode == null ? null : current.populations().get(profileCode);
         String profileSource = profile == null ? null : profile.sourceCode();
         FoodCategory category = categoryOf(food.name());
@@ -307,10 +300,15 @@ public class ReferenceService implements IReferenceService {
             return List.of();
         }
         ReferenceSnapshot current = snapshot();
-        List<FoodMeasureDto> own = dietId == null ? List.of() : criteria.dietRows(dietId);
-        List<FoodMeasureDto> global = criteria.globalRows(queries.stream()
+        // Every criterion names a composition food: with none asked about, neither
+        // query could find a row, so neither is run.
+        Set<Long> foodIds = queries.stream()
                 .map(MeasureQueryDto::compositionFoodId).filter(Objects::nonNull)
-                .collect(Collectors.toSet()));
+                .collect(Collectors.toSet());
+        List<FoodMeasureDto> own = dietId == null || foodIds.isEmpty()
+                ? List.of()
+                : criteria.dietRows(dietId);
+        List<FoodMeasureDto> global = criteria.globalRows(foodIds);
         PopulationView profile = profileCode == null ? null : current.populations().get(profileCode);
         String profileSource = profile == null ? null : profile.sourceCode();
 
@@ -380,20 +378,14 @@ public class ReferenceService implements IReferenceService {
 
     /**
      * The food a lookup names: a composition food — its id, and its Spanish name
-     * when the crosswalk gives one — or, until FD-033 phase D re-matches every
-     * ingredient, a BEDCA food by its name only. The BEDCA id goes no further
-     * than this: it is never compared with the composition id a row names.
+     * when the crosswalk gives one.
      */
-    private LookedUpFood food(Long compositionFoodId, Long bedcaFoodId) {
-        if ((compositionFoodId == null) == (bedcaFoodId == null)) {
-            throw new InvalidReferenceException(
-                    "Name the food by exactly one of compositionFoodId and bedcaFoodId");
+    private LookedUpFood food(Long compositionFoodId) {
+        if (compositionFoodId == null) {
+            throw new InvalidReferenceException("Name the food by compositionFoodId");
         }
-        if (compositionFoodId != null) {
-            CompositionFood food = compositionFoodService.entityById(compositionFoodId);
-            return new LookedUpFood(food.getId(), food.getNameEs());
-        }
-        return new LookedUpFood(null, bedcaFoodService.entityById(bedcaFoodId).getName());
+        CompositionFood food = compositionFoodService.entityById(compositionFoodId);
+        return new LookedUpFood(food.getId(), food.getNameEs());
     }
 
     /** The family a food name reads as; null without a name. */

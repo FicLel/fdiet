@@ -5,7 +5,7 @@ import com.fdiet.diet.dto.NutritionSummaryDto;
 import com.fdiet.diet.helpers.PortionScaler;
 import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.food.dto.NutritionDto;
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.model.NutrientValue;
 import com.fdiet.food.service.NutritionService;
 import com.fdiet.reference.domain.HouseholdMeasure;
@@ -127,7 +127,7 @@ class DietNutritionServiceTest {
 
     @Test
     void cutsAGrossMeasureToTheEdiblePartAndRefusesWithoutOne() {
-        BedcaFood kiwi = lechuga();
+        CompositionFood kiwi = lechuga();
         kiwi.setEdiblePortion(new BigDecimal("0.85"));
         RecipeIngredient piece = ingredient(kiwi, "1", "unidad");
         piece.setFoodMeasure(measure(HouseholdMeasure.UNIDAD, "100", null, "1", WeightBasis.GROSS));
@@ -230,16 +230,16 @@ class DietNutritionServiceTest {
         return measure;
     }
 
-    private static BedcaFood lechuga() {
-        BedcaFood food = new BedcaFood();
+    private static CompositionFood lechuga() {
+        CompositionFood food = new CompositionFood();
         food.setId(2399L);
-        food.setName("Lechuga");
+        food.setNameEs("Lechuga");
         food.setEnergy(new NutrientValue(new BigDecimal("65.125"), "kJ"));
         food.setProtein(new NutrientValue(new BigDecimal("1.125"), "g"));
         return food;
     }
 
-    private static RecipeIngredient ingredient(BedcaFood food, String quantity, String unit) {
+    private static RecipeIngredient ingredient(CompositionFood food, String quantity, String unit) {
         return new RecipeIngredient("lechuga", null, food, new BigDecimal(quantity), unit);
     }
 }

@@ -77,17 +77,14 @@ public class ReferenceMatcher {
         publishedCandidates.stream()
                 .sorted(byProfileThenTier(profileSourceCode))
                 .forEach(all::add);
+
+        FoodMeasureDto preferred = preferred(query, measure, category, all,
+                List.of(own, global, published));
+        if (preferred != null) {
+            return new MeasureChoiceDto(preferred, all);
+        }
         if (all.isEmpty()) {
             return MeasureChoiceDto.NONE;
-        }
-
-        if (query.preferredMeasureId() != null) {
-            FoodMeasureDto preferred = all.stream()
-                    .filter(row -> row.id().equals(query.preferredMeasureId()))
-                    .findFirst().orElse(null);
-            if (preferred != null) {
-                return new MeasureChoiceDto(preferred, all);
-            }
         }
 
         // A criterion of the nutritionist's decides when there is one: the diet's
@@ -182,6 +179,41 @@ public class ReferenceMatcher {
                 && FoodKeywords.specificity(row.methodKeywords(), methodText) > 0;
     }
 
+    /**
+     * The measure a person picked, kept while its row is still live (among the
+     * rows handed in) for the same household measure and still covers the food —
+     * even when the narrowing that ranks candidates would leave it out, because a
+     * more specific row or another size now exists. A pick is a decision; the
+     * narrowing only decides what to offer. A row that no longer exists, measures
+     * another word, or covers another food is dropped and the rule decides again.
+     * When kept but not among the candidates, it is added to them, so the answer
+     * still lists what was chosen. O(n) over the rows.
+     */
+    private static FoodMeasureDto preferred(MeasureQueryDto query, HouseholdMeasure measure,
+                                            FoodCategory category, List<FoodMeasureDto> candidates,
+                                            List<List<FoodMeasureDto>> rowSets) {
+        Long id = query.preferredMeasureId();
+        if (id == null) {
+            return null;
+        }
+        for (FoodMeasureDto row : candidates) {
+            if (row.id().equals(id)) {
+                return row;
+            }
+        }
+        for (List<FoodMeasureDto> rows : rowSets) {
+            for (FoodMeasureDto row : rows) {
+                if (row.id().equals(id) && row.measure() == measure
+                        && covers(row.compositionFoodId(), row.foodCategory(), row.keywords(),
+                        query.compositionFoodId(), query.foodName(), category)) {
+                    candidates.add(0, row);
+                    return row;
+                }
+            }
+        }
+        return null;
+    }
+
     private List<FoodMeasureDto> measureCandidates(List<FoodMeasureDto> rows, HouseholdMeasure measure,
                                                    MeasureQueryDto query, FoodCategory category,
                                                    FoodState foodState) {
@@ -225,8 +257,7 @@ public class ReferenceMatcher {
 
     /**
      * A row naming a food covers that composition food and nothing else — never
-     * a food known only by its name, whose id (a BEDCA one, until FD-033 phase D)
-     * is not a composition id. A family row covers the names its keywords fit.
+     * a food known only by its name. A family row covers the names its keywords fit.
      */
     private static boolean covers(Long rowFoodId, FoodCategory rowCategory, String rowKeywords,
                                   Long compositionFoodId, String foodName, FoodCategory category) {

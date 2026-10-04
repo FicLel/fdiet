@@ -87,8 +87,9 @@ public class JournalController {
     @PostMapping("/{dietId}/extras")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Record something eaten that the plan did not prescribe. Give "
-            + "bedcaFoodId or foodItemId to match it to a food, or neither — an entry nothing "
-            + "matched is kept as written and simply counts towards nothing")
+            + "compositionFoodId (CIQUAL / BLS) or foodItemId to match it to a food, or "
+            + "neither — an entry nothing matched is kept as written and simply counts towards "
+            + "nothing. bedcaFoodId is retired: a value there is a 400")
     public ExtraFoodDto logExtra(@PathVariable Long dietId,
                                  @RequestBody @Valid LogExtraFoodRequestDto request) {
         return journalService.logExtra(dietId, request);

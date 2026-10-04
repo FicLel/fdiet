@@ -17,7 +17,7 @@ import com.fdiet.diet.model.Recipe;
 import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.diet.service.FoodMatch;
 import com.fdiet.diet.service.IDietNutritionService;
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.model.FoodItem;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.dto.YieldFactorDto;
@@ -143,18 +143,18 @@ public class DietMapper implements IDietMapper {
     }
 
     /**
-     * A state disagreement is read against what the matched food's own name says
-     * — {@code Lenteja, hervida} is cooked — and is shown, never converted: how
+     * A state disagreement is read against what the matched food's Spanish name
+     * says — {@code Lenteja, hervida} is cooked — and is shown, never converted: how
      * much 70 g of raw rice weighs once boiled is a yield factor somebody has to
      * choose.
      */
     @Override
     public DishIngredient toDto(RecipeIngredient ingredient) {
         FoodItem foodItem = ingredient.getFoodItem();
-        BedcaFood bedcaFood = ingredient.getBedcaFood();
+        CompositionFood food = ingredient.getCompositionFood();
         ReferenceFoodMeasure measure = ingredient.getFoodMeasure();
-        boolean stateMismatch = bedcaFood != null && FoodState.disagree(
-                ingredient.getState(), FoodState.ofFoodName(bedcaFood.getName()));
+        boolean stateMismatch = food != null && FoodState.disagree(
+                ingredient.getState(), FoodState.ofFoodName(food.getNameEs()));
         return new DishIngredient(
                 ingredient.getId(),
                 ingredient.getRawName(),
@@ -164,13 +164,15 @@ public class DietMapper implements IDietMapper {
                 ingredient.getState(),
                 ingredient.getSize(),
                 foodItem == null ? null : foodItem.getId(),
-                bedcaFood == null ? null : bedcaFood.getId(),
+                food == null ? null : food.getId(),
                 measure == null ? null : measure.getId(),
-                matchedNameOf(foodItem, bedcaFood),
+                matchedNameOf(foodItem, food),
+                food == null ? null : food.getSource(),
                 referenceService.describe(measure),
                 stateMismatch,
-                stateMismatch ? yieldHint(ingredient, bedcaFood) : null,
+                stateMismatch ? yieldHint(ingredient, food) : null,
                 dietNutritionService.of(ingredient),
+                null,
                 null);
     }
 
@@ -185,7 +187,7 @@ public class DietMapper implements IDietMapper {
         RecipeIngredient entity = new RecipeIngredient(
                 ingredient.name(),
                 match == null ? null : match.foodItem(),
-                match == null ? null : match.bedcaFood(),
+                match == null ? null : match.compositionFood(),
                 ingredient.quantity(),
                 ingredient.unit());
         entity.setQuantityMax(ingredient.quantityMax());
@@ -202,12 +204,12 @@ public class DietMapper implements IDietMapper {
      * cooked one: the food's name ({@code Pollo, pechuga, plancha}) when the text
      * said raw, the text ({@code pechuga a la plancha (120 g)}) when the food is raw.
      */
-    private YieldHintDto yieldHint(RecipeIngredient ingredient, BedcaFood food) {
+    private YieldHintDto yieldHint(RecipeIngredient ingredient, CompositionFood food) {
         FoodState written = ingredient.getState();
-        FoodState published = FoodState.ofFoodName(food.getName());
+        FoodState published = FoodState.ofFoodName(food.getNameEs());
         boolean toCooked = written.uncooked() && published.cooked();
-        String methodText = toCooked ? food.getName() : ingredient.getRawName();
-        List<YieldFactorDto> yields = referenceService.yieldFactors(food.getName(), methodText);
+        String methodText = toCooked ? food.getNameEs() : ingredient.getRawName();
+        List<YieldFactorDto> yields = referenceService.yieldFactors(food.getNameEs(), methodText);
         if (yields.isEmpty()) {
             return null;
         }
@@ -222,9 +224,9 @@ public class DietMapper implements IDietMapper {
     }
 
     /** What the catalogue calls the food, so a matched row reads as matched. */
-    private static String matchedNameOf(FoodItem foodItem, BedcaFood bedcaFood) {
-        if (bedcaFood != null) {
-            return bedcaFood.getName();
+    private static String matchedNameOf(FoodItem foodItem, CompositionFood food) {
+        if (food != null) {
+            return food.label();
         }
         return foodItem == null ? null : foodItem.getCommercialName();
     }

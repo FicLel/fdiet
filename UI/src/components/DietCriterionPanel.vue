@@ -3,7 +3,7 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import type { CompositionFood } from '@/api/compositionTypes'
 import { dietsApi } from '@/api/diets'
 import type { FoodMeasure } from '@/api/types'
-import { CRITERIA_PENDING_NOTE, compositionFoodName } from '@/domain/compositionFood'
+import { compositionFoodName } from '@/domain/compositionFood'
 import { CRITERION_UNITS, type CriterionUnit } from '@/domain/measureCriteria'
 import { useDietCriteria } from '@/stores/dietCriteria'
 import { useDietDraft } from '@/stores/dietDraft'
@@ -16,9 +16,8 @@ import MeasureCriteriaList from './MeasureCriteriaList.vue'
  * diet only, and the diet's criteria already written.
  *
  * A criterion weighs a CIQUAL / BLS food, chosen here: the search starts from
- * the ingredient's name and nothing is picked on its own. While the ingredient
- * is still matched to BEDCA the criterion attaches to nothing, and the panel
- * says so rather than reporting it as an error.
+ * the ingredient's name and nothing is picked on its own. It attaches only to
+ * ingredients matched to that same food.
  */
 const link = useFoodLink()
 const draft = useDietDraft()
@@ -94,7 +93,6 @@ watch(dietId, () => void loadCriteria(), { immediate: true })
   <div v-if="at" class="own">
     <form class="fields" @submit.prevent="save()">
       <span class="own-title">Criterio para esta dieta</span>
-      <p class="note">{{ CRITERIA_PENDING_NOTE }}</p>
 
       <CompositionFoodSearch v-if="!food" :key="at.id ?? 'new'" :initial-term="hint" @pick="food = $event" />
       <div v-else class="food" :title="food.attribution">

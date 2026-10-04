@@ -19,7 +19,7 @@ import com.fdiet.diet.model.PlannedDish;
 import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.diet.model.PlannedMeal;
 import com.fdiet.food.dto.NutritionDto;
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.RecommendationPeriod;
 import com.fdiet.reference.dto.ExchangeSystemDto;
@@ -170,10 +170,9 @@ public class DietRationService implements IDietRationService {
                         : "Sin peso"));
                 continue;
             }
-            BedcaFood food = ingredient.getBedcaFood();
-            // A BEDCA food is counted by its name only: its id is not a composition id.
+            CompositionFood food = ingredient.getCompositionFood();
             RationDto ration = food == null ? null
-                    : referenceService.countingRation(profileCode, null, food.getName());
+                    : referenceService.countingRation(profileCode, food.getId(), food.getNameEs());
             BigDecimal[] weight = ration == null ? null : ration.edibleWeight(food.getEdiblePortion());
             if (ration == null || weight == null) {
                 noRation++;
@@ -184,7 +183,7 @@ public class DietRationService implements IDietRationService {
             }
             FoodState written = ingredient.getState() != null
                     ? ingredient.getState()
-                    : FoodState.ofFoodName(food.getName());
+                    : FoodState.ofFoodName(food.getNameEs());
             if (FoodState.disagree(written, ration.state())) {
                 stateMismatch++;
                 uncounted.add(new Uncounted(ingredient.getRawName(), "Pesado " + stateWord(written)

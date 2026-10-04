@@ -6,13 +6,14 @@ import com.fdiet.food.dto.CompositionFoodDto;
 import com.fdiet.food.dto.CompositionFoodRowDto;
 import com.fdiet.food.dto.CompositionIndexRow;
 import com.fdiet.food.dto.CompositionKey;
-import com.fdiet.food.dto.CompositionLinkDto;
 import com.fdiet.food.dto.CompositionStoreResultDto;
+import com.fdiet.food.dto.CompositionSuggestionDto;
 import com.fdiet.food.exception.CompositionFoodNotFoundException;
 import com.fdiet.food.helpers.INameMatcher;
 import com.fdiet.food.helpers.NameIndex;
 import com.fdiet.food.mapper.ICompositionFoodMapper;
 import com.fdiet.food.model.CompositionFood;
+import com.fdiet.food.model.CompositionSource;
 import com.fdiet.food.repository.CompositionFoodRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageImpl;
@@ -146,6 +147,43 @@ public class CompositionFoodService implements ICompositionFoodService {
         return found;
     }
 
+    /**
+     * One query, bounded by the crosswalk: only a food with a Spanish name can be
+     * read for a family, so only those are handed out.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<CompositionFood> entitiesNamed() {
+        return repository.findByNameEsIsNotNull();
+    }
+
+    /**
+     * Ranked by how much of each food's Spanish name the text accounts for, then
+     * by name. One pass over the in-memory index, an O(m log m) sort of the m foods
+     * sharing a word; no query.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<CompositionSuggestionDto> suggest(String text, int limit) {
+        Set<String> wanted = nameMatcher.tokens(text);
+        if (limit <= 0 || wanted.isEmpty()) {
+            return List.of();
+        }
+        List<CompositionSuggestionDto> scored = new ArrayList<>();
+        for (IndexedFood food : index().foods()) {
+            int score = food.tokens().isEmpty() ? 0 : nameMatcher.score(wanted, food.tokens());
+            if (score > 0) {
+                scored.add(new CompositionSuggestionDto(food.id(), food.label(), food.source(),
+                        food.source().label(), score));
+            }
+        }
+        return scored.stream()
+                .sorted(Comparator.comparingInt(CompositionSuggestionDto::score).reversed()
+                        .thenComparing(CompositionSuggestionDto::name))
+                .limit(limit)
+                .toList();
+    }
+
     @Override
     @Transactional(readOnly = true)
     public boolean isEmpty() {
@@ -227,35 +265,28 @@ public class CompositionFoodService implements ICompositionFoodService {
      */
     private Index indexOf(List<CompositionIndexRow> rows) {
         List<IndexedFood> foods = new ArrayList<>(rows.size());
-        List<NameIndex.Entry<Long>> named = new ArrayList<>();
         Map<CompositionKey, Long> ids = new HashMap<>(rows.size() * 2);
         for (CompositionIndexRow row : rows) {
             ids.put(row.key(), row.id());
-            List<String> spanish = row.nameEs() == null
-                    ? List.of()
-                    : Stream.concat(Stream.of(row.nameEs()),
-                    CompositionLinkDto.splitAliases(row.nameAliases()).stream()).toList();
-            if (!spanish.isEmpty()) {
-                named.add(new NameIndex.Entry<>(row.id(), spanish, row.namePreferred()));
-            }
+            List<String> spanish = row.spanishNames();
             String everyName = Stream.concat(spanish.stream(), Stream.of(row.nameEn(), row.nameOriginal()))
                     .filter(Objects::nonNull)
                     .collect(Collectors.joining(" | "));
-            foods.add(new IndexedFood(row.id(),
+            foods.add(new IndexedFood(row.id(), row.source(),
                     Objects.requireNonNullElse(row.nameEs(), Objects.requireNonNullElse(row.nameEn(),
                             row.nameOriginal())),
                     Objects.requireNonNullElse(Texts.key(everyName), ""),
                     List.copyOf(nameMatcher.tokens(String.join(" ", spanish)))));
         }
-        return new Index(List.copyOf(foods), NameIndex.of(named), Map.copyOf(ids));
+        return new Index(List.copyOf(foods), CompositionIndexRow.nameIndex(rows), Map.copyOf(ids));
     }
 
     /** The search rows, the exact-name lookup and the stable keys, built together and dropped together. */
     private record Index(List<IndexedFood> foods, NameIndex<Long> names, Map<CompositionKey, Long> ids) {
     }
 
-    /** One food as a search sees it: what to show, every name upper-cased, its Spanish words. */
-    private record IndexedFood(Long id, String label, String key, List<String> tokens) {
+    /** One food as a search sees it: its table, what to show, every name upper-cased, its Spanish words. */
+    private record IndexedFood(Long id, CompositionSource source, String label, String key, List<String> tokens) {
     }
 
     private record SearchHit(Long id, String label, int shared, int score) {

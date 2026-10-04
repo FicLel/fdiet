@@ -8,8 +8,6 @@ import com.fdiet.diet.repository.DietRepository;
 import com.fdiet.diet.repository.PlannedDishRepository;
 import com.fdiet.diet.repository.RecipeIngredientRepository;
 import com.fdiet.diet.repository.RecipeRepository;
-import com.fdiet.food.service.IBedcaFoodService;
-import com.fdiet.food.service.IFoodItemService;
 import com.fdiet.patient.service.IPatientService;
 import com.fdiet.reference.service.IReferenceService;
 import org.junit.jupiter.api.Test;
@@ -48,12 +46,9 @@ class DietServiceDeleteTest {
             mock(RecipeIngredientRepository.class),
             mock(IDietMapper.class),
             mock(IMealTextParser.class),
-            mock(IFoodResolverService.class),
-            mock(IFoodItemService.class),
-            mock(IBedcaFoodService.class),
+            mock(IIngredientFoodService.class),
             mock(IReferenceService.class),
-            mock(IMeasureResolverService.class),
-            5);
+            mock(IMeasureResolverService.class));
 
     private final DietService dietService = new DietService(
             dietRepository,

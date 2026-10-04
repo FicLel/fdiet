@@ -124,7 +124,7 @@ async function save(): Promise<void> {
             quantityMax: ingredient.quantityMax,
             unit: ingredient.unit,
             foodItemId: ingredient.foodItemId,
-            bedcaFoodId: ingredient.bedcaFoodId,
+            compositionFoodId: ingredient.compositionFoodId,
             state: ingredient.state,
             size: ingredient.size,
             foodMeasureId: ingredient.foodMeasureId,

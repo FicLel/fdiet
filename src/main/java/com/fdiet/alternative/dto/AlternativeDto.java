@@ -1,6 +1,7 @@
 package com.fdiet.alternative.dto;
 
 import com.fdiet.food.dto.NutritionDto;
+import com.fdiet.food.model.CompositionSource;
 
 import java.math.BigDecimal;
 
@@ -12,7 +13,8 @@ import java.math.BigDecimal;
  * two meats is the nearer swap. It is 0–100, a hundred meaning the two
  * compositions read alike on the components both publish.
  *
- * <p>{@code nutrition} is per 100 g, always. {@code equivalentGrams} is how much
+ * <p>{@code compositionFoodId} is a CIQUAL or BLS food, {@code source} its table.
+ * {@code nutrition} is per 100 g, always. {@code equivalentGrams} is how much
  * of this food carries the same energy — or the same grams of carbohydrate,
  * protein or fat, whichever basis was asked for — as the portion that was asked
  * about, and {@code equivalentPortion} its figures at that weight. Both are null
@@ -22,8 +24,9 @@ import java.math.BigDecimal;
  * reference profile's rations, when a profile was given and counts the food.
  */
 public record AlternativeDto(
-        Long bedcaFoodId,
+        Long compositionFoodId,
         String name,
+        CompositionSource source,
         int score,
         NutritionDto nutrition,
         BigDecimal equivalentGrams,

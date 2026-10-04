@@ -7,11 +7,12 @@ import com.fdiet.alternative.dto.AlternativeQueryDto;
 import com.fdiet.alternative.dto.FoodAlternativesDto;
 import com.fdiet.alternative.helpers.FoodCategoriser;
 import com.fdiet.alternative.helpers.NutritionSimilarity;
-import com.fdiet.food.exception.BedcaFoodNotFoundException;
+import com.fdiet.food.exception.CompositionFoodNotFoundException;
 import com.fdiet.food.helpers.NameMatcher;
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
+import com.fdiet.food.model.CompositionSource;
 import com.fdiet.food.model.NutrientValue;
-import com.fdiet.food.service.IBedcaFoodService;
+import com.fdiet.food.service.ICompositionFoodService;
 import com.fdiet.food.service.NutritionService;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.WeightBasis;
@@ -29,14 +30,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * The catalogue here is a small slice of bedca_foods.csv: real ids, real names
- * and the real published figures, kilojoules and all.
+ * The catalogue here was a slice of bedca_foods.csv — names and published
+ * figures, kilojoules and all — kept as crosswalked composition foods: the
+ * shelf and the arithmetic do not care which table a figure came from, and a
+ * kilojoule figure still exercises the unit conversion.
  */
 class AlternativeServiceTest {
 
@@ -44,18 +47,18 @@ class AlternativeServiceTest {
     private static final Long LETTUCE = 2399L;
     private static final Long OIL = 1L;
 
-    private final IBedcaFoodService bedcaFoodService = mock(IBedcaFoodService.class);
+    private final ICompositionFoodService foods = mock(ICompositionFoodService.class);
     private final IReferenceService reference = mock(IReferenceService.class);
 
     private final AlternativeService service = new AlternativeService(
-            bedcaFoodService,
+            foods,
             new NutritionService(),
             new FoodCategoriser(),
             new NutritionSimilarity(),
             new NameMatcher(),
             reference);
 
-    private List<BedcaFood> catalogue;
+    private List<CompositionFood> catalogue;
 
     @BeforeEach
     void catalogue() {
@@ -78,9 +81,9 @@ class AlternativeServiceTest {
                 // A fat, so an oil has somewhere to go.
                 food(OIL, "Aceite de oliva", "3700", "0", "100", "0"));
 
-        when(bedcaFoodService.entitiesAll()).thenReturn(catalogue);
-        for (BedcaFood food : catalogue) {
-            when(bedcaFoodService.entityById(food.getId())).thenReturn(food);
+        when(foods.entitiesNamed()).thenReturn(catalogue);
+        for (CompositionFood food : catalogue) {
+            when(foods.entityById(food.getId())).thenReturn(food);
         }
     }
 
@@ -136,7 +139,7 @@ class AlternativeServiceTest {
     @Test
     void neverOffersTheFoodItself() {
         assertThat(service.forFoodId(CHICKEN_BREAST, 10, null, true).alternatives())
-                .extracting(AlternativeDto::bedcaFoodId)
+                .extracting(AlternativeDto::compositionFoodId)
                 .doesNotContain(CHICKEN_BREAST);
     }
 
@@ -159,6 +162,21 @@ class AlternativeServiceTest {
         assertThat(alternatives.alternatives()).isEmpty();
         assertThat(alternatives.inCategory()).isZero();
         assertThat(alternatives.nutrition().energyKcal()).isNotNull();
+    }
+
+    /** CIQUAL and BLS publish no Spanish name; without the crosswalk's, there is no family. */
+    @Test
+    void answersAFoodWithoutASpanishNameWithNoCategory() {
+        CompositionFood untranslated = food(6000L, "x", "500", "20", "5", "0");
+        untranslated.setNameEs(null);
+        untranslated.setNameEn("Chicken, breast, grilled");
+        when(foods.entityById(6000L)).thenReturn(untranslated);
+
+        FoodAlternativesDto alternatives = service.forFoodId(6000L, 10, null, false);
+
+        assertThat(alternatives.name()).isEqualTo("Chicken, breast, grilled");
+        assertThat(alternatives.category()).isNull();
+        assertThat(alternatives.alternatives()).isEmpty();
     }
 
     @Test
@@ -219,13 +237,13 @@ class AlternativeServiceTest {
      */
     @Test
     void ranksAFoodWithoutEnergyAndOffersItNoEquivalentWeight() {
-        BedcaFood noEnergy = blank(5000L, "Cerdo, chuleta, plancha");
+        CompositionFood noEnergy = blank(5000L, "Cerdo, chuleta, plancha");
         noEnergy.setProtein(new NutrientValue(new BigDecimal("29"), "g"));
         noEnergy.setFat(new NutrientValue(new BigDecimal("9"), "g"));
         noEnergy.setFiber(new NutrientValue(new BigDecimal("0"), "g"));
-        List<BedcaFood> withIt = new java.util.ArrayList<>(catalogue);
+        List<CompositionFood> withIt = new java.util.ArrayList<>(catalogue);
         withIt.add(noEnergy);
-        when(bedcaFoodService.entitiesAll()).thenReturn(withIt);
+        when(foods.entitiesNamed()).thenReturn(withIt);
 
         FoodAlternativesDto alternatives =
                 service.forFoodId(CHICKEN_BREAST, 10, new BigDecimal("100"), false);
@@ -240,10 +258,10 @@ class AlternativeServiceTest {
 
     @Test
     void answersForAReferenceFoodWithoutEnergy() {
-        BedcaFood noEnergy = blank(5001L, "Pollo, muslo, asado");
+        CompositionFood noEnergy = blank(5001L, "Pollo, muslo, asado");
         noEnergy.setProtein(new NutrientValue(new BigDecimal("27"), "g"));
         noEnergy.setFat(new NutrientValue(new BigDecimal("8"), "g"));
-        when(bedcaFoodService.entityById(5001L)).thenReturn(noEnergy);
+        when(foods.entityById(5001L)).thenReturn(noEnergy);
 
         FoodAlternativesDto alternatives = service.forFoodId(5001L, 10, new BigDecimal("100"), false);
 
@@ -256,7 +274,7 @@ class AlternativeServiceTest {
     @Test
     void readsTheEquivalentWeightInTheProfilesRations() {
         when(reference.profileExists("AESAN-2022:ADULTOS")).thenReturn(true);
-        when(reference.countingRation(eq("AESAN-2022:ADULTOS"), isNull(), anyString()))
+        when(reference.countingRation(eq("AESAN-2022:ADULTOS"), any(), anyString()))
                 .thenReturn(meatRation(FoodState.UNSPECIFIED));
 
         FoodAlternativesDto alternatives = service.forFoodId(CHICKEN_BREAST,
@@ -274,7 +292,7 @@ class AlternativeServiceTest {
     @Test
     void countsNoRationDefinedInAnotherState() {
         when(reference.profileExists("AESAN-2022:ADULTOS")).thenReturn(true);
-        when(reference.countingRation(eq("AESAN-2022:ADULTOS"), isNull(), anyString()))
+        when(reference.countingRation(eq("AESAN-2022:ADULTOS"), any(), anyString()))
                 .thenReturn(meatRation(FoodState.RAW));
 
         FoodAlternativesDto alternatives = service.forFoodId(CHICKEN_BREAST,
@@ -306,7 +324,7 @@ class AlternativeServiceTest {
 
     @Test
     void findsTheFoodByTheNameADietWrites() {
-        when(bedcaFoodService.entitiesByName(anyCollection()))
+        when(foods.entitiesByName(anyCollection()))
                 .thenReturn(Map.of("lechuga", catalogue.get(6)));
 
         assertThat(service.forName("Lechuga", 10, null, false).foodId()).isEqualTo(LETTUCE);
@@ -314,10 +332,10 @@ class AlternativeServiceTest {
 
     @Test
     void refusesANameTheCatalogueDoesNotCarry() {
-        when(bedcaFoodService.entitiesByName(anyCollection())).thenReturn(Map.of());
+        when(foods.entitiesByName(anyCollection())).thenReturn(Map.of());
 
         assertThatThrownBy(() -> service.forName("pechuga de pollo", 10, null, false))
-                .isInstanceOf(BedcaFoodNotFoundException.class)
+                .isInstanceOf(CompositionFoodNotFoundException.class)
                 .hasMessageContaining("pechuga de pollo");
     }
 
@@ -329,9 +347,9 @@ class AlternativeServiceTest {
     }
 
     /** Energy as published: kilojoules, which is what 947 of the 957 rows use. */
-    private static BedcaFood food(Long id, String name,
+    private static CompositionFood food(Long id, String name,
                                   String kj, String protein, String fat, String fibre) {
-        BedcaFood food = blank(id, name);
+        CompositionFood food = blank(id, name);
         food.setEnergy(new NutrientValue(new BigDecimal(kj), "kJ"));
         food.setProtein(new NutrientValue(new BigDecimal(protein), "g"));
         food.setFat(new NutrientValue(new BigDecimal(fat), "g"));
@@ -339,10 +357,11 @@ class AlternativeServiceTest {
         return food;
     }
 
-    private static BedcaFood blank(Long id, String name) {
-        BedcaFood food = new BedcaFood();
+    private static CompositionFood blank(Long id, String name) {
+        CompositionFood food = new CompositionFood();
         food.setId(id);
-        food.setName(name);
+        food.setNameEs(name);
+        food.setSource(CompositionSource.CIQUAL);
         return food;
     }
 }

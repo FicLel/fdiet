@@ -138,8 +138,8 @@ public class DietController {
 
     @GetMapping("/{id}/ingredients")
     @Operation(summary = "A diet's ingredients. Pass resolved=false for the ones still waiting "
-            + "to be matched to a food, and suggest=true to have the composition database's "
-            + "best candidates ranked against each of them")
+            + "to be matched to a food, and suggest=true to have the best CIQUAL / BLS "
+            + "candidates (by their Spanish names) ranked against each of them")
     public PageDto<DishIngredient> ingredients(
             @PathVariable Long id,
             @RequestParam(required = false) Boolean resolved,
@@ -150,9 +150,9 @@ public class DietController {
     }
 
     @PatchMapping("/{id}/ingredients/{ingredientId}")
-    @Operation(summary = "Match one ingredient to a food — bedcaFoodId for a composition-database "
+    @Operation(summary = "Match one ingredient to a food — compositionFoodId for a CIQUAL or BLS "
             + "food, foodItemId for a branded product — or correct its name, quantity or unit. "
-            + "Fields left out are left alone")
+            + "Fields left out are left alone. bedcaFoodId is retired: a value there is a 400")
     public DishIngredient resolveIngredient(
             @PathVariable Long id,
             @PathVariable Long ingredientId,

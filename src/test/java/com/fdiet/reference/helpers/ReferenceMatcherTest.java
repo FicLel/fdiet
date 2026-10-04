@@ -44,8 +44,8 @@ class ReferenceMatcherTest {
     }
 
     /**
-     * A BEDCA-matched ingredient (until FD-033 phase D) is known by its name only:
-     * a row naming a composition food never covers it, whatever its family.
+     * A food known by its name only — no composition id — is never covered by a
+     * row naming a composition food, whatever its family.
      */
     @Test
     void aRowNamingAFoodNeverCoversAFoodKnownByNameOnly() {
@@ -53,7 +53,7 @@ class ReferenceMatcherTest {
                 KIWI, FoodCategory.FRUIT, null, "80", "80");
 
         MeasureChoiceDto choice = matcher.chooseMeasure(List.of(kiwi), List.of(), List.of(),
-                MeasureQueryDto.byNameOnly("Kiwi", "unidad", null, null), FoodCategory.FRUIT, AESAN);
+                new MeasureQueryDto(null, "Kiwi", "unidad", null, null), FoodCategory.FRUIT, AESAN);
 
         assertThat(choice.chosen()).isNull();
         assertThat(choice.candidates()).isEmpty();
@@ -246,6 +246,44 @@ class ReferenceMatcherTest {
                 foodId, null, null, weight, weight, null, null, weight, FoodState.UNSPECIFIED,
                 WeightBasis.NET_EDIBLE, null, null, null, null, null, null, null, dietId,
                 dietId != null, dietId == null);
+    }
+
+    /**
+     * FD-039: a measure a person picked stays picked while its row is live for the
+     * same measure and still covers the food — here a family row, which the row
+     * naming the kiwi outright would otherwise narrow away on the next save.
+     */
+    @Test
+    void keepsAPickedRowTheNarrowingWouldLeaveOut() {
+        FoodMeasureDto named = measure(1L, "5ALDIA-2019", HouseholdMeasure.UNIDAD, PortionSize.MEDIUM,
+                KIWI, null, null, "80", "80");
+        FoodMeasureDto family = measure(2L, AESAN, HouseholdMeasure.UNIDAD, null, null,
+                FoodCategory.FRUIT, "kiwi", "100", "100");
+
+        MeasureChoiceDto choice = matcher.chooseMeasure(List.of(named, family), List.of(), List.of(),
+                query(KIWI, "Kiwi", "unidad", null, 2L), FoodCategory.FRUIT, AESAN);
+
+        assertThat(choice.chosen()).isEqualTo(family);
+        assertThat(choice.candidates()).contains(family, named);
+    }
+
+    /** A picked row for another food, or another measure, is dropped and the rule decides again. */
+    @Test
+    void dropsAPickedRowThatNoLongerFitsTheFoodOrTheMeasure() {
+        FoodMeasureDto kiwi = measure(1L, "5ALDIA-2019", HouseholdMeasure.UNIDAD, PortionSize.MEDIUM,
+                KIWI, null, null, "80", "80");
+        FoodMeasureDto oil = measure(3L, AESAN, HouseholdMeasure.UNIDAD, null, AOVE, null, null,
+                "10", "10");
+        FoodMeasureDto spoon = measure(4L, AESAN, HouseholdMeasure.CUCHARADA_SOPERA, null, KIWI, null, null,
+                "10", "10");
+
+        MeasureChoiceDto otherFood = matcher.chooseMeasure(List.of(kiwi, oil, spoon), List.of(),
+                List.of(), query(KIWI, "Kiwi", "unidad", null, 3L), FoodCategory.FRUIT, AESAN);
+        MeasureChoiceDto otherMeasure = matcher.chooseMeasure(List.of(kiwi, oil, spoon), List.of(),
+                List.of(), query(KIWI, "Kiwi", "unidad", null, 4L), FoodCategory.FRUIT, AESAN);
+
+        assertThat(otherFood.chosen()).isEqualTo(kiwi);
+        assertThat(otherMeasure.chosen()).isEqualTo(kiwi);
     }
 
     private static FoodMeasureDto measure(Long id, String source, HouseholdMeasure measure,

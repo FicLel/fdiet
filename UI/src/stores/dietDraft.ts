@@ -16,13 +16,8 @@ import type {
   DietImportSummary,
   Dish,
   DishIngredient,
-  FoodMeasure,
-  FoodState,
   MealType,
-  PortionSize,
   Recipe,
-  UnitWording,
-  YieldHint,
 } from '@/api/types'
 import { buildRows, cellKey, dishAt, mealOf, type GridRow, type MealRow } from '@/domain/slots'
 import { joinFragment, renderRecipe } from '@/domain/dishText'
@@ -99,26 +94,27 @@ export interface CellEdit {
  * these. An ingredient read out of a cell being edited has no row of its own
  * yet, and nothing for a PATCH to address; it is matched by publishing first.
  */
-export interface IngredientAt {
+export type IngredientAt = Pick<
+  DishIngredient,
+  | 'name'
+  | 'quantity'
+  | 'quantityMax'
+  | 'unit'
+  | 'unitWording'
+  | 'matchedName'
+  | 'matchedSource'
+  | 'compositionFoodId'
+  | 'foodItemId'
+  | 'state'
+  | 'size'
+  | 'measure'
+  | 'stateMismatch'
+  | 'yieldHint'
+> & {
   /** The stored row's id — what `PATCH …/ingredients/{id}` addresses. */
   id: number
-  name: string
-  quantity: number
-  /** The upper end of a range still to be settled, or null. */
-  quantityMax: number | null
-  unit: string
-  unitWording?: UnitWording | null
-  /** The catalogue's own name for the food, when it is already matched. */
-  matchedName: string | null
-  bedcaFoodId: number | null
-  foodItemId: number | null
-  state: FoodState | null
-  size: PortionSize | null
-  measure: FoodMeasure | null
   /** Matched, but nothing weighs the unit it is written in. */
   unweighed: boolean
-  stateMismatch: boolean
-  yieldHint: YieldHint | null
   row: MealRow
   day: DayOfWeek
 }
@@ -126,7 +122,7 @@ export interface IngredientAt {
 /** Matched to a food, and still in no total: nothing weighs the unit it is written in. */
 export function isUnweighed(ingredient: DishIngredient): boolean {
   return (
-    (ingredient.bedcaFoodId !== null || ingredient.foodItemId !== null) &&
+    (ingredient.compositionFoodId !== null || ingredient.foodItemId !== null) &&
     (ingredient.nutrition === null ||
       Object.values(ingredient.nutrition).every((value) => value === null))
   )
@@ -141,21 +137,9 @@ export function locate(
   return ingredient.id === null
     ? null
     : {
+        ...ingredient,
         id: ingredient.id,
-        name: ingredient.name,
-        quantity: ingredient.quantity,
-        quantityMax: ingredient.quantityMax,
-        unit: ingredient.unit,
-        unitWording: ingredient.unitWording,
-        matchedName: ingredient.matchedName,
-        bedcaFoodId: ingredient.bedcaFoodId,
-        foodItemId: ingredient.foodItemId,
-        state: ingredient.state,
-        size: ingredient.size,
-        measure: ingredient.measure,
         unweighed: isUnweighed(ingredient),
-        stateMismatch: ingredient.stateMismatch,
-        yieldHint: ingredient.yieldHint,
         row,
         day,
       }
@@ -339,7 +323,7 @@ const unmatched = computed<IngredientAt[]>(() => {
       }
       const dish = storedDish(column.day, row.mealType, row.dishIndex)
       for (const ingredient of ingredientsOf(dish)) {
-        if (ingredient.foodItemId !== null || ingredient.bedcaFoodId !== null) {
+        if (ingredient.foodItemId !== null || ingredient.compositionFoodId !== null) {
           continue
         }
         const at = locate(row, column.day, ingredient)
@@ -738,7 +722,7 @@ function recipeRequest(edit: CellEdit): RequestRecipe | null {
         quantityMax: ingredient.quantityMax,
         unit: ingredient.unit,
         foodItemId: ingredient.foodItemId,
-        bedcaFoodId: ingredient.bedcaFoodId,
+        compositionFoodId: ingredient.compositionFoodId,
         state: ingredient.state,
         size: ingredient.size,
         foodMeasureId: ingredient.foodMeasureId,

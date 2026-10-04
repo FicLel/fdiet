@@ -87,7 +87,15 @@ flyway {
 	url = "jdbc:mysql://${env('MYSQL_HOST', 'localhost')}:${env('MYSQL_PORT', '3306')}/${env('MYSQL_DATABASE', 'fdiet')}?useUnicode=true&characterEncoding=UTF-8"
 	user = env('MYSQL_USER', 'root')
 	password = env('MYSQL_PASSWORD', '')
-	locations = ['filesystem:src/main/resources/db/migration']
+	// V18 is a Java migration (src/main/java/db/migration): the standalone tasks
+	// must see the compiled classes as well as the SQL files, or they report it as
+	// "Future" and a fresh `flywayMigrate` would skip it.
+	locations = ['filesystem:src/main/resources/db/migration', 'classpath:db/migration']
+	configurations = ['runtimeClasspath']
+}
+
+tasks.matching { it.name.startsWith('flyway') }.configureEach {
+	dependsOn 'classes'
 }
 
 tasks.named('bootRun') {

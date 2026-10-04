@@ -8,10 +8,9 @@ import { useFoodLink } from './foodLink'
  * dieta" — written from the fix-up drawer, for the measure the open ingredient
  * is written in.
  *
- * A criterion names a CIQUAL / BLS food, chosen by the nutritionist; the
- * ingredient's own match is still BEDCA's until the foods are re-matched
- * (FD-033 phase D), so for now it attaches to nothing and `attached` comes back
- * 0. That is the honest answer, not a failure.
+ * A criterion names a CIQUAL / BLS food, chosen by the nutritionist, and
+ * attaches only to ingredients matched to that food: `attached` 0 is an honest
+ * answer (another food was picked), not a failure.
  */
 
 const draft = useDietDraft()

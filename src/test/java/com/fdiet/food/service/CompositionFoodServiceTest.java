@@ -5,6 +5,7 @@ import com.fdiet.food.dto.CompositionFoodRowDto;
 import com.fdiet.food.dto.CompositionIndexRow;
 import com.fdiet.food.dto.CompositionKey;
 import com.fdiet.food.dto.CompositionStoreResultDto;
+import com.fdiet.food.dto.CompositionSuggestionDto;
 import com.fdiet.food.helpers.NameMatcher;
 import com.fdiet.food.mapper.ICompositionFoodMapper;
 import com.fdiet.food.model.CompositionFood;
@@ -118,6 +119,19 @@ class CompositionFoodServiceTest {
         assertThat(ids(service.search("lechuga", 0, 20))).containsExactly(1L);
         assertThat(ids(service.search("lettuce", 0, 20))).containsExactly(1L, 2L);
         assertThat(ids(service.search("Olivenöl", 0, 20))).containsExactly(4L);
+    }
+
+    /** Offers rank Spanish names only, best first, with each food's table; no query beyond the index. */
+    @Test
+    void suggestsCrosswalkedFoodsWithTheirSourceAndNeverAnUntranslatedOne() {
+        List<CompositionSuggestionDto> offered = service.suggest("2 cucharadas de aceite de oliva", 5);
+
+        assertThat(offered).extracting(CompositionSuggestionDto::compositionFoodId).containsExactly(4L, 3L);
+        assertThat(offered.get(0).source()).isEqualTo(CompositionSource.BLS);
+        assertThat(offered.get(0).sourceLabel()).isEqualTo("BLS 4.0");
+        assertThat(service.suggest("lettuce", 5)).isEmpty();
+        assertThat(service.suggest("lechuga", 0)).isEmpty();
+        verify(repository, times(0)).findAllById(anyIterable());
     }
 
     @Test

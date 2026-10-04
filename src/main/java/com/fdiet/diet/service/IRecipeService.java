@@ -77,14 +77,16 @@ public interface IRecipeService {
      * One recipe read from text, matched and weighed the way a stored one is,
      * without storing anything.
      *
-     * @param preferredMeasure the measure to keep for a one-ingredient text, when it fits
+     * @param compositionFoodId the food a one-ingredient text names, when the caller
+     *                          already knows it (the composer); null to match by name
+     * @param preferredMeasure  the measure to keep for a one-ingredient text, when it fits
      */
-    RecipeDto read(String text, String fallbackName, Long dietId, String profile, Long preferredMeasure);
+    RecipeDto read(String text, String fallbackName, Long dietId, String profile,
+                   Long compositionFoodId, Long preferredMeasure);
 
     /**
      * Attaches the diet's own measure to every ingredient of its private recipes
-     * that it now weighs — those matched to its composition food, none until
-     * FD-033 phase D gives ingredients one. Answers how many.
+     * that it now weighs — those matched to its composition food. Answers how many.
      */
     int attachDietMeasure(Collection<Long> recipeIds, Long compositionFoodId, HouseholdMeasure measure,
                           Long dietId, String profile);

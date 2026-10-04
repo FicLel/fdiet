@@ -3,6 +3,7 @@ package com.fdiet.alternative.dto;
 import com.fdiet.alternative.domain.EquivalenceBasis;
 import com.fdiet.alternative.domain.FoodCategory;
 import com.fdiet.food.dto.NutritionDto;
+import com.fdiet.food.model.CompositionSource;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -20,7 +21,8 @@ import java.util.List;
  * {@code inCategory} is the honest answer; a short list because nothing could be
  * read is a different one.
  *
- * <p>{@code nutrition} is the asked-for food per 100 g. {@code portion} is the
+ * <p>{@code foodId} is the asked-for CIQUAL or BLS food, {@code source} its table.
+ * {@code nutrition} is the asked-for food per 100 g. {@code portion} is the
  * same figures at {@code grams}, and both it and {@code grams} are null unless a
  * portion was asked about. {@code basis} is what every equivalent weight holds
  * constant; {@code portionRations} the asked-for portion in the rations of
@@ -29,6 +31,7 @@ import java.util.List;
 public record FoodAlternativesDto(
         Long foodId,
         String name,
+        CompositionSource source,
         FoodCategory category,
         String categoryLabel,
         NutritionDto nutrition,

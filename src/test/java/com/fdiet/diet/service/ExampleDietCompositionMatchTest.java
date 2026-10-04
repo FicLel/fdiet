@@ -14,7 +14,7 @@ import com.fdiet.food.mapper.ICompositionFoodMapper;
 import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.repository.CompositionFoodRepository;
 import com.fdiet.food.service.CompositionFoodService;
-import com.fdiet.reference.domain.PortionSize;
+import com.fdiet.food.service.IFoodItemService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -38,14 +38,15 @@ import static org.mockito.Mockito.when;
 
 /**
  * FD-033's acceptance floor, measured: importing example-ui.xlsx ("Dieta 1")
- * must match at least 41 of its 210 ingredients outright — what BEDCA matches
- * today — against the open composition tables.
+ * must match at least 41 of its 210 ingredients outright — what BEDCA matched —
+ * against the open composition tables, and phase D keeps the 144 phase B reached.
  *
- * <p>The week is read by the real importer and parser, and every ingredient
- * name is put to the real {@link CompositionFoodService#entitiesByName} the way
- * {@link FoodResolverService} puts it to BEDCA: exactly, and once more without
- * its size words. Only the table is replaced, by the committed crosswalk
- * (composition-es/links.csv) — no database is touched.
+ * <p>The week is read by the real importer and parser, and every ingredient name
+ * is put to the real {@link FoodResolverService} over the real
+ * {@link CompositionFoodService}: exactly, and once more without its size words,
+ * the rule every import and the V18 re-match go through. Only the table is
+ * replaced, by the committed crosswalk (composition-es/links.csv), and the branded
+ * catalogue by one that answers nothing — no database is touched.
  */
 class ExampleDietCompositionMatchTest {
 
@@ -55,6 +56,8 @@ class ExampleDietCompositionMatchTest {
 
     /** BEDCA's outright matches on the same sheet: the floor (user, 2026-10-03). */
     private static final int FLOOR = 41;
+    /** What the crosswalk reached in phase B; phase D must not lose any (AC D3). */
+    private static final int PHASE_B = 144;
     private static final int INGREDIENTS = 210;
 
     private static final String CAPTURED = "captured";
@@ -62,29 +65,20 @@ class ExampleDietCompositionMatchTest {
     @Test
     void matchesAtLeastAsManyIngredientsOutrightAsBedca() throws IOException {
         List<String> names = ingredientNamesOfTheExampleWeek();
-        CompositionFoodService foods = serviceOverTheCrosswalk();
+        FoodResolverService resolver =
+                new FoodResolverService(serviceOverTheCrosswalk(), mock(IFoodItemService.class), 100);
 
-        Map<String, CompositionFood> exact = foods.entitiesByName(names);
-        Map<String, String> sizeless = new LinkedHashMap<>();
-        for (String name : names) {
-            String normalised = Texts.normaliseName(name);
-            String stripped = Texts.normaliseName(PortionSize.withoutSize(name));
-            if (!exact.containsKey(normalised) && stripped != null) {
-                sizeless.put(normalised, stripped);
-            }
-        }
-        Map<String, CompositionFood> bySize = foods.entitiesByName(sizeless.values());
+        Map<String, FoodMatch> resolved = resolver.resolve(names);
 
         long matched = names.stream()
                 .map(Texts::normaliseName)
-                .filter(name -> exact.containsKey(name)
-                        || (sizeless.containsKey(name) && bySize.containsKey(sizeless.get(name))))
+                .filter(name -> resolved.containsKey(name) && resolved.get(name).compositionFood() != null)
                 .count();
 
         System.out.printf("example-ui.xlsx %s: %d of %d ingredients matched outright "
                 + "against the composition crosswalk (BEDCA: %d)%n", SHEET, matched, names.size(), FLOOR);
         assertThat(names).hasSize(INGREDIENTS);
-        assertThat(matched).isGreaterThanOrEqualTo(FLOOR);
+        assertThat(matched).isGreaterThanOrEqualTo(FLOOR).isGreaterThanOrEqualTo(PHASE_B);
     }
 
     private static List<String> ingredientNamesOfTheExampleWeek() throws IOException {

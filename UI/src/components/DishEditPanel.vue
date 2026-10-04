@@ -79,7 +79,7 @@ const matchedLabel = computed(() => {
     return 'sin ingredientes'
   }
   const matched = ingredients.value.filter(
-    (ingredient) => ingredient.foodItemId !== null || ingredient.bedcaFoodId !== null,
+    (ingredient) => ingredient.foodItemId !== null || ingredient.compositionFoodId !== null,
   ).length
   return `${matched} de ${all} en el catálogo`
 })
@@ -127,7 +127,7 @@ const linkable = computed(() => edit.value === undefined || mode.value === 'libr
 
 const firstUnmatched = computed(() =>
   ingredients.value.find(
-    (ingredient) => ingredient.foodItemId === null && ingredient.bedcaFoodId === null,
+    (ingredient) => ingredient.foodItemId === null && ingredient.compositionFoodId === null,
   ),
 )
 
@@ -253,7 +253,7 @@ async function saveToLibrary(): Promise<void> {
       quantityMax: ingredient.quantityMax,
       unit: ingredient.unit,
       foodItemId: ingredient.foodItemId,
-      bedcaFoodId: ingredient.bedcaFoodId,
+      compositionFoodId: ingredient.compositionFoodId,
       state: ingredient.state,
       size: ingredient.size,
       foodMeasureId: ingredient.foodMeasureId,
@@ -487,7 +487,7 @@ const dishExchanges = computed(() => {
                   <span
                     class="chip"
                     :class="{
-                      linked: ingredient.foodItemId !== null || ingredient.bedcaFoodId !== null,
+                      linked: ingredient.foodItemId !== null || ingredient.compositionFoodId !== null,
                     }"
                   >
                     {{ ingredient.matchedName ?? 'Sin vincular' }}

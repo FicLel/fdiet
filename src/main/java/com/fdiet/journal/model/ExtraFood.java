@@ -1,6 +1,6 @@
 package com.fdiet.journal.model;
 
-import com.fdiet.food.model.BedcaFood;
+import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.model.FoodItem;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.PortionSize;
@@ -83,10 +83,13 @@ public class ExtraFood {
     @JoinColumn(name = "food_measure_id")
     private ReferenceFoodMeasure foodMeasure;
 
-    /** The generic food of the composition database, when that is the match. */
+    /**
+     * The generic composition food (CIQUAL 2025 / BLS 4.0), when that is the
+     * match. {@code bedca_food_id} stays in the table, null, until FD-033 phase E.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "bedca_food_id")
-    private BedcaFood bedcaFood;
+    @JoinColumn(name = "composition_food_id")
+    private CompositionFood compositionFood;
 
     /** The branded product, the usual match for an extra. */
     @ManyToOne(fetch = FetchType.LAZY)
@@ -104,20 +107,20 @@ public class ExtraFood {
                      String rawName,
                      BigDecimal quantity,
                      String unit,
-                     BedcaFood bedcaFood,
+                     CompositionFood compositionFood,
                      FoodItem foodItem) {
         this.dietId = dietId;
         this.dayOfWeek = dayOfWeek;
         this.rawName = rawName;
         this.quantity = quantity;
         this.unit = unit;
-        this.bedcaFood = bedcaFood;
+        this.compositionFood = compositionFood;
         this.foodItem = foodItem;
         this.loggedAt = LocalDateTime.now();
     }
 
     /** True once the entry points at a food, whichever half it came from. */
     public boolean isMatched() {
-        return bedcaFood != null || foodItem != null;
+        return compositionFood != null || foodItem != null;
     }
 }

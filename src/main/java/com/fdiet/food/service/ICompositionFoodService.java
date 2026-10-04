@@ -5,6 +5,7 @@ import com.fdiet.food.dto.CompositionFoodDto;
 import com.fdiet.food.dto.CompositionFoodRowDto;
 import com.fdiet.food.dto.CompositionKey;
 import com.fdiet.food.dto.CompositionStoreResultDto;
+import com.fdiet.food.dto.CompositionSuggestionDto;
 import com.fdiet.food.model.CompositionFood;
 
 import java.util.Collection;
@@ -13,9 +14,9 @@ import java.util.Map;
 
 /**
  * The one way into {@code composition_foods} — CIQUAL 2025 and BLS 4.0, with
- * fdiet's Spanish names. Shaped like {@link IBedcaFoodService} so that, when
- * phase C points the diet at it, the resolver asks it through the same batched
- * calls.
+ * fdiet's Spanish names. Since FD-033 phase D it is the food every recipe
+ * ingredient, journal extra, reference row and alternative points at; the diet
+ * resolves a week through its batched calls, so none of them turns into an N+1.
  */
 public interface ICompositionFoodService {
 
@@ -52,6 +53,22 @@ public interface ICompositionFoodService {
      * nothing answers is absent. At most one query (the index), however many keys.
      */
     Map<CompositionKey, Long> idsByKey(Collection<CompositionKey> keys);
+
+    /**
+     * Every food the crosswalk gives a Spanish name, in one query: the foods a
+     * name-based judgement (a food's family, its state) can be made about at all.
+     * Offered for {@code com.fdiet.alternative}, whose question — which foods share
+     * this one's family — is read off Spanish names the database cannot filter on.
+     * Bounded by the crosswalk (123 rows today), not by the ten thousand foods.
+     */
+    List<CompositionFood> entitiesNamed();
+
+    /**
+     * The crosswalked foods whose Spanish names best fit some ingredient text,
+     * best first. Offers, not decisions — nothing in this module assigns a
+     * suggestion to anything. Answered from the in-memory index: no query.
+     */
+    List<CompositionSuggestionDto> suggest(String text, int limit);
 
     /** Whether nothing has been synced yet. */
     boolean isEmpty();

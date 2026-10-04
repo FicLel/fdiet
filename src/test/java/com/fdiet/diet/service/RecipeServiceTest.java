@@ -6,11 +6,14 @@ import com.fdiet.diet.exception.InvalidDietException;
 import com.fdiet.diet.helpers.MealTextParser;
 import com.fdiet.diet.helpers.PortionScaler;
 import com.fdiet.diet.mapper.DietMapper;
+import com.fdiet.diet.dto.ResolveIngredientDto;
 import com.fdiet.diet.model.Recipe;
+import com.fdiet.diet.model.RecipeIngredient;
+import com.fdiet.food.model.FoodItem;
 import com.fdiet.diet.repository.RecipeIngredientRepository;
 import com.fdiet.diet.repository.RecipeRepository;
-import com.fdiet.food.model.BedcaFood;
-import com.fdiet.food.service.IBedcaFoodService;
+import com.fdiet.food.model.CompositionFood;
+import com.fdiet.food.service.ICompositionFoodService;
 import com.fdiet.food.service.IFoodItemService;
 import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.HouseholdMeasure;
@@ -35,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -52,19 +56,18 @@ class RecipeServiceTest {
     private final RecipeRepository recipes = mock(RecipeRepository.class);
     private final IReferenceService reference = mock(IReferenceService.class);
     private final IFoodResolverService resolver = mock(IFoodResolverService.class);
-    private final IBedcaFoodService bedcaFoods = mock(IBedcaFoodService.class);
+    private final ICompositionFoodService compositionFoods = mock(ICompositionFoodService.class);
+    private final IFoodItemService foodItems = mock(IFoodItemService.class);
+    private final RecipeIngredientRepository ingredients = mock(RecipeIngredientRepository.class);
 
     private final RecipeService service = new RecipeService(
             recipes,
-            mock(RecipeIngredientRepository.class),
+            ingredients,
             new DietMapper(mock(IDietNutritionService.class), reference),
             new MealTextParser(),
-            resolver,
-            mock(IFoodItemService.class),
-            bedcaFoods,
+            new IngredientFoodService(compositionFoods, foodItems, resolver, 5),
             reference,
-            new MeasureResolverService(reference, new PortionScaler()),
-            5);
+            new MeasureResolverService(reference, new PortionScaler()));
 
     @Test
     void refusesALibraryNameAnotherRecipeHolds() {
@@ -92,7 +95,7 @@ class RecipeServiceTest {
         when(recipes.findFirstByLibraryTrueAndName(any())).thenReturn(Optional.empty());
         when(reference.measureEntities(anyCollection())).thenReturn(Map.of(11L, own));
         DishIngredient oil = new DishIngredient(null, "AOVE", BigDecimal.ONE, null, "cdta", null, null,
-                null, null, 11L, null, null, false, null, null, null);
+                null, null, 11L, null, null, null, false, null, null, null, null);
 
         assertThatThrownBy(() -> service.create(content("Aliño", List.of(oil))))
                 .isInstanceOf(InvalidDietException.class)
@@ -106,18 +109,18 @@ class RecipeServiceTest {
         ReferenceFoodMeasure global = new ReferenceFoodMeasure();
         global.setId(40L);
         global.setGlobalCriterion(true);
-        BedcaFood egg = new BedcaFood();
+        CompositionFood egg = new CompositionFood();
         egg.setId(2127L);
-        egg.setName("Huevo, entero, crudo");
+        egg.setNameEs("Huevo, entero, crudo");
         FoodMeasureDto chosen = new ReferenceMapper().toDto(globalEgg(global));
         when(recipes.findFirstByLibraryTrueAndName(any())).thenReturn(Optional.empty());
         when(recipes.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         when(reference.measureEntities(anyCollection())).thenReturn(Map.of(40L, global));
-        when(bedcaFoods.entitiesByIds(anyCollection())).thenReturn(Map.of(2127L, egg));
+        when(compositionFoods.entitiesByIds(anyCollection())).thenReturn(Map.of(2127L, egg));
         when(reference.chooseMeasures(anyList(), isNull(), isNull()))
                 .thenReturn(List.of(new MeasureChoiceDto(chosen, List.of(chosen))));
         DishIngredient eggs = new DishIngredient(null, "Huevo", new BigDecimal("2"), null, "unidades", null,
-                PortionSize.MEDIUM, null, 2127L, 40L, null, null, false, null, null, null);
+                PortionSize.MEDIUM, null, 2127L, 40L, null, null, null, false, null, null, null, null);
 
         service.create(content("Huevos revueltos", List.of(eggs)));
 
@@ -190,6 +193,53 @@ class RecipeServiceTest {
         service.deletePrivate(List.of(1L, 2L));
 
         verify(recipes).deleteAll(List.of(own));
+    }
+
+    /** FD-033 D: the fix-up PATCH matches to a CIQUAL / BLS food and releases a branded match. */
+    @Test
+    void matchesAnIngredientToACompositionFoodAndReleasesTheBrandedOne() {
+        CompositionFood lettuce = new CompositionFood();
+        lettuce.setId(7L);
+        lettuce.setNameEs("Lechuga, cruda");
+        RecipeIngredient stored = new RecipeIngredient("lechuga", new FoodItem(), null,
+                new BigDecimal("80"), "g");
+        stored.setRecipe(recipe(1L, "Ensalada", false));
+        when(ingredients.findByIdAndRecipeIdIn(eq(5L), anyCollection())).thenReturn(Optional.of(stored));
+        when(ingredients.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(compositionFoods.entityById(7L)).thenReturn(lettuce);
+
+        DishIngredient matched = service.resolveIngredient(List.of(1L), 5L,
+                new ResolveIngredientDto(null, 7L, null, null, null, null), 3L, null);
+
+        assertThat(matched.compositionFoodId()).isEqualTo(7L);
+        assertThat(matched.foodItemId()).isNull();
+        assertThat(matched.matchedName()).isEqualTo("Lechuga, cruda");
+    }
+
+    @Test
+    void refusesAnIngredientNamingTwoFoods() {
+        assertThatThrownBy(() -> service.resolveIngredient(List.of(1L), 5L,
+                new ResolveIngredientDto(31L, 7L, null, null, null, null), 3L, null))
+                .isInstanceOf(InvalidDietException.class)
+                .hasMessageContaining("compositionFoodId");
+    }
+
+    /** The C-review note: a diet's criterion is chosen with the food's Spanish name, so family rows still rank. */
+    @Test
+    void attachesADietMeasureAskingWithTheFoodsSpanishName() {
+        CompositionFood egg = new CompositionFood();
+        egg.setId(2127L);
+        egg.setNameEs("Huevo, entero, crudo");
+        RecipeIngredient eggs = new RecipeIngredient("huevo", null, egg, new BigDecimal("2"), "unidades");
+        eggs.setRecipe(recipe(1L, "Tortilla", false));
+        when(ingredients.findByRecipeIdIn(anyCollection())).thenReturn(List.of(eggs));
+        when(reference.chooseMeasures(anyList(), eq(3L), isNull())).thenReturn(List.of(MeasureChoiceDto.NONE));
+
+        service.attachDietMeasure(List.of(1L), 2127L, HouseholdMeasure.UNIDAD, 3L, null);
+
+        verify(reference).chooseMeasures(org.mockito.ArgumentMatchers.argThat(queries ->
+                queries.size() == 1 && "Huevo, entero, crudo".equals(queries.get(0).foodName())
+                        && Long.valueOf(2127L).equals(queries.get(0).compositionFoodId())), eq(3L), isNull());
     }
 
     private static ReferenceFoodMeasure globalEgg(ReferenceFoodMeasure row) {

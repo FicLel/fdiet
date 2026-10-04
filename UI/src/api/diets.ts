@@ -18,7 +18,7 @@ import type {
 /** What one ingredient may be corrected to; a field left out is left alone. */
 export interface ResolveIngredient {
   foodItemId?: number | null
-  bedcaFoodId?: number | null
+  compositionFoodId?: number | null
   name?: string
   quantity?: number
   unit?: string
@@ -47,7 +47,7 @@ export interface RequestIngredient {
   quantityMax?: number | null
   unit: string
   foodItemId?: number | null
-  bedcaFoodId?: number | null
+  compositionFoodId?: number | null
   state?: FoodState | null
   size?: PortionSize | null
   foodMeasureId?: number | null
@@ -124,7 +124,7 @@ export interface ImportDietRequest {
  * no parser of its own.
  */
 export interface ComposeRequest {
-  bedcaFoodId: number
+  compositionFoodId: number
   grams?: number
   foodMeasureId?: number
   count?: number

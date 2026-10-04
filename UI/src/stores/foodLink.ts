@@ -2,14 +2,14 @@ import { computed, reactive, ref, shallowRef } from 'vue'
 import { catalogueApi } from '@/api/catalogue'
 import { dietsApi } from '@/api/diets'
 import { referenceApi } from '@/api/reference'
-import type {
-  BedcaFood,
-  DishIngredient,
-  FoodItem,
-  FoodMeasure,
-  FoodSuggestion,
-  HouseholdMeasure,
-} from '@/api/types'
+import type { DishIngredient, FoodMeasure, FoodSuggestion, HouseholdMeasure } from '@/api/types'
+import {
+  brandedResult,
+  compositionResult,
+  suggestionResult,
+  type CatalogueHalf,
+  type CatalogueResult,
+} from '@/domain/catalogueResult'
 import { isUnweighed, locate, useDietDraft, type IngredientAt } from './dietDraft'
 import { useReference } from './reference'
 
@@ -42,25 +42,6 @@ const SEARCH_SIZE = 25
 /** One page holds every unmatched ingredient of a week; 210 is the whole of one. */
 const SUGGESTION_PAGE = 200
 
-/** Which half of the catalogue is being searched. They answer different questions. */
-export type CatalogueHalf = 'bedca' | 'branded'
-
-/** A candidate to match against, from either half, in the one shape the list draws. */
-export interface CatalogueResult {
-  key: string
-  bedcaFoodId: number | null
-  foodItemId: number | null
-  name: string
-  /** The food group for a generic food, the brand for a product. */
-  note: string | null
-  /** The EAN, which only a branded product has. */
-  code: string | null
-  /** Energy per 100 g, or null where the source published none. */
-  kcalPer100: number | null
-  /** 0–100, how much of the name the ingredient's words account for. */
-  score: number | null
-}
-
 const draft = useDietDraft()
 const reference = useReference()
 
@@ -74,7 +55,7 @@ const target = ref<IngredientAt | null>(null)
 const measures = shallowRef<FoodMeasure[]>([])
 const loadingMeasures = ref(false)
 const savingMeasure = ref(false)
-const half = ref<CatalogueHalf>('bedca')
+const half = ref<CatalogueHalf>('composition')
 const term = ref('')
 const results = ref<CatalogueResult[]>([])
 const searching = ref(false)
@@ -84,7 +65,8 @@ const error = ref<string | null>(null)
 /**
  * The ranked candidates the backend attached to each unmatched ingredient,
  * keyed by ingredient id. One request covers a whole week and costs no query
- * per ingredient — the suggestion index is held in memory over 957 names.
+ * per ingredient — the suggestion index is held in memory over the crosswalk's
+ * Spanish names.
  */
 const suggestions = reactive<Record<number, FoodSuggestion[]>>({})
 const suggestionsFor = ref<number | null>(null)
@@ -101,16 +83,7 @@ const ranked = computed<CatalogueResult[]>(() => {
   if (!at) {
     return []
   }
-  return (suggestions[at.id] ?? []).map((suggestion) => ({
-    key: `bedca-${suggestion.bedcaFoodId}`,
-    bedcaFoodId: suggestion.bedcaFoodId,
-    foodItemId: null,
-    name: suggestion.name,
-    note: suggestion.foodGroup,
-    code: null,
-    kcalPer100: null,
-    score: suggestion.score,
-  }))
+  return (suggestions[at.id] ?? []).map(suggestionResult)
 })
 
 /** How many of the week's ingredients are still waiting, the open one included. */
@@ -125,40 +98,14 @@ const position = computed(() => {
   return index === -1 ? 0 : index + 1
 })
 
-function bedcaResult(food: BedcaFood): CatalogueResult {
-  return {
-    key: `bedca-${food.id}`,
-    bedcaFoodId: food.id,
-    foodItemId: null,
-    name: food.name,
-    note: food.foodGroup,
-    code: null,
-    kcalPer100: food.nutrition?.energyKcal ?? null,
-    score: null,
-  }
-}
-
-function brandedResult(item: FoodItem): CatalogueResult {
-  return {
-    key: `item-${item.id}`,
-    bedcaFoodId: null,
-    foodItemId: item.id,
-    name: item.commercialName ?? item.legalName ?? `EAN ${item.ean ?? item.id}`,
-    note: item.brand,
-    code: item.ean,
-    kcalPer100: item.energyKcal,
-    score: null,
-  }
-}
-
 async function runSearch(query: string): Promise<void> {
   const token = ++searchToken
   searching.value = true
   error.value = null
   try {
     const page =
-      half.value === 'bedca'
-        ? (await catalogueApi.bedca(query, 0, SEARCH_SIZE)).content.map(bedcaResult)
+      half.value === 'composition'
+        ? (await catalogueApi.composition(query, 0, SEARCH_SIZE)).content.map(compositionResult)
         : (await catalogueApi.branded(query, 0, SEARCH_SIZE)).content.map(brandedResult)
     // The term may have moved on, or the drawer closed, while this was in flight.
     if (token === searchToken) {
@@ -256,7 +203,7 @@ const measureWord = computed<HouseholdMeasure | null>(() =>
 
 /** A generic food written in a household measure: the only kind a measure can weigh. */
 const measurable = computed(
-  () => target.value !== null && target.value.bedcaFoodId !== null && measureWord.value !== null,
+  () => target.value !== null && target.value.compositionFoodId !== null && measureWord.value !== null,
 )
 
 let measureToken = 0
@@ -265,7 +212,7 @@ async function loadMeasures(): Promise<void> {
   const at = target.value
   const mine = ++measureToken
   measures.value = []
-  if (!at || at.bedcaFoodId === null) {
+  if (!at || at.compositionFoodId === null) {
     return
   }
   await reference.ensure().catch(() => undefined)
@@ -274,7 +221,7 @@ async function loadMeasures(): Promise<void> {
   }
   loadingMeasures.value = true
   try {
-    const rows = await referenceApi.measures({ bedcaFoodId: at.bedcaFoodId }, {
+    const rows = await referenceApi.measures({ compositionFoodId: at.compositionFoodId }, {
       unit: at.unit,
       dietId: draft.diet.value?.id,
       profile: draft.diet.value?.referenceProfileCode,
@@ -413,15 +360,15 @@ async function link(result: CatalogueResult): Promise<void> {
     const updated: DishIngredient = await dietsApi.resolveIngredient(
       draft.diet.value!.id,
       at.id,
-      result.bedcaFoodId !== null
-        ? { bedcaFoodId: result.bedcaFoodId }
+      result.compositionFoodId !== null
+        ? { compositionFoodId: result.compositionFoodId }
         : { foodItemId: result.foodItemId },
     )
     draft.applyIngredient(updated)
     delete suggestions[at.id]
     // Matched but still weighing nothing — `1 cdta` of an oil no source
     // measures — so the drawer stays on it for its measure rather than moving on.
-    if (isUnweighed(updated) && updated.bedcaFoodId !== null && reference.measureOfUnit(updated.unit)) {
+    if (isUnweighed(updated) && updated.compositionFoodId !== null && reference.measureOfUnit(updated.unit)) {
       const matched = locate(at.row, at.day, updated)
       if (matched) {
         target.value = matched
