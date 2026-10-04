@@ -87,3 +87,22 @@
 - 2026-10-04 — FD-054 backend done: V19 `measure_picked` (all stored measures picked), V20 Java frees those the rule would choose today (0 rows on dev DB: no stored measures); criterion save re-weighs non-picked rows via `IMeasureReweigher` port; diet measure endpoints moved to `DietMeasureService`. 368 tests green; 5000 restarted. **Breaking:** criteria POST/PUT answer `{measure, reweighed}`. Uncommitted. Handed to frontend with FD-056.
 - 2026-10-04 — FD-056 started (frontend, after FD-054 frontend in the same run).
 - 2026-10-04 — FD-065 (diet criterion delete leaves rows unweighed; re-choose via the re-weigh port — alternative to FD-011's refusal), FD-066 (reference sync does not re-weigh rule-chosen measures), FD-067 (62 matched `unidad` ingredients, no measure — check) created from FD-054 backend.
+- 2026-10-04 — FD-041 done, FD-052 done: committed by the user (4c374f6).
+- 2026-10-04 — FD-054 frontend agent stopped by session usage limit mid-run (resets 18:00 Europe/Madrid). Its partial UI work (`api/measureTypes.ts`, `domain/requestIngredient.ts`, `api/reference.ts`, `RecipeLibraryDialog.vue`, …) is inside 4c374f6 with the FD-054 backend; `pnpm build` state unknown. FD-056 not started.
+- 2026-10-04 — FD-060 refined and started (user moved it ahead of FD-056); backend agent launched.
+- 2026-10-04 — FD-054 frontend resumed after the usage-limit reset.
+- 2026-10-04 — FD-060 backend done (uncommitted, 370 tests); tech-lead review launched.
+- 2026-10-04 — FD-060 tech-lead review done (no bugs; one word table `FoodState.written()`, 371 tests). Live check pending backend restart.
+- 2026-10-04 — FD-054 frontend finished (uncommitted, `pnpm build` clean, live-checked); tech-lead review launched with FD-060 live check.
+- 2026-10-04 — FD-068 (builder stale after criterion change outside Guardar), FD-069 (patient switch drops draft without confirm) created from FD-054 frontend; FD-013 re-measured.
+- 2026-10-04 — FD-060 done: live check passed (compose+parse COOKED, mismatch, not totalled). Uncommitted.
+- 2026-10-04 — FD-054 done: tech-lead review (one UI fix), 371 tests, `pnpm build` clean. Frontend uncommitted.
+- 2026-10-04 — FD-070 (weight-only global criterion edit says nothing changed) created from FD-054 review.
+- 2026-10-04 — FD-056 started; frontend agent launched.
+- 2026-10-04 — FD-056 frontend done (uncommitted, `pnpm build` clean, live via store); tech-lead review launched.
+- 2026-10-04 — FD-071 (restored pin loses measure on case/accent change) created from FD-056 frontend.
+- 2026-10-04 — FD-043 started; backend agent launched.
+- 2026-10-04 — FD-056 done: tech-lead review, no bugs. Uncommitted.
+- 2026-10-04 — FD-043 backend done: V21 applied to dev DB (2 rows changed; 298 recipes without `raw_text`). Tech-lead review launched.
+- 2026-10-04 — FD-072 (re-read `raw_name` of recipes without text — needs decision), FD-073 (leading count kept before brackets) created from FD-043 backend.
+- 2026-10-04 — FD-043 done: tech-lead aligned `RecipeReread` with the publish rule, 392 tests. Uncommitted.

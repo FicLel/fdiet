@@ -1,6 +1,6 @@
 # FD-052 A bracket state that contradicts the food is flagged, never totalled silently
 
-Status: review done, uncommitted · Size: M · Created: 2026-10-03 · Refined: 2026-10-04 · Absorbs FD-001
+Status: done (4c374f6) · Size: M · Created: 2026-10-03 · Refined: 2026-10-04 · Absorbs FD-001
 For: nutritionist
 
 ## Problem

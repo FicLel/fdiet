@@ -8,6 +8,7 @@ import {
   criterionRequest,
   criterionValue,
   criterionWeight,
+  reweighedText,
   unitOf,
   usageText,
 } from '@/domain/measureCriteria'
@@ -37,11 +38,14 @@ const value = ref<number | null>(null)
 const usage = ref<MeasureUsage | null>(null)
 const busy = ref(false)
 const error = ref<string | null>(null)
+/** What the last change weighed again (FD-054). */
+const done = ref<string | null>(null)
 
 const forDiet = computed(() => props.dietId != null)
 
 async function startEdit(criterion: FoodMeasure): Promise<void> {
   editingId.value = criterion.id
+  done.value = null
   value.value = criterionValue(criterion)
   usage.value = null
   error.value = null
@@ -79,9 +83,10 @@ async function save(criterion: FoodMeasure): Promise<void> {
       unitOf(criterion),
       criterion.note,
     )
-    await (props.dietId != null
+    const saved = await (props.dietId != null
       ? dietsApi.saveMeasure(props.dietId, request)
       : referenceApi.updateCriterion(criterion.id, request))
+    done.value = reweighedText(saved.reweighed)
     editingId.value = null
     emit('changed')
   } catch (cause) {
@@ -97,6 +102,7 @@ async function remove(criterion: FoodMeasure): Promise<void> {
   }
   busy.value = true
   error.value = null
+  done.value = null
   try {
     await (props.dietId != null
       ? dietsApi.deleteMeasure(props.dietId, criterion.id)
@@ -158,6 +164,7 @@ async function remove(criterion: FoodMeasure): Promise<void> {
         </div>
       </li>
     </ul>
+    <p v-if="done" class="done">{{ done }}</p>
     <p v-if="error" class="error">{{ error }}</p>
   </div>
 </template>
@@ -276,6 +283,12 @@ async function remove(criterion: FoodMeasure): Promise<void> {
 .secondary {
   border: 1px solid var(--line);
   color: var(--ink);
+}
+
+.done {
+  margin: 0;
+  font-size: 11px;
+  color: var(--sage-700);
 }
 
 .error {

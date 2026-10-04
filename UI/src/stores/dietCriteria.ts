@@ -1,4 +1,5 @@
 import { dietsApi } from '@/api/diets'
+import type { MeasureReweigh } from '@/api/types'
 import { criterionRequest, type CriterionUnit } from '@/domain/measureCriteria'
 import { useDietDraft } from './dietDraft'
 import { useFoodLink } from './foodLink'
@@ -9,8 +10,9 @@ import { useFoodLink } from './foodLink'
  * is written in.
  *
  * A criterion names a CIQUAL / BLS food, chosen by the nutritionist, and
- * attaches only to ingredients matched to that food: `attached` 0 is an honest
- * answer (another food was picked), not a failure.
+ * re-weighs only ingredients and extras matched to that food whose measure the
+ * rule chose (FD-054): nothing re-weighed is an honest answer (another food was
+ * picked, or every measure was the nutritionist's own pick), not a failure.
  */
 
 const draft = useDietDraft()
@@ -18,16 +20,16 @@ const link = useFoodLink()
 
 /**
  * Writes (or rewrites) the criterion for the open ingredient's measure and
- * size. It is attached to every ingredient of the week it now weighs, so the
- * week is read again rather than patched one row at a time. Answers how many
- * ingredients it weighs, or null when nothing was saved.
+ * size. Every ingredient of the week whose measure the rule chose is weighed
+ * again, so the week is read again rather than patched one row at a time.
+ * Answers what was re-weighed, or null when nothing was saved.
  */
 async function saveDietCriterion(
   compositionFoodId: number,
   value: number,
   unit: CriterionUnit,
   note: string,
-): Promise<number | null> {
+): Promise<MeasureReweigh | null> {
   const at = link.target.value
   const plan = draft.diet.value
   const word = link.measureWord.value
@@ -48,7 +50,7 @@ async function saveDietCriterion(
       link.target.value = fresh
     }
     await link.loadMeasures()
-    return saved.attached
+    return saved.reweighed
   } catch (cause) {
     link.error.value = `No se pudo guardar el criterio${cause instanceof Error ? `: ${cause.message}` : ''}`
     return null

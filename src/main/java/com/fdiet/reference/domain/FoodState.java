@@ -28,7 +28,9 @@ public enum FoodState {
     UNSPECIFIED;
 
     private static final List<Rule> NAME_RULES = List.of(
-            new Rule(COOKED, "hervid[oa]s?", "cocid[oa]s?", "plancha", "asad[oa]s?", "frit[oa]s?",
+            // "Cocinado" is also the word the composer and the ration notes write for
+            // COOKED, so the text they produce reads back in the state it was written in.
+            new Rule(COOKED, "hervid[oa]s?", "cocid[oa]s?", "cocinad[oa]s?", "plancha", "asad[oa]s?", "frit[oa]s?",
                     "horno", "horneado", "estofad[oa]s?", "guisad[oa]s?", "escalfad[oa]s?",
                     "parrilla", "vapor", "salteado", "salteada", "brasa", "rebozad[oa]s?",
                     "empanad[oa]s?", "duro", "pasado por agua", "revuelto"),
@@ -37,6 +39,23 @@ public enum FoodState {
             new Rule(DRAINED, "escurrid[oa]s?"),
             new Rule(DRY, "en seco", "sec[oa]s?", "desecad[oa]s?", "deshidratad[oa]s?"),
             new Rule(RAW, "crud[oa]s?", "en crudo"));
+
+    /**
+     * The words fdiet writes for this state after a weight ({@code 150 g cocinado}),
+     * or null for {@link #UNSPECIFIED}, which writes nothing. One table for every
+     * writer — the composer's fragment and the ration notes — and each word reads
+     * back through {@link #ofWriting} as this state (FD-060).
+     */
+    public String written() {
+        return switch (this) {
+            case RAW -> "en crudo";
+            case DRY -> "en seco";
+            case COOKED -> "cocinado";
+            case CANNED -> "en conserva";
+            case DRAINED -> "escurrido";
+            case UNSPECIFIED -> null;
+        };
+    }
 
     /** Raw and dry are both weighed before cooking; the others after it, or as sold. */
     public boolean uncooked() {

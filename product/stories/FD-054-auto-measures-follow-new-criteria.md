@@ -1,6 +1,6 @@
 # FD-054 An auto-chosen measure follows a new criterion; a picked one stays
 
-Status: in progress · Size: M · Created: 2026-10-04 · Refined: 2026-10-04 · Absorbs FD-018
+Status: done (backend 4c374f6; frontend uncommitted, 2026-10-04) · Size: M · Created: 2026-10-04 · Refined: 2026-10-04 · Absorbs FD-018
 For: nutritionist
 
 ## Problem
@@ -17,17 +17,17 @@ ingredients (FD-018).
   included; a picked measure is never replaced. (User, "yes to all".)
 
 ## Acceptance criteria
-- [ ] Each ingredient and extra records whether its measure was **picked** by a person or chosen by
+- [x] Each ingredient and extra records whether its measure was **picked** by a person or chosen by
   the rule; the DTOs carry it.
-- [ ] A measure set by a person (fix-up, composer measure choice, PATCH `foodMeasureId`) is picked.
-- [ ] Parse `keep` and `PUT` keep a picked measure (FD-039 re-validation still applies); an
+- [x] A measure set by a person (fix-up, composer measure choice, PATCH `foodMeasureId`) is picked.
+- [x] Parse `keep` and `PUT` keep a picked measure (FD-039 re-validation still applies); an
   auto-chosen one is chosen again by the rule.
-- [ ] Creating or changing a global or diet criterion re-chooses the measure of every
+- [x] Creating or changing a global or diet criterion re-chooses the measure of every
   ingredient/extra it now applies to whose measure is not picked; the answer says how many.
-- [ ] Migration loses no measure a person may have picked (default: a stored measure counts as
+- [x] Migration loses no measure a person may have picked (default: a stored measure counts as
   picked unless the rule would choose the same row today — backend to confirm).
-- [ ] Composer and fix-up label a measure as the person's choice or automatic.
-- [ ] Tests; CLAUDE.md. **Needs a migration**: restart backend on 5000; `gradlew test` migrates the
+- [x] Composer and fix-up label a measure as the person's choice or automatic.
+- [x] Tests; CLAUDE.md. **Needs a migration**: restart backend on 5000; `gradlew test` migrates the
   real `.env` DB.
 
 ## Tasks
@@ -51,3 +51,6 @@ and fix-up panel. `pnpm build`, live check. List, do not fix, other bugs.
 
 ## Notes
 - 2026-10-04 backend: V19 `measure_picked` + V20 (Java) frees rule-chosen; `IMeasureReweigher` port (`RecipeMeasureReweigher`, `JournalService`); `DietMeasureService` split out. Criteria POST/PUT answer `{measure, reweighed}` (breaking); diet measures PUT `{measure, attached, reweighed}`. 368 tests. Not live-verified: criterion write, V20 on measured rows (dev DB has none). Follow-ups FD-065, FD-066, FD-067.
+- 2026-10-04 frontend: agent stopped by usage limit mid-run; partial UI work committed in 4c374f6 by the user. Resume: finish frontend, `pnpm build`, live check, then tech-lead.
+- 2026-10-04 frontend (resumed): build fixed (`IngredientAt.measurePicked`, criterion form answer); `keep` sends `foodMeasureId` only when picked; `reweighedText` message after diet/global criterion save ("cambia de medida" — backend counts rows whose measure changed, not new weights); composer preview says "elegida por ti / automática". `pnpm build` clean. Live: auto vs picked label, keep body, publish flags, diet criterion moved only the automatic oil, fix-up pick turns picked, global criterion from composer; test data deleted. Not live: global criterion edit from list, final message wording, patient view, mobile. Follow-ups FD-068, FD-069, FD-013 re-measured.
+- 2026-10-04 tech-lead: backend no bugs (fixed query count, scope, transaction, flag consistent). UI fix: composer no longer shows re-weighed sentence twice while criterion panel open. 371 tests, `pnpm build` clean. Nits: `.done` style copied in 3 components; FD-070.

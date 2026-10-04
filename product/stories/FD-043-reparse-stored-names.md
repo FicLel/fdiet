@@ -1,6 +1,6 @@
 # FD-043 Re-read stored ingredient names with today's parser
 
-Status: ready · Size: M · Created: 2026-10-03 · Refined: 2026-10-04
+Status: done (uncommitted, 2026-10-04) · Size: M · Created: 2026-10-03 · Refined: 2026-10-04
 For: nutritionist
 
 ## Problem
@@ -16,14 +16,14 @@ matched vs 144 on re-import.
   archived included; no existing match or picked measure is lost.
 
 ## Acceptance criteria
-- [ ] Every recipe with `raw_text` is re-read; ingredients get today's name, quantity, range, unit,
+- [x] Every recipe with `raw_text` is re-read; ingredients get today's name, quantity, range, unit,
   state and size.
-- [ ] An ingredient already matched keeps its food and measure (paired by position, FD-048 rule).
-- [ ] Unmatched ingredients are re-matched by exact Spanish name/alias (V18's rule).
-- [ ] A recipe whose re-read gives a different number of ingredients is left untouched and listed.
-- [ ] Recipes without `raw_text` are untouched.
-- [ ] Before/after per diet in `product/reports/FD-043-before-after.md` (matched count, kcal).
-- [ ] Tests; CLAUDE.md migration table. **Needs a migration**: restart backend on 5000;
+- [x] An ingredient already matched keeps its food and measure (paired by position, FD-048 rule).
+- [x] Unmatched ingredients are re-matched by exact Spanish name/alias (V18's rule).
+- [x] A recipe whose re-read gives a different number of ingredients is left untouched and listed.
+- [x] Recipes without `raw_text` are untouched.
+- [x] Before/after per diet in `product/reports/FD-043-before-after.md` (matched count, kcal).
+- [x] Tests; CLAUDE.md migration table. **Needs a migration**: restart backend on 5000;
   `gradlew test` migrates the real `.env` DB.
 
 ## Tasks
@@ -39,3 +39,7 @@ and re-matches the unmatched by exact Spanish name (V18's rule). Leave a recipe 
 ingredient count changes, and list it. Write `product/reports/FD-043-before-after.md`. Tests,
 CLAUDE.md. Tell the user the backend on 5000 needs a restart. List, do not fix, any bug outside this
 story.
+
+## Notes
+- 2026-10-04 backend: V21 (Java) + `db/migration/support/` (`RecipeReread`, `MeasureRules`, `Crosswalk`, `JdbcColumns`). 6 selects + 1 batched update. 380 tests. Applied to dev DB 2026-10-04 20:14: only 3 of 301 recipes have `raw_text` (Dieta 1 stored before V5); 2 rows changed (`1 infusión sin azúcar` re-matched), diets 9/12 matched 105 → 106, kcal unchanged. Report `product/reports/FD-043-before-after.md`. **Premise does not hold**: the `1 cdta AOVE` / `1 kiwi` rows have no `raw_text` → FD-072. Parser keeps a leading count before a bracket → FD-073. Unverified: measure paths (dev DB has 0 measures). Backend on 5000 left running on the new build (pid 7124; agent stop denied by permissions).
+- 2026-10-04 tech-lead: `RecipeReread.measureOf` now follows the publish rule exactly (pick re-validated per FD-039; rule-chosen re-chosen; unmeasured rows asked). V21 file untouched, checksum null, validates. +`MeasureRulesTest`, `CrosswalkTest`, `FakeJdbc`. 392 tests. Caveat: dev DB ran V21 with the old rule; may differ from a fresh run on matched rows of the 3 texted recipes until their diet is next published. Nits left: V21 javadoc says six selects (seven); `privateRecipeDiets` arbitrary if a private recipe ever serves two diets.

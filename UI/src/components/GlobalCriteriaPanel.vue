@@ -2,7 +2,8 @@
 import { ref, shallowRef } from 'vue'
 import type { CompositionFood } from '@/api/compositionTypes'
 import { referenceApi } from '@/api/reference'
-import type { FoodMeasure } from '@/api/types'
+import type { FoodMeasure, MeasureCriterionSaved } from '@/api/types'
+import { reweighedText } from '@/domain/measureCriteria'
 import { compositionFoodName } from '@/domain/compositionFood'
 import CompositionFoodSearch from './CompositionFoodSearch.vue'
 import MeasureCriteriaList from './MeasureCriteriaList.vue'
@@ -22,7 +23,7 @@ const props = defineProps<{
   from: FoodMeasure | null
 }>()
 
-const emit = defineEmits<{ saved: [criterion: FoodMeasure]; close: [] }>()
+const emit = defineEmits<{ saved: [saved: MeasureCriterionSaved]; close: [] }>()
 
 const food = shallowRef<CompositionFood | null>(null)
 const criteria = shallowRef<FoodMeasure[]>([])
@@ -30,6 +31,8 @@ const loading = ref(false)
 // Opened to write one: the form shows first, the criteria already held beside it.
 const adding = ref(true)
 const error = ref<string | null>(null)
+/** What the last save weighed again, in every diet (FD-054). */
+const done = ref<string | null>(null)
 
 async function load(chosen: CompositionFood): Promise<void> {
   loading.value = true
@@ -62,12 +65,13 @@ function change(): void {
   error.value = null
 }
 
-function onSaved(criterion: FoodMeasure): void {
+function onSaved(saved: MeasureCriterionSaved): void {
+  done.value = reweighedText(saved.reweighed)
   adding.value = false
   if (food.value) {
     void load(food.value)
   }
-  emit('saved', criterion)
+  emit('saved', saved)
 }
 </script>
 
@@ -87,7 +91,7 @@ function onSaved(criterion: FoodMeasure): void {
         <button class="link" type="button" @click="change()">Cambiar</button>
       </div>
 
-      <p v-if="loading" class="hint">Leyendo tus criterios…</p>
+      <p v-if="loading && criteria.length === 0" class="hint">Leyendo tus criterios…</p>
       <MeasureCriteriaList
         v-else-if="criteria.length > 0"
         :criteria="criteria"
@@ -103,7 +107,8 @@ function onSaved(criterion: FoodMeasure): void {
         @saved="onSaved"
         @cancel="adding = false"
       />
-      <button v-else class="add" type="button" @click="adding = true">+ Nueva unidad</button>
+      <button v-else class="add" type="button" @click="adding = true; done = null">+ Nueva unidad</button>
+      <p v-if="done" class="done">{{ done }}</p>
     </template>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -163,6 +168,12 @@ function onSaved(criterion: FoodMeasure): void {
   border-radius: var(--radius);
   font-size: 12px;
   font-weight: 500;
+  color: var(--sage-700);
+}
+
+.done {
+  margin: 0;
+  font-size: 11px;
   color: var(--sage-700);
 }
 

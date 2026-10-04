@@ -108,16 +108,7 @@ public class DietComposeService implements IDietComposeService {
     }
 
     private static String stateWords(FoodState state) {
-        if (state == null) {
-            return "";
-        }
-        return switch (state) {
-            case RAW -> " en crudo";
-            case DRY -> " en seco";
-            case COOKED -> " cocinado";
-            case CANNED -> " en conserva";
-            case DRAINED -> " escurrido";
-            case UNSPECIFIED -> "";
-        };
+        String words = state == null ? null : state.written();
+        return words == null ? "" : " " + words;
     }
 }

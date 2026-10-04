@@ -8,7 +8,6 @@ import {
   type ImportDietRequest,
   type RequestDish,
   type RequestMeal,
-  type RequestRecipe,
 } from '@/api/diets'
 import { usePatients } from '@/stores/patients'
 import type {
@@ -24,8 +23,8 @@ import { buildRows, cellKey, dishAt, mealOf, type GridRow, type MealRow } from '
 import { joinFragment, renderRecipe } from '@/domain/dishText'
 import { dishTotals, ingredientsOf, sumTotals, type DishTotals } from '@/domain/nutrition'
 import { locate, type IngredientAt } from '@/domain/ingredientAt'
-import { matchesOf } from '@/domain/keptMatches'
-import { requestIngredient } from '@/domain/requestIngredient'
+import { droppedFrom, matchesOf, toSend } from '@/domain/keptMatches'
+import { recipeRequest } from '@/domain/requestIngredient'
 import { addDays, dayName, dayNumber, longDate, mondayOf, WEEK } from '@/domain/week'
 
 // Where an ingredient sits moved to `domain/ingredientAt`; its callers still reach it here.
@@ -125,6 +124,9 @@ const goalNote = ref('1.900 kcal/día · 120 g de proteína o más')
 const targetKcal = ref(PLACEHOLDER_TARGET_KCAL)
 
 const parseTimers = new Map<string, ReturnType<typeof setTimeout>>()
+/** Per cell, the matches its reads dropped (FD-056): sent again until publish or discard. */
+const dropped = new Map<string, KeptMatch[]>()
+const sendFor = (key: string, keep: KeptMatch[]) => toSend(keep, dropped.get(key) ?? [])
 
 const rows = computed<GridRow[]>(() =>
   diet.value ? buildRows(diet.value, { template: true }) : [],
@@ -409,12 +411,13 @@ async function reparse(key: string, slotName: string): Promise<void> {
     return
   }
   const text = edit.text
+  const keep = sendFor(key, edit.keep)
   try {
     const recipe = await dietsApi.parse({
       text,
       slotName: edit.name.trim() || slotName,
       dietId: diet.value?.id,
-      keep: edit.keep,
+      keep,
     })
     // The text may have moved on while the request was in flight.
     const current = edits[key]
@@ -423,6 +426,7 @@ async function reparse(key: string, slotName: string): Promise<void> {
       // What the answer holds matched is what the next read keeps: a name gone
       // from the text is gone from the answer, and its match with it.
       current.keep = matchesOf(recipe.ingredients)
+      dropped.set(key, droppedFrom(keep, current.keep))
       // "Ensalada: lechuga (80 gr)" names its plate; a description nobody has
       // written yet takes that name rather than staying blank.
       if (current.name.trim() === '' && recipe.name !== slotName) {
@@ -527,6 +531,7 @@ function setRecipeText(row: MealRow, day: DayOfWeek, text: string): void {
   if (text.trim() === '') {
     // No ingredients written: nothing to read, nothing on the plate, nothing kept.
     edit.recipe = null
+    dropped.set(key, droppedFrom(sendFor(key, edit.keep), []))
     edit.keep = []
     edit.parsing = false
     settle(row, day)
@@ -594,6 +599,7 @@ function clearRecipe(row: MealRow, day: DayOfWeek): void {
   clearTimer(key)
   edit.mode = 'none'
   edit.recipe = null
+  dropped.set(key, droppedFrom(sendFor(key, edit.keep), []))
   edit.keep = []
   edit.keepRecipeId = null
   edit.parsing = false
@@ -625,6 +631,7 @@ function appendFragment(row: MealRow, day: DayOfWeek, fragment: string, pin: Dis
 function revert(row: MealRow, day: DayOfWeek): void {
   const key = cellKey(row, day)
   clearTimer(key)
+  dropped.delete(key)
   delete edits[key]
 }
 
@@ -633,6 +640,7 @@ function discardAll(): void {
     clearTimer(key)
     delete edits[key]
   }
+  dropped.clear()
 }
 
 /** Reads any recipe still waiting on its debounce, so nothing is published stale. */
@@ -649,19 +657,6 @@ async function settleParses(): Promise<void> {
     }
   }
   await Promise.all(pending)
-}
-
-function recipeRequest(edit: CellEdit): RequestRecipe | null {
-  if (edit.text.trim() === '' && edit.steps.trim() === '') {
-    return null
-  }
-  return {
-    rawText: edit.text.trim() || null,
-    steps: edit.steps.trim() || null,
-    ingredients: (edit.text.trim() === '' ? [] : (edit.recipe?.ingredients ?? [])).map(
-      requestIngredient,
-    ),
-  }
 }
 
 /**
@@ -690,7 +685,7 @@ function dishRequest(day: DayOfWeek, row: MealRow): RequestDish | null {
     if (edit.keepRecipeId !== null) {
       return { ...plate, recipeId: edit.keepRecipeId }
     }
-    const recipe = recipeRequest(edit)
+    const recipe = recipeRequest(edit.text, edit.steps, edit.recipe?.ingredients ?? [])
     return recipe ? { ...plate, recipe } : plate
   }
   return plate

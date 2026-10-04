@@ -1,6 +1,6 @@
 # FD-041 Credit CIQUAL 2025 and BLS 4.0 in the footer
 
-Status: review done, uncommitted · Size: S · Created: 2026-10-03 · Refined: 2026-10-04
+Status: done (4c374f6) · Size: S · Created: 2026-10-03 · Refined: 2026-10-04
 For: both
 
 ## Problem

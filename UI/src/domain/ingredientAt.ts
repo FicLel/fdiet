@@ -23,6 +23,7 @@ export type IngredientAt = Pick<
   | 'state'
   | 'size'
   | 'measure'
+  | 'measurePicked'
   | 'stateMismatch'
   | 'yieldHint'
 > & {

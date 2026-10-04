@@ -580,7 +580,10 @@ only, so `(20 g: nueces + almendras)` stays one ingredient. A fragment with no r
 still becomes an ingredient of one `unidad`; nothing is ever discarded. Writing without brackets
 is read measure-first: `1 cdta AOVE` is `AOVE`, 1, `cdta`, and `1 kiwi` is `kiwi`, 1, `unidad`
 (multi-word measures such as `cucharada sopera` are read whole). State words (`cocidas`, `en crudo`)
-and size words (`mediano`) stay in the name and are also read into `state` and `size`. **When the
+and size words (`mediano`) stay in the name and are also read into `state` and `size`. `cocinado`
+(any gender and number) reads `COOKED` (FD-060): it is the word the composer (`compose` with
+`state: COOKED`) and the ration notes write, so their text reads back in the state it was written
+in — a cooked ration composed onto a dry food comes back with `stateMismatch`. **When the
 name and the bracket state opposite sides of cooking, the bracket wins** (FD-052,
 `FoodState.ofWriting`): `Lenteja, cocida (55 g en seco)` is `DRY` and `pechuga a la plancha (150 g en
 crudo)` is `RAW` — the bracket says in which state the grams were weighed, the name still says which
@@ -899,6 +902,7 @@ changing an entity, add a migration to match or startup fails.
 | `V18__rematch_ingredients_by_composition_name` (Java, `src/main/java/db/migration/`) | re-matches every ingredient and extra without a food by exact Spanish name / alias of the crosswalk (size-word retry), the import's rule; releases a measure whose row names another food |
 | `V19__measure_picked_flag.sql` | `recipe_ingredients.measure_picked` / `extra_foods.measure_picked` (FD-054): whether a person picked the measure; every stored measure starts as picked; `idx_*_food_picked (composition_food_id, measure_picked)` |
 | `V20__free_measures_the_rule_chooses` (Java) | marks as the rule's (`measure_picked = FALSE`) every stored measure the publish rule would choose today anyway — over the published rows, the row's diet's criteria (none for a library recipe), the global criteria and the diet's profile source; anything else stays picked, since nothing recorded who chose it. Applied to the dev DB 2026-10-04: 0 rows (no ingredient or extra had a measure) |
+| `V21__reread_recipe_texts` (Java) | FD-043: re-reads every recipe's `raw_text` with today's `MealTextParser` and rewrites each ingredient's name, quantity, range, unit, state and size, paired with the stored rows **by position**; keeps every food match; re-matches the unmatched by exact Spanish name or alias (V18's rule); gives every row the measure a publish would: a picked one while it still measures the re-read unit and covers the food (FD-039), else the publish rule's choice (FD-054). A recipe without `raw_text`, or whose text now reads into another number of ingredients, is left untouched and logged. The decisions are `db/migration/support/RecipeReread` (pure, tested); `support/` also holds the JDBC loaders a Java migration shares (`Crosswalk`, `MeasureRules`). Applied to the dev DB 2026-10-04: 11 rows re-read, 2 changed and matched, 298 of 301 recipes have no `raw_text`; `product/reports/FD-043-before-after.md` |
 
 ## Data files and licensing
 

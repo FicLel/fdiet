@@ -86,3 +86,6 @@ Append-only. Newest at the bottom. A reversed decision gets a new entry naming t
 - **2026-10-04** — FD-043: stored recipes' `raw_text` is **re-parsed** with today's parser (rewrites `raw_name`); existing matches and picked measures kept. One-off migration, all diets.
 - **2026-10-04** — FD-008: drop the `fdiet_ui_verify` schema. Backlog order accepted as proposed.
 - **2026-10-04** — FD-052 outcome (backend): **no state mismatch is ever totalled, even when a yield fits**; the yield stays offered (`yieldHint`). Changes one behaviour: `150 g en crudo` against a plancha food was totalled at cooked figures, now it is not. Follows from "never wrong state" + "never convert by a yield". Open to the user to reverse.
+
+## 2026-10-04 — FD-060 first
+- FD-060 moves ahead of FD-056. Fix the reader (add "cocinado"), not the composer wording (proposed default). User: "Go ahead with FD-060".

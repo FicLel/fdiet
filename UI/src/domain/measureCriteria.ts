@@ -2,6 +2,7 @@ import type {
   FoodMeasure,
   HouseholdMeasure,
   MeasureCriterionRequest,
+  MeasureReweigh,
   MeasureUsage,
   PortionSize,
 } from '@/api/types'
@@ -158,7 +159,34 @@ export function usageText(usage: MeasureUsage): string {
   if (usage.ingredients === 0 && usage.extraFoods === 0) {
     return 'Ahora no pesa ningún ingrediente ni extra.'
   }
-  const ingredients = usage.ingredients === 1 ? '1 ingrediente' : `${usage.ingredients} ingredientes`
-  const extras = usage.extraFoods === 1 ? '1 extra' : `${usage.extraFoods} extras`
-  return `Afecta a ${ingredients} y ${extras} en todas las dietas, al momento.`
+  return `Afecta a ${rowsText(usage)} en todas las dietas, al momento.`
+}
+
+/** `3 ingredientes y 1 extra`. */
+function rowsText(rows: { ingredients: number; extraFoods: number }): string {
+  return `${countOf(rows.ingredients, 'ingrediente', 'ingredientes')} y ${countOf(rows.extraFoods, 'extra', 'extras')}`
+}
+
+/**
+ * What saving a criterion re-chose (FD-054): the ingredients and extras whose
+ * measure the rule had chosen and now lands on another row. A new weight on a
+ * row already in use is live without changing any row, so it counts 0. A
+ * measure the nutritionist picked is never among them, and the sentence says so.
+ */
+export function reweighedText(reweighed: MeasureReweigh): string {
+  const total = reweighed.ingredients + reweighed.extraFoods
+  const parts = [
+    reweighed.ingredients === 0 ? null : countOf(reweighed.ingredients, 'ingrediente', 'ingredientes'),
+    reweighed.extraFoods === 0 ? null : countOf(reweighed.extraFoods, 'extra', 'extras'),
+  ].filter((part) => part !== null)
+  const lead =
+    total === 0
+      ? 'Ningún ingrediente ni extra cambia de medida.'
+      : `${total === 1 ? 'Cambia' : 'Cambian'} de medida ${parts.join(' y ')} con medida automática.`
+  return `${lead} Las medidas que elegiste tú no cambian.`
+}
+
+/** `1 ingrediente`, `3 ingredientes`. */
+function countOf(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`
 }

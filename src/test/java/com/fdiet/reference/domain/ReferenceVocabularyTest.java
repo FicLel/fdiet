@@ -2,6 +2,8 @@ package com.fdiet.reference.domain;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** The words the reference layer reads: states, sizes, household measures and keywords. */
@@ -17,6 +19,33 @@ class ReferenceVocabularyTest {
         assertThat(FoodState.ofFoodName("Pollo, pechuga, plancha")).isEqualTo(FoodState.COOKED);
         assertThat(FoodState.ofFoodName("Lechuga")).isEqualTo(FoodState.UNSPECIFIED);
         assertThat(FoodState.ofFoodName("Arroz")).isEqualTo(FoodState.UNSPECIFIED);
+    }
+
+    /** FD-060: "cocinado" is the word the composer writes for COOKED, and a person writes it too. */
+    @Test
+    void readsCocinadoInEveryGenderAndNumberAsCooked() {
+        for (String word : List.of("cocinado", "cocinada", "cocinados", "cocinadas")) {
+            assertThat(FoodState.ofWriting("lentejas", "150 g " + word)).as(word).isEqualTo(FoodState.COOKED);
+            assertThat(FoodState.ofWriting("lentejas " + word, "")).as(word).isEqualTo(FoodState.COOKED);
+            assertThat(FoodState.ofFoodName("Lenteja, " + word)).as(word).isEqualTo(FoodState.COOKED);
+        }
+        // The bracket still wins over a name on the other side of cooking (FD-052).
+        assertThat(FoodState.ofWriting("Lenteja, seca, cruda", "150 g cocinado")).isEqualTo(FoodState.COOKED);
+        assertThat(FoodState.ofWriting("arroz cocinado", "70 g en crudo")).isEqualTo(FoodState.RAW);
+        // A word that only starts the same way is not the state.
+        assertThat(FoodState.ofFoodName("Cocinilla")).isEqualTo(FoodState.UNSPECIFIED);
+    }
+
+    /** Every word fdiet writes for a state reads back as that state, alone and against a name. */
+    @Test
+    void everyWrittenStateReadsBackAsItself() {
+        for (FoodState state : FoodState.values()) {
+            if (state.written() == null) {
+                assertThat(state).isEqualTo(FoodState.UNSPECIFIED);
+                continue;
+            }
+            assertThat(FoodState.ofWriting("lentejas", "150 g " + state.written())).as(state.name()).isEqualTo(state);
+        }
     }
 
     @Test

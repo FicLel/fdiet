@@ -3,7 +3,7 @@ import { computed, ref, shallowRef } from 'vue'
 import { dietsApi, type ComposeRequest } from '@/api/diets'
 import { referenceApi } from '@/api/reference'
 import type { CompositionFood } from '@/api/compositionTypes'
-import type { DishIngredient, FoodMeasure, FoodState, Ration } from '@/api/types'
+import type { DishIngredient, FoodMeasure, FoodState, MeasureCriterionSaved, Ration } from '@/api/types'
 import {
   asksForWeight as needsWeight,
   choiceTotal,
@@ -17,8 +17,8 @@ import {
   type ComposerChoice,
 } from '@/domain/composerChoice'
 import { useComposePreview } from '@/composables/useComposePreview'
-import { criterionFor, unitsWeight, weighs } from '@/domain/measureCriteria'
-import { amount, stateWord } from '@/domain/rations'
+import { criterionFor, reweighedText, unitsWeight, weighs } from '@/domain/measureCriteria'
+import { amount, measureOrigin, stateWord } from '@/domain/rations'
 import { compositionFoodName } from '@/domain/compositionFood'
 import CompositionFoodSearch from './CompositionFoodSearch.vue'
 import ComposerChoices from './ComposerChoices.vue'
@@ -69,6 +69,7 @@ const state = ref<FoodState | ''>('')
 const busy = ref(false)
 const error = ref<string | null>(null)
 const added = ref<string | null>(null)
+const reweighed = ref<string | null>(null) // last criterion save (FD-054); the open panel says it itself
 
 function loadMeasures(chosen: CompositionFood): Promise<FoodMeasure[]> {
   return referenceApi.measures({ compositionFoodId: chosen.id }, {
@@ -81,6 +82,7 @@ async function pick(chosen: CompositionFood): Promise<void> {
   food.value = chosen
   error.value = null
   added.value = null
+  reweighed.value = null
   rations.value = []
   measures.value = []
   asking.value = null
@@ -180,8 +182,9 @@ async function refreshMeasures(selectId: number | null): Promise<void> {
 }
 
 /** Selected here once the measures list it; until then the panel stays open, listing it. */
-function onCriterionSaved(criterion: FoodMeasure): void {
-  void refreshMeasures(criterion.id)
+function onCriterionSaved(saved: MeasureCriterionSaved): void {
+  reweighed.value = reweighedText(saved.reweighed)
+  void refreshMeasures(saved.measure.id)
 }
 
 function reset(): void {
@@ -334,7 +337,7 @@ async function add(): Promise<void> {
 
           <p class="hint">
             <template v-if="unitsLine">
-              {{ unitsLine }}. Se escribe en unidades; el paciente no ve los gramos.
+              {{ unitsLine }}<template v-if="reading?.measure"> · {{ measureOrigin(reading) }}</template>. Se escribe en unidades; el paciente no ve los gramos.
             </template>
             <template v-else-if="proposed && total !== null && choice.kind === 'ration'">
               Propuesta: el punto medio de {{ rationRange(choice.ration) }} por ración. Cámbiala si
@@ -353,6 +356,7 @@ async function add(): Promise<void> {
 
       </template>
 
+      <p v-if="reweighed && !asking" class="done">{{ reweighed }}</p>
       <p v-if="added" class="done">Añadido: {{ added }}</p>
       <p v-if="error" class="error">{{ error }}</p>
     </div>

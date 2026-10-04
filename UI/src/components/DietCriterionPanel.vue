@@ -4,7 +4,7 @@ import type { CompositionFood } from '@/api/compositionTypes'
 import { dietsApi } from '@/api/diets'
 import type { FoodMeasure } from '@/api/types'
 import { compositionFoodName } from '@/domain/compositionFood'
-import { CRITERION_UNITS, type CriterionUnit } from '@/domain/measureCriteria'
+import { CRITERION_UNITS, reweighedText, type CriterionUnit } from '@/domain/measureCriteria'
 import { useDietCriteria } from '@/stores/dietCriteria'
 import { useDietDraft } from '@/stores/dietDraft'
 import { useFoodLink } from '@/stores/foodLink'
@@ -16,8 +16,8 @@ import MeasureCriteriaList from './MeasureCriteriaList.vue'
  * diet only, and the diet's criteria already written.
  *
  * A criterion weighs a CIQUAL / BLS food, chosen here: the search starts from
- * the ingredient's name and nothing is picked on its own. It attaches only to
- * ingredients matched to that same food.
+ * the ingredient's name and nothing is picked on its own. It re-weighs only
+ * ingredients matched to that same food whose measure the rule chose (FD-054).
  */
 const link = useFoodLink()
 const draft = useDietDraft()
@@ -61,16 +61,11 @@ async function save(): Promise<void> {
   if (!canSave.value) {
     return
   }
-  const attached = await saveDietCriterion(food.value!.id, value.value!, unit.value, note.value)
-  if (attached === null) {
+  const reweighed = await saveDietCriterion(food.value!.id, value.value!, unit.value, note.value)
+  if (reweighed === null) {
     return
   }
-  saved.value =
-    attached === 0
-      ? 'Guardado para esta dieta. Todavía no pesa ningún ingrediente (ver la nota de arriba).'
-      : attached === 1
-        ? 'Guardado para esta dieta y aplicado a 1 ingrediente.'
-        : `Guardado para esta dieta y aplicado a ${attached} ingredientes.`
+  saved.value = `Guardado para esta dieta. ${reweighedText(reweighed)}`
   value.value = null
   note.value = ''
   await loadCriteria()

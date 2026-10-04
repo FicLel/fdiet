@@ -327,14 +327,8 @@ public class DietRationService implements IDietRationService {
     }
 
     private static String stateWord(FoodState state) {
-        return switch (state) {
-            case RAW -> "en crudo";
-            case DRY -> "en seco";
-            case COOKED -> "cocinado";
-            case CANNED -> "en conserva";
-            case DRAINED -> "escurrido";
-            case UNSPECIFIED -> "sin estado";
-        };
+        String words = state.written();
+        return words == null ? "sin estado" : words;
     }
 
     /** Grams of one group, and the ration counts they come to. */

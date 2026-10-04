@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { isRefusal } from '@/api/http'
 import { referenceApi } from '@/api/reference'
-import type { FoodMeasure, HouseholdMeasure, PortionSize } from '@/api/types'
+import type { FoodMeasure, HouseholdMeasure, MeasureCriterionSaved, PortionSize } from '@/api/types'
 import {
   CRITERION_UNITS,
   DEFAULT_MEASURE,
@@ -31,7 +31,8 @@ const props = defineProps<{
   from: FoodMeasure | null
 }>()
 
-const emit = defineEmits<{ saved: [criterion: FoodMeasure]; cancel: [] }>()
+/** `saved` carries what the save weighed again in every diet (FD-054). */
+const emit = defineEmits<{ saved: [saved: MeasureCriterionSaved]; cancel: [] }>()
 
 const reference = useReference()
 
