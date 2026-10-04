@@ -106,3 +106,9 @@
 - 2026-10-04 — FD-043 backend done: V21 applied to dev DB (2 rows changed; 298 recipes without `raw_text`). Tech-lead review launched.
 - 2026-10-04 — FD-072 (re-read `raw_name` of recipes without text — needs decision), FD-073 (leading count kept before brackets) created from FD-043 backend.
 - 2026-10-04 — FD-043 done: tech-lead aligned `RecipeReread` with the publish rule, 392 tests. Uncommitted.
+- 2026-10-04 — Open questions answered yes: FD-052 kept, FD-072 approved (after FD-073), FD-069 draft was the user's. FD-008 done (user drops the schema). FD-060, FD-043, FD-054 frontend, FD-056 committed by the user (28f6d3c).
+- 2026-10-04 — FD-033 phase E refined (decisions 23–25, AC E1–E10) and started; backend agent launched.
+- 2026-10-04 — FD-033 E backend done: V22 drops `bedca_foods` + both `bedca_food_id` columns (applied to dev DB, dump taken), BEDCA code/files removed, licence audit in `sources.csv` + README, 372 tests, 144/210. Uncommitted. Tech-lead review launched.
+- 2026-10-04 — FD-074 (agent files cite BEDCA), FD-075 (fooddata attribution + row count), FD-076 (CLAUDE.md size), FD-077 (`CompositionFigures` single implementer) created from FD-033 E backend.
+- 2026-10-04 — FD-033 E done: tech-lead review, no bug, comment fixes + SPDX manifest test, 373 tests. Uncommitted. FD-033 epic complete once committed.
+- 2026-10-04 — FD-078 (AESAN reuse notice unverified vs audit "yes"), FD-079 (`plan.md` live BEDCA lines) created from FD-033 E review. FD-008 reopened: `fdiet_ui_verify` still exists.

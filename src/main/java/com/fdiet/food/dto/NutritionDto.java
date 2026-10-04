@@ -11,7 +11,8 @@ import java.math.RoundingMode;
  * milligrams.
  *
  * <p>This is a derived shape. The stored figures keep the units they were
- * published in — see {@link NutrientDto} and BEDCA-ATTRIBUTION.txt — and the
+ * published in — see {@link NutrientDto} and each source's attribution
+ * ({@link com.fdiet.food.model.CompositionSource}) — and the
  * conversion happens on the way out, never on the way in.
  *
  * <p>A null field means the source published nothing for that component, which

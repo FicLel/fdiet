@@ -8,7 +8,8 @@ import com.fdiet.food.dto.CompositionSyncSummaryDto;
  *
  * <p>It owns no repository: it reads the snapshots committed under
  * {@code reference-data/composition/} and hands typed rows to the service that
- * owns the table, the way {@link IBedcaImportService} does for BEDCA.
+ * owns the table, the way {@link FoodImportService} does for the
+ * branded catalogue.
  */
 public interface ICompositionImportService {
 

@@ -37,8 +37,8 @@ public interface ICompositionFoodService {
     /**
      * The foods those names name exactly — a Spanish name or alias from the
      * crosswalk, case and accents ignored — keyed by the name normalised
-     * through {@link com.fdiet.common.helper.Texts#normaliseName} (the same key
-     * {@link IBedcaFoodService#normalise} gives). A name nothing answers, or
+     * through {@link com.fdiet.common.helper.Texts#normaliseName} (the key the
+     * diet's resolver looks names up by). A name nothing answers, or
      * one two foods share with neither preferred, is absent. One query however
      * many names.
      */

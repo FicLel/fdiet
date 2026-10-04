@@ -5,62 +5,59 @@ import java.util.function.Function;
 
 /**
  * The composition components fdiet keeps, in one place: the key they travel
- * under, the code BEDCA publishes them as, the column pair they are stored in,
- * and how to read and write them on any food that carries them
- * ({@link CompositionFigures}: {@link BedcaFood} and {@link CompositionFood}).
+ * under, the column pair they are stored in, and how to read and write them on
+ * any food that carries them ({@link CompositionFigures}, implemented by
+ * {@link CompositionFood} for CIQUAL and BLS alike).
  *
  * <p>The importers, the mappers and the transport shape all loop over this
  * rather than repeating fourteen names three times. Adding a component the
- * sources already carry is a constant here, a field on each entity and a column
- * pair in a migration.
+ * sources already carry is a constant here, a field on the entity and a column pair
+ * in a migration; each table reader maps it to its source's own column.
  */
 public enum Nutrient {
 
-    ENERGY("energy", "ENERC", "energy",
+    ENERGY("energy", "energy",
             CompositionFigures::getEnergy, CompositionFigures::setEnergy),
-    PROTEIN("protein", "PROT", "protein",
+    PROTEIN("protein", "protein",
             CompositionFigures::getProtein, CompositionFigures::setProtein),
-    FAT("fat", "FAT", "fat",
+    FAT("fat", "fat",
             CompositionFigures::getFat, CompositionFigures::setFat),
-    SATURATED_FAT("saturatedFat", "FASAT", "saturated_fat",
+    SATURATED_FAT("saturatedFat", "saturated_fat",
             CompositionFigures::getSaturatedFat, CompositionFigures::setSaturatedFat),
-    CARBOHYDRATES("carbohydrates", "CHO", "carbohydrates",
+    CARBOHYDRATES("carbohydrates", "carbohydrates",
             CompositionFigures::getCarbohydrates, CompositionFigures::setCarbohydrates),
-    SUGARS("sugars", "SUGAR", "sugars",
+    SUGARS("sugars", "sugars",
             CompositionFigures::getSugars, CompositionFigures::setSugars),
-    FIBER("fiber", "FIBT", "fiber",
+    FIBER("fiber", "fiber",
             CompositionFigures::getFiber, CompositionFigures::setFiber),
-    WATER("water", "WATER", "water",
+    WATER("water", "water",
             CompositionFigures::getWater, CompositionFigures::setWater),
-    SODIUM("sodium", "NA", "sodium",
+    SODIUM("sodium", "sodium",
             CompositionFigures::getSodium, CompositionFigures::setSodium),
-    POTASSIUM("potassium", "K", "potassium",
+    POTASSIUM("potassium", "potassium",
             CompositionFigures::getPotassium, CompositionFigures::setPotassium),
-    CALCIUM("calcium", "CA", "calcium",
+    CALCIUM("calcium", "calcium",
             CompositionFigures::getCalcium, CompositionFigures::setCalcium),
-    IRON("iron", "FE", "iron",
+    IRON("iron", "iron",
             CompositionFigures::getIron, CompositionFigures::setIron),
-    CHOLESTEROL("cholesterol", "CHORL", "cholesterol",
+    CHOLESTEROL("cholesterol", "cholesterol",
             CompositionFigures::getCholesterol, CompositionFigures::setCholesterol),
-    VITAMIN_C("vitaminC", "VITC", "vitamin_c",
+    VITAMIN_C("vitaminC", "vitamin_c",
             CompositionFigures::getVitaminC, CompositionFigures::setVitaminC);
 
     /** The suffix of the column that holds a component's unit: {@code energy_unit}. */
     public static final String UNIT_COLUMN_SUFFIX = "_unit";
 
     private final String key;
-    private final String code;
     private final String column;
     private final Function<CompositionFigures, NutrientValue> getter;
     private final BiConsumer<CompositionFigures, NutrientValue> setter;
 
     Nutrient(String key,
-             String code,
              String column,
              Function<CompositionFigures, NutrientValue> getter,
              BiConsumer<CompositionFigures, NutrientValue> setter) {
         this.key = key;
-        this.code = code;
         this.column = column;
         this.getter = getter;
         this.setter = setter;
@@ -71,15 +68,10 @@ public enum Nutrient {
         return key;
     }
 
-    /** The EuroFIR component code, which is bedca_foods.csv's column name. */
-    public String code() {
-        return code;
-    }
-
     /**
      * The column the value is stored in; the unit sits beside it in
-     * {@code column + }{@link #UNIT_COLUMN_SUFFIX}. The same pair in
-     * {@code bedca_foods} and {@code composition_foods}.
+     * {@code column + }{@link #UNIT_COLUMN_SUFFIX}. The pair in
+     * {@code composition_foods}.
      */
     public String column() {
         return column;

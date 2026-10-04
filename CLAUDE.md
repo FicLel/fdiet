@@ -19,7 +19,7 @@ fill it in; `build.gradle` reads `.env` and passes it to `bootRun`, `test` and t
 tasks. A real exported environment variable always wins over the `.env` entry.
 
 `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, and the optional
-`SERVER_PORT`, `FOOD_CSV_PATH`, `BEDCA_CSV_PATH` and `COMPOSITION_DATA_PATH` (default
+`SERVER_PORT`, `FOOD_CSV_PATH` and `COMPOSITION_DATA_PATH` (default
 `reference-data/composition`).
 
 ## Architecture
@@ -76,7 +76,7 @@ belongs to exactly one patient, so `dish_scores.diet_id` already says who wrote 
 - `helpers/DataReader` — hand-rolled RFC 4180 CSV parser (quoted fields, embedded
   delimiters/line breaks, doubled quotes, leading BOM). `foodData()` reads the path in
   `fdiet.food.csv-path`; `read(Path)` takes any CSV of the same dialect, which is how the
-  composition database is read without a second parser.
+  composition crosswalk (`links.csv`) and the reference CSVs are read without a second parser.
 
 ### The two halves of the catalogue
 
@@ -93,59 +93,44 @@ A diet says `lechuga (80 gr)`, so **the composition foods are the half that answ
 import of example-ui.xlsx matches 0 of 210 ingredients against `food_items` and 144 against the
 Spanish crosswalk of `composition_foods`. The branded catalogue is still there for the days a diet
 names a product outright. Since FD-033 phase D (`V17`/`V18`) every recipe ingredient, journal
-extra, reference row, alternative and ration count points at `composition_foods`; `bedca_foods`
-below is still loaded and served at `/api/bedca`, but **nothing matches to it any more** and
-phase E removes it.
+extra, reference row, alternative and ration count points at `composition_foods`.
 
-### `bedca_foods` — the retired composition database (removed in FD-033 phase E)
+### BEDCA — retired (FD-033 phase E, `V22`)
 
-Nothing outside `/api/bedca` reads it since phase D. `recipe_ingredients.bedca_food_id` and
-`extra_foods.bedca_food_id` are NULL on every row and no entity maps them; `bedcaFoodId` in any
-request is a 400 (`common/helper/RetiredFields`, `@Null` on the retired field — a field Jackson
-simply ignored would let an old caller's match vanish without a word).
+History: BEDCA (AESAN, 957 foods, **non-commercial and no modification**) was fdiet's first
+composition database. FD-033 replaced it with the open tables below and phase E removed it: the
+`bedca_foods` table, `recipe_ingredients.bedca_food_id`, `extra_foods.bedca_food_id`,
+`/api/bedca`, every BEDCA class, `bedca_foods.csv` and `BEDCA-ATTRIBUTION.txt` are gone (git
+history is not rewritten). The applied migrations V4–V18 still name it, and must not be edited.
+`bedcaFoodId` in any request **stays a 400** (`common/helper/RetiredFields`, `@Null` on the
+retired field — a field Jackson simply ignored would let an old caller's match vanish without a
+word; decision 24).
 
-- `controller/BedcaController` — `@RestController` at `/api/bedca`:
-  - `GET /api/bedca?name=&page=&size=` — page of foods. No `name`: alphabetical. With one, it is
-    a **ranked word search** (FD-020): the term is reduced by `NameMatcher` (accents, plurals,
-    quantity and serving words dropped) and every food sharing at least one word shows — most
-    words shared first, then the `suggest` order (share of the food's name covered, then name).
-    A food that shares no word but contains the term as typed (`lechu` → `Lechuga`) comes last,
-    so a box being typed into never goes blank mid-word. Ranked from the in-memory suggestion
-    index; the page's foods are one `findAllById`. `pan de molde` puts both `…, de molde,
-    tostado` breads first; `jamón york` lists the `Jamón …` foods (no synonyms yet).
-  - `GET /api/bedca/{id}` — one food, 404 through `BedcaFoodNotFoundException`.
-  - `POST /api/bedca/sync` — imports bedca_foods.csv; safe to re-run.
-- `service/BedcaFoodService` — owns `bedca_foods`: search, lookup, the batched
-  `entitiesByName` / `entitiesByIds` the diet resolves through, the suggestion ranking, and
-  the sync's writes.
-- `service/BedcaImportService` — owns no repository. Finds its columns **by header name**, not
-  by position: the file is 111 columns wide and 14 of them are wanted.
+### Composition figures, shared helpers
+
 - `service/NutritionService` — the unit arithmetic, and nothing else. A figure whose unit it
   does not know comes back null rather than as a number in the wrong scale.
 - `helpers/NameMatcher` — reduces a food name to the words that carry it (accents, plurals,
   quantities and serving words dropped) and scores the overlap. It **ranks and never decides**.
-- `model/BedcaFood`, `model/NutrientValue`, `model/Nutrient` — the entity, the embeddable
-  value+unit pair, and the enum that names the fourteen components in one place so the
-  importer, the mapper and the DTO all loop over it instead of repeating them.
+- `model/NutrientValue`, `model/Nutrient` — the embeddable value+unit pair, and the enum that
+  names the fourteen components in one place so the readers, the mapper and the DTO all loop over
+  it instead of repeating them.
 
-**Values are stored exactly as published, each with its own unit.** Energy is kJ for 947 of
-the 957 foods and kcal for 8; carbohydrate, fibre and water each have a stray milligram row.
-Reading a value without its unit is a wrong number, which is why the table carries a `*_unit`
-column beside every value. Anything derived — kcal from kJ, a portion scaled off the per-100 g
-figure — is computed on read and never written back. The terms of use require this and require
-the attribution to appear wherever the figures are shown; see **BEDCA-ATTRIBUTION.txt**, and
-note that the data is **non-commercial** without AESAN's authorisation.
+**Values are stored exactly as published, each with its own unit.** Reading a value without its
+unit is a wrong number, which is why the table carries a `*_unit` column beside every value.
+Anything derived — kcal from kJ, a portion scaled off the per-100 g figure — is computed on read
+and never written back.
 
-Only the fourteen components a diet is read by are stored. The other 33 stay in the CSV;
-adding one is a constant in `Nutrient`, a field on `BedcaFood` (and `CompositionFood`) and a
-column pair in a migration. `Nutrient` reads and writes through `model/CompositionFigures`, the
-fourteen value+unit accessors both composition entities implement, so `NutritionService.per100g`
-and the mappers serve BEDCA, CIQUAL and BLS alike.
+Only the fourteen components a diet is read by are stored; adding one is a constant in
+`Nutrient`, a field on `CompositionFood`, a column pair in a migration and its column in each
+table reader. `Nutrient` reads and writes through `model/CompositionFigures`, the fourteen
+value+unit accessors `CompositionFood` implements, so `NutritionService.per100g` and the mappers
+serve CIQUAL and BLS alike.
 
 ### `composition_foods` — the open composition tables (FD-033 phase B, `V15`)
 
-**CIQUAL 2025 (ANSES) and BLS 4.0 (Max Rubner-Institut), both CC BY 4.0, in one table.** It is
-BEDCA's open replacement: the reference rows point at it since phase C (`V16`), and recipe
+**CIQUAL 2025 (ANSES) and BLS 4.0 (Max Rubner-Institut), both CC BY 4.0, in one table.** It
+replaced BEDCA (retired, above): the reference rows point at it since phase C (`V16`), and recipe
 ingredients and journal extras since phase D (`V17`/`V18`, below). One table rather than two, so
 every consumer points at one id column.
 
@@ -155,7 +140,7 @@ every consumer points at one id column.
   food carries its source** — CIQUAL's protein is nitrogen × Jones factor, BLS's × 6.25, and BLS's
   energy is its own formula — and `CompositionFoodDto` sends `source`, `sourceLabel` and
   `attribution` with every food.
-- **Values as published, with units**, like `bedca_foods`. Energy is the source's **kcal** figure
+- **Values as published, with units.** Energy is the source's **kcal** figure
   (CIQUAL's Regulation (EU) 1169/2011 column, BLS `ENERCC`), so no kJ→kcal factor is applied to it.
   **A qualified value (`traces`, `< 0,2`, `<LOQ`, `<LOD`, `TR`, `-`) is NULL**, never 0; the original
   text is not copied beside it — the committed upstream file is the record of what was written.
@@ -165,8 +150,8 @@ every consumer points at one id column.
   such a food no equivalent weight by energy and still ranks it on its other figures (tested).
 - **fdiet's crosswalk columns** — `name_es`, `name_aliases`, `name_preferred`, `name_reviewed`,
   `edible_portion`, `edible_portion_fdc_id` — come from `composition-es/links.csv`, not from either
-  source, and are NULL on every food it does not name. `name_es` is written **head first, BEDCA
-  style** (`Pollo, pechuga, plancha`), so `FoodCategoriser` (121 of the 123 names) and the
+  source, and are NULL on every food it does not name. `name_es` is written **head first**
+  (`Pollo, pechuga, plancha`), so `FoodCategoriser` (121 of the 123 names) and the
   `FoodState` reader read it. **CIQUAL answers first; a BLS row is used where CIQUAL has no
   same-food equivalent, or only BLS has the state written or an energy figure.** A name two rows
   claim goes to the one marked preferred; a name shared without exactly one preferred stops the
@@ -174,15 +159,15 @@ every consumer points at one id column.
 - **Every crosswalk row starts as a machine prefill (`reviewed = false`)** and a person approves it; the
   122 rows of FD-033 phase B were approved by the project owner on 2026-10-03; the one row phase C
   added (CIQUAL 13716, piña en su jugo) was approved by the project owner on 2026-10-03.
-  Scope today: the "Dieta 1" foods of example-ui.xlsx and the BEDCA foods referenced on 2026-10-03
-  (123 rows); the rest is FD-036.
+  Scope today: the "Dieta 1" foods of example-ui.xlsx and the foods referenced on 2026-10-03 (then
+  BEDCA foods; 123 rows); the rest is FD-036.
 - **`edible_portion` = 1 − refuse/100 of the USDA SR Legacy food in `edible_portion_fdc_id`**
   (CC0; `usda-sr-legacy/refuse.csv` is the extract, and a test checks every row against it). NULL
-  where no SR Legacy food fits (5 rows) — and NULL still refuses a gross weight, as with BEDCA.
+  where no SR Legacy food fits (5 rows) — and NULL still refuses a gross weight.
 - **Matching is exact**: `ICompositionFoodService.entitiesByName` answers a Spanish name or alias,
   case and accents ignored, from an in-memory index of every row (one query, dropped on sync); the
   index is built by `CompositionIndexRow.nameIndex`. Re-importing example-ui.xlsx matches **144 of
-  210** ingredients outright (BEDCA: 41, the floor) — `ExampleDietCompositionMatchTest` measures it
+  210** ingredients outright (BEDCA had matched 41) — `ExampleDietCompositionMatchTest` measures it
   through the real `FoodResolverService` on every build.
 - **Suggestions and alternatives read Spanish names only.** `suggest(text, limit)` ranks the
   crosswalked foods' Spanish words in memory (`CompositionSuggestionDto`: id, name, `source`,
@@ -450,8 +435,7 @@ Every class in `diet/`, `alternative/` and `patient/` is injected through an int
 `IAlternativeService`, `IFoodCategoriser`, `INutritionSimilarity`, `IPatientService`,
 `IPatientMapper`, `IReferenceService`, `IMeasureCriterionService`, `IReferenceMapper`, `IDietRationService`,
 `IMeasureResolverService`, `IDietMeasureService`, …), as are the food services
-they depend on: `IFoodItemService`, `IBedcaFoodService`, `INutritionService`, `INameMatcher`,
-`IBedcaImportService`, `IBedcaFoodMapper`, `ICompositionFoodService`, `ICompositionImportService`,
+they depend on: `IFoodItemService`, `INutritionService`, `INameMatcher`, `ICompositionFoodService`, `ICompositionImportService`,
 `ICompositionFoodMapper`, `ICompositionTableReader`, `ICompositionLinkReader`, `ISheetStreamReader`. The older `food/` classes
 (`FoodItemService`'s siblings, `FoodImportService`) still use their concrete types. The
 repositories are Spring Data interfaces already.
@@ -634,19 +618,19 @@ exactly why the arithmetic is never allowed to make the first decision.
   rather than botanically. A tomato sits with the vegetables and a potato in `TUBER`, because
   neither is a plausible swap for the other.
 - `helpers/FoodCategoriser` — the word list, and the first word of a name that any rule claims
-  wins. BEDCA names are written head first (`Pollo, pechuga, plancha`), so the head is the food
+  wins. The crosswalk's Spanish names are written head first (`Pollo, pechuga, plancha`), so the head is the food
   and the rest is preparation; reading left to right is what keeps `Aceite de hígado de bacalao`
   an oil, `Café, con leche` a drink and `Flan de huevo` a dessert. Two-word rules go first at
   each position for the few foods named after something they are not — `judía verde`,
-  `nuez moscada`. It claims **956 of the 957** names; the one it does not is left uncategorised
-  and offered nothing, and a word claimed by two families is a startup failure rather than a
+  `nuez moscada`. It claims **121 of the crosswalk's 123** names (a herb mix and a dip are left);
+  a name it does not claim is left uncategorised and offered nothing, and a word claimed by two families is a startup failure rather than a
   silent tie.
 - `helpers/NutritionSimilarity` — the distance, and nothing else. Relative differences on five
   components (energy and protein weighted heaviest, then fat and carbohydrate, fibre breaking
   ties), each measured against a floor so a gram of fat against two reads as rounding. **Only
   components both foods publish are compared**, and fewer than two shared components is a null
-  rather than a score resting on one number. Sugars are published for 205 of 957 foods and
-  sodium says how a food was canned, so neither is counted.
+  rather than a score resting on one number. Sugars were published for only 205 of BEDCA's 957
+  foods when this was tuned (history), and sodium says how a food was canned, so neither is counted.
 - `service/AlternativeService` — one pass over the crosswalked foods per request
   (`ICompositionFoodService.entitiesNamed()`, one query): the category is read off every Spanish
   name, the wrong shelf is dropped before a figure is looked at, and the rest is ordered. Only foods
@@ -656,8 +640,8 @@ exactly why the arithmetic is never allowed to make the first decision.
   and `source`; `FoodAlternativesDto` carries `source`.
 
 **Categories are derived on read and never stored**, like a kcal figure converted from kilojoules.
-The source publishes a group for 182 of its 957 foods, so a stored category would exist for one
-food in five; the name is the one thing every row has.
+CIQUAL and BLS each publish groups of their own, on their own split, so a stored category would
+differ by source; fdiet's Spanish name is the one thing every food on the shelf has.
 
 `AlternativeController` at `/api/alternatives`:
 
@@ -903,20 +887,26 @@ changing an entity, add a migration to match or startup fails.
 | `V19__measure_picked_flag.sql` | `recipe_ingredients.measure_picked` / `extra_foods.measure_picked` (FD-054): whether a person picked the measure; every stored measure starts as picked; `idx_*_food_picked (composition_food_id, measure_picked)` |
 | `V20__free_measures_the_rule_chooses` (Java) | marks as the rule's (`measure_picked = FALSE`) every stored measure the publish rule would choose today anyway — over the published rows, the row's diet's criteria (none for a library recipe), the global criteria and the diet's profile source; anything else stays picked, since nothing recorded who chose it. Applied to the dev DB 2026-10-04: 0 rows (no ingredient or extra had a measure) |
 | `V21__reread_recipe_texts` (Java) | FD-043: re-reads every recipe's `raw_text` with today's `MealTextParser` and rewrites each ingredient's name, quantity, range, unit, state and size, paired with the stored rows **by position**; keeps every food match; re-matches the unmatched by exact Spanish name or alias (V18's rule); gives every row the measure a publish would: a picked one while it still measures the re-read unit and covers the food (FD-039), else the publish rule's choice (FD-054). A recipe without `raw_text`, or whose text now reads into another number of ingredients, is left untouched and logged. The decisions are `db/migration/support/RecipeReread` (pure, tested); `support/` also holds the JDBC loaders a Java migration shares (`Crosswalk`, `MeasureRules`). Applied to the dev DB 2026-10-04: 11 rows re-read, 2 changed and matched, 298 of 301 recipes have no `raw_text`; `product/reports/FD-043-before-after.md` |
+| `V22__drop_bedca.sql` | FD-033 phase E: drops `recipe_ingredients.bedca_food_id` and `extra_foods.bedca_food_id` (foreign keys `fk_diet_ingredients_bedca` / `fk_extra_foods_bedca` and their indexes first) and the `bedca_foods` table. Every column was NULL since V17, so nothing is lost. Applied to the dev DB 2026-10-04 (dump taken first) |
 
 ## Data files and licensing
 
-Two datasets sit in the repository root and both are tracked:
+**Every dataset in the repository allows commercial use.** The audit — each dataset, its SPDX id
+(or its licence named plainly where it has none) and `commercial_use` — is in
+`reference-data/README.md` ("Licence audit"), with `spdx` and `commercial_use` columns in
+`reference-data/sources.csv` (ignored by the importer, checked by `ReferenceLicenceAuditTest`) and
+the SPDX id of every composition file in `reference-data/composition/manifest.csv`. The gated
+sources (SENC, DIAL, FINUT, the Russolillo exchange lists, Murillo / Sant Joan de Déu, TABULA,
+Moreiras, ASPCAT, AEP 2018, FAO/INFOODS, NEVO, Frida, INSA) stay out of the repository and the
+database: a written permission is not an open licence.
 
-- `fooddata.csv` — the branded catalogue, read by `POST /api/food/sync`.
-- `bedca_foods.csv` — the composition database, read by `POST /api/bedca/sync`. Copied from
-  <https://github.com/TerjeRu/bedca-database>, itself a retrieval of <https://www.bedca.net/>.
+`fooddata.csv` sits in the repository root, tracked: the branded catalogue, read by
+`POST /api/food/sync` — an extract of AESAN's open-data file "Datos de composición de alimentos y
+bebidas comercializados en España en 2022" (label data collected by Kantar Worldpanel), under the
+AESAN reuse notice (cite the source and the date of last update; do not alter the content).
 
-**bedca_foods.csv is not unencumbered.** Attribution is required wherever the figures are shown,
-application credits included; the values may not be modified or normalised; and use is limited to
-personal, educational or **non-commercial** purposes without AESAN's express authorisation. The
-full terms and the attribution string are in `BEDCA-ATTRIBUTION.txt`, and `POST /api/bedca/sync`
-returns the attribution in its response so no caller can store the data without being handed it.
+BEDCA (`bedca_foods.csv`, `BEDCA-ATTRIBUTION.txt`), non-commercial and not to be modified, was the
+one encumbered dataset; FD-033 phase E deleted both files from the tree (history not rewritten).
 
 `reference-data/composition/` holds the open composition tables, each **unmodified upstream file**
 in its own folder with a `LICENSE.md` carrying its attribution, plus `manifest.csv` (per file: URL or
@@ -932,7 +922,10 @@ never go inside an upstream file. `POST /api/composition/sync` returns the CIQUA
 attribution strings.
 
 `reference-data/` holds the reference CSVs, each folder under its own source's terms; the 5 al día
-figures are **CC BY-SA 4.0**, so a derived file stays ShareAlike; the USDA yields are US public domain.
+figures are **CC BY-SA 4.0**, so a derived file stays ShareAlike; the USDA yields are US public domain;
+`exchange_systems.csv` is **method-only** — the 10 g definition of the diabetes carbohydrate ration
+and of the Russolillo & Marques-Lopes exchanges, no food list copied — published by fdiet under
+**CC BY 4.0** crediting the method's authors.
 Both the builder and the patient screen show the CIQUAL 2025 and BLS 4.0 attribution lines (FD-041;
 `SOURCE_ATTRIBUTIONS` in `UI/src/domain/compositionFood.ts`, copied word for word from
 `CompositionSource`, since no endpoint hands them over without a sync) and every reference source a

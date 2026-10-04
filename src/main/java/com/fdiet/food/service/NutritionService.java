@@ -22,7 +22,7 @@ import java.util.Locale;
 @Service
 public class NutritionService implements INutritionService {
 
-    /** The kilojoules in one kilocalorie, as the source's own energy notes use it. */
+    /** The kilojoules in one (thermochemical) kilocalorie. */
     private static final BigDecimal KJ_PER_KCAL = new BigDecimal("4.184");
 
     private static final BigDecimal THOUSAND = new BigDecimal("1000");

@@ -1,27 +1,17 @@
 package com.fdiet.alternative.helpers;
 
 import com.fdiet.alternative.domain.FoodCategory;
-import com.fdiet.food.helpers.DataReader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
 
 /**
- * Every name here is one bedca_foods.csv actually carries.
+ * Names written head first, the way fdiet's Spanish crosswalk names a food.
+ * The crosswalk itself is read whole by {@code CompositionDataFilesTest}.
  */
 class FoodCategoriserTest {
-
-    private static final Path CSV = Path.of("bedca_foods.csv");
-
-    /** {@code f_ori_name}, the column the category is read off. */
-    private static final int NAME = 1;
 
     private final FoodCategoriser categoriser = new FoodCategoriser();
 
@@ -41,7 +31,7 @@ class FoodCategoriserTest {
     }
 
     /**
-     * The head of a BEDCA name is the food and the rest is what was done to it,
+     * The head of a name is the food and the rest is what was done to it,
      * so a later word never gets to overrule the first one that is recognised.
      */
     @ParameterizedTest
@@ -101,26 +91,5 @@ class FoodCategoriserTest {
         assertThat(categoriser.of("Cremoso san millan")).isNull();
         assertThat(categoriser.of("")).isNull();
         assertThat(categoriser.of(null)).isNull();
-    }
-
-    /**
-     * The whole composition database, so a rule that stops claiming a shelf of
-     * foods shows up here rather than as an empty list in production.
-     */
-    @Test
-    void claimsAllButAHandfulOfTheCompositionDatabase() {
-        assumeThat(Files.exists(CSV)).isTrue();
-        List<List<String>> records = new DataReader(CSV.toString()).read(CSV);
-        List<String> names = records.subList(1, records.size()).stream()
-                .filter(record -> record.size() > NAME)
-                .map(record -> record.get(NAME))
-                .toList();
-
-        List<String> unclaimed = names.stream()
-                .filter(name -> categoriser.of(name) == null)
-                .toList();
-
-        assertThat(names).hasSize(957);
-        assertThat(unclaimed).containsExactly("Cremoso san millan");
     }
 }

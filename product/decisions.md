@@ -89,3 +89,15 @@ Append-only. Newest at the bottom. A reversed decision gets a new entry naming t
 
 ## 2026-10-04 — FD-060 first
 - FD-060 moves ahead of FD-056. Fix the reader (add "cocinado"), not the composer wording (proposed default). User: "Go ahead with FD-060".
+
+## 2026-10-04 — open questions answered ("yes" to all)
+- FD-052 outcome kept: a state mismatch is never totalled, even with a yield. Confirms the entry above.
+- FD-072 approved: re-read stored `raw_name` of recipes without `raw_text`, after FD-073.
+- FD-069: the "Prueba 1" draft was the user's own; the missing confirm on patient switch is still the bug.
+- FD-008: the user drops `fdiet_ui_verify` themselves.
+- Next implementation: FD-033 phase E (order accepted earlier today).
+
+## 2026-10-04 — FD-033 phase E
+- BEDCA files deleted from the tree; git history not rewritten.
+- `bedcaFoodId` in a request stays a 400 after removal.
+- Licence audit (SPDX, commercial use, method-only exchanges) done in E, not FD-034 A.

@@ -21,8 +21,8 @@ import java.util.function.Function;
  *
  * <p>Five components are compared and three are not. Energy and protein carry
  * the most weight because they are what a swap has to preserve; fat and
- * carbohydrate follow; fibre breaks ties. Sugars are published for only 205 of
- * the 957 foods, so counting them would mostly mean counting nothing, and
+ * carbohydrate follow; fibre breaks ties. Sugars are published far less often
+ * than the other figures, so counting them would mostly mean counting nothing, and
  * sodium says how a food was canned rather than what it is — a fresh food and
  * its tinned self are the same swap.
  *

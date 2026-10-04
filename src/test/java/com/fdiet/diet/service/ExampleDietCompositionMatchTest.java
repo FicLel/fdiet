@@ -38,8 +38,9 @@ import static org.mockito.Mockito.when;
 
 /**
  * FD-033's acceptance floor, measured: importing example-ui.xlsx ("Dieta 1")
- * must match at least 41 of its 210 ingredients outright — what BEDCA matched —
- * against the open composition tables, and phase D keeps the 144 phase B reached.
+ * must match at least 144 of its 210 ingredients outright against the open
+ * composition tables — what phase B reached. (The original floor, 41, was what
+ * BEDCA matched before FD-033 retired it.)
  *
  * <p>The week is read by the real importer and parser, and every ingredient name
  * is put to the real {@link FoodResolverService} over the real
@@ -54,16 +55,14 @@ class ExampleDietCompositionMatchTest {
     private static final String SHEET = "Dieta 1";
     private static final Path LINKS = Path.of("reference-data/composition/composition-es/links.csv");
 
-    /** BEDCA's outright matches on the same sheet: the floor (user, 2026-10-03). */
-    private static final int FLOOR = 41;
-    /** What the crosswalk reached in phase B; phase D must not lose any (AC D3). */
+    /** What the crosswalk reached in phase B; no later phase may lose any (AC D3, E8). */
     private static final int PHASE_B = 144;
     private static final int INGREDIENTS = 210;
 
     private static final String CAPTURED = "captured";
 
     @Test
-    void matchesAtLeastAsManyIngredientsOutrightAsBedca() throws IOException {
+    void matchesAtLeastWhatPhaseBReached() throws IOException {
         List<String> names = ingredientNamesOfTheExampleWeek();
         FoodResolverService resolver =
                 new FoodResolverService(serviceOverTheCrosswalk(), mock(IFoodItemService.class), 100);
@@ -76,9 +75,9 @@ class ExampleDietCompositionMatchTest {
                 .count();
 
         System.out.printf("example-ui.xlsx %s: %d of %d ingredients matched outright "
-                + "against the composition crosswalk (BEDCA: %d)%n", SHEET, matched, names.size(), FLOOR);
+                + "against the composition crosswalk%n", SHEET, matched, names.size());
         assertThat(names).hasSize(INGREDIENTS);
-        assertThat(matched).isGreaterThanOrEqualTo(FLOOR).isGreaterThanOrEqualTo(PHASE_B);
+        assertThat(matched).isGreaterThanOrEqualTo(PHASE_B);
     }
 
     private static List<String> ingredientNamesOfTheExampleWeek() throws IOException {

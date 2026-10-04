@@ -1,7 +1,6 @@
 package com.fdiet.food.service;
 
 import com.fdiet.food.dto.NutritionDto;
-import com.fdiet.food.model.BedcaFood;
 import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.model.FoodItem;
 import com.fdiet.food.model.NutrientValue;
@@ -11,24 +10,28 @@ import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The figures are the real ones for Lechuga (f_id 2399). */
+/**
+ * The unit arithmetic on a composition food. CIQUAL and BLS publish energy in
+ * kcal, but a figure in kJ, a stray milligram or an unknown unit must still read
+ * correctly, so each case is built by hand.
+ */
 class NutritionServiceTest {
 
     private final NutritionService nutritionService = new NutritionService();
 
     @Test
     void readsKilojoulesAsKilocalories() {
-        BedcaFood lechuga = new BedcaFood();
-        lechuga.setEnergy(new NutrientValue(new BigDecimal("65.125"), "kJ"));
+        CompositionFood food = new CompositionFood();
+        food.setEnergy(new NutrientValue(new BigDecimal("65.125"), "kJ"));
 
-        // 65.125 / 4.184
-        assertThat(nutritionService.per100g(lechuga).energyKcal())
+        // 65.125 / 4.184, a figure that does not divide evenly
+        assertThat(nutritionService.per100g(food).energyKcal())
                 .isEqualByComparingTo("15.565249");
     }
 
     @Test
-    void leavesTheFewFoodsPublishedInKilocaloriesAlone() {
-        BedcaFood food = new BedcaFood();
+    void leavesAFigurePublishedInKilocaloriesAlone() {
+        CompositionFood food = new CompositionFood();
         food.setEnergy(new NutrientValue(new BigDecimal("240"), "kcal"));
 
         assertThat(nutritionService.per100g(food).energyKcal()).isEqualByComparingTo("240");
@@ -36,8 +39,7 @@ class NutritionServiceTest {
 
     @Test
     void convertsTheStrayMilligramRowsToGrams() {
-        BedcaFood food = new BedcaFood();
-        // Three of the 957 foods publish fibre in milligrams.
+        CompositionFood food = new CompositionFood();
         food.setFiber(new NutrientValue(new BigDecimal("1500"), "mg"));
 
         assertThat(nutritionService.per100g(food).fiberG()).isEqualByComparingTo("1.5");
@@ -45,7 +47,7 @@ class NutritionServiceTest {
 
     @Test
     void refusesAUnitItDoesNotKnowRatherThanGuessingTheScale() {
-        BedcaFood food = new BedcaFood();
+        CompositionFood food = new CompositionFood();
         food.setProtein(new NutrientValue(new BigDecimal("12"), "oz"));
 
         assertThat(nutritionService.per100g(food).proteinG()).isNull();
@@ -53,7 +55,7 @@ class NutritionServiceTest {
 
     @Test
     void leavesAComponentTheSourceNeverPublishedNull() {
-        BedcaFood food = new BedcaFood();
+        CompositionFood food = new CompositionFood();
         food.setProtein(new NutrientValue(new BigDecimal("1.125"), "g"));
 
         NutritionDto nutrition = nutritionService.per100g(food);
@@ -89,8 +91,8 @@ class NutritionServiceTest {
 
     @Test
     void knowsWhenNothingIsKnown() {
-        assertThat(nutritionService.per100g((BedcaFood) null).isEmpty()).isTrue();
-        assertThat(nutritionService.per100g(new BedcaFood()).isEmpty()).isTrue();
+        assertThat(nutritionService.per100g((CompositionFood) null).isEmpty()).isTrue();
+        assertThat(nutritionService.per100g(new CompositionFood()).isEmpty()).isTrue();
     }
 
     /** CIQUAL 20031 "Lettuce, raw": energy published in kcal, sodium in mg, energy-less foods blank. */

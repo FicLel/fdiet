@@ -4,11 +4,10 @@ package com.fdiet.food.model;
  * The fourteen published figures a composition food carries, each as a value
  * and its own unit.
  *
- * <p>Two tables hold them: {@code bedca_foods} ({@link BedcaFood}) and
- * {@code composition_foods} ({@link CompositionFood}, CIQUAL and BLS). Both
- * entities implement this so {@link Nutrient}, the unit arithmetic and the
- * mappers loop over one shape rather than one per table. The accessors are the
- * ones Lombok generates on each entity.
+ * <p>{@code composition_foods} ({@link CompositionFood}, CIQUAL and BLS) holds
+ * them and implements this, so {@link Nutrient}, the unit arithmetic and the
+ * mappers loop over one shape rather than over fourteen named fields. The
+ * accessors are the ones Lombok generates on the entity.
  */
 public interface CompositionFigures {
 

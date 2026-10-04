@@ -92,7 +92,7 @@ public class ExtraFood {
 
     /**
      * The generic composition food (CIQUAL 2025 / BLS 4.0), when that is the
-     * match. {@code bedca_food_id} stays in the table, null, until FD-033 phase E.
+     * match.
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "composition_food_id")

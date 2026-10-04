@@ -35,8 +35,8 @@ where only BLS publishes the state written (`plancha`, `asado`) or an energy fig
 describes the food as purchased in the US (bone-in, in shell, with peel): a reviewer should confirm
 it describes the purchase the row means. A blank edible portion still refuses a gross weight.
 
-Scope today: the foods of `example-ui.xlsx` "Dieta 1" and the BEDCA foods fdiet referenced on
-2026-10-03 (FD-033 phase B). Not linked on purpose, because neither source has a defensible
+Scope today: the foods of `example-ui.xlsx` "Dieta 1" and the foods fdiet referenced (then in the
+retired BEDCA table) on 2026-10-03 (FD-033 phase B). Not linked on purpose, because neither source has a defensible
 equivalent: néctar de ciruela, queso fresco de Burgos, hummus casero, bacalao desalado, salsa de soja
 baja en sodio. The rest of both tables is FD-036.
 

@@ -18,8 +18,8 @@ import com.fdiet.food.model.FoodItem;
 public interface INutritionService {
 
     /**
-     * A composition food's figures per 100 g of edible portion — BEDCA, CIQUAL
-     * or BLS, which all publish each figure with its own unit.
+     * A composition food's figures per 100 g of edible portion — CIQUAL or BLS,
+     * which both publish each figure with its own unit.
      */
     NutritionDto per100g(CompositionFigures food);
 

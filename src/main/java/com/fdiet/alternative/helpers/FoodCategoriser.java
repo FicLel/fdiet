@@ -31,14 +31,14 @@ import static com.fdiet.alternative.domain.FoodCategory.VEGETABLE;
 /**
  * The word list that puts a food on a shelf, and nothing else.
  *
- * <p><strong>Why the name and not the published group.</strong> The composition
- * database fills {@code namelevel1} for 182 of its 957 foods and leaves it empty
- * for the other 775, so a category read from it would exist for one food in five
- * and the answer to "what can I swap this for" would depend on which food you
- * happened to ask about. The name is the one thing every row has, and BEDCA
- * names are written head first — {@code Pollo, pechuga, plancha},
- * {@code Aceite de hígado de bacalao} — so the head is the food and everything
- * after it is preparation.
+ * <p><strong>Why the name and not the published group.</strong> CIQUAL and BLS
+ * each publish a food group of their own, in their own language and on their
+ * own split, so a category read from them would differ by source and the answer
+ * to "what can I swap this for" would depend on which table a food came from.
+ * fdiet's Spanish names (the crosswalk's {@code name_es}) are the one thing
+ * every food on the shelf has, and they are written head first —
+ * {@code Pollo, pechuga, plancha}, {@code Aceite de hígado de bacalao} — so the
+ * head is the food and everything after it is preparation.
  *
  * <p><strong>So the first word that any rule claims wins.</strong> Reading left
  * to right is what keeps {@code Aceite de hígado de bacalao} an oil rather than
@@ -51,8 +51,9 @@ import static com.fdiet.alternative.domain.FoodCategory.VEGETABLE;
  * are named after something they are not: {@code judía verde} is a vegetable and
  * not a legume, {@code nuez moscada} a spice and not a nut.
  *
- * <p>Over bedca_foods.csv this claims 956 of the 957 names. The one it does
- * not is left uncategorised on purpose — see {@link IFoodCategoriser}.
+ * <p>Over the crosswalk this claims 121 of the 123 Spanish names (a herb mix and
+ * a dip are left; {@code CompositionDataFilesTest} pins them). A name it does not
+ * claim is left uncategorised on purpose — see {@link IFoodCategoriser}.
  */
 @Component
 public class FoodCategoriser implements IFoodCategoriser {

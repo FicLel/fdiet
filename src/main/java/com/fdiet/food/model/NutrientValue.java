@@ -10,10 +10,10 @@ import java.math.BigDecimal;
 /**
  * One published nutrient figure: the number and the unit it was published in.
  *
- * <p>They travel together because the source publishes the unit per value and
- * its terms forbid normalising it — energy is kJ for most foods and kcal for a
- * few, and carbohydrate, fibre and water each have a stray milligram row. A
- * value read without its unit is a wrong number.
+ * <p>They travel together because each source publishes a unit per component —
+ * kcal for energy, mg for sodium, g for protein — and the stored figure is kept
+ * exactly as published, so the unit is part of the record. A value read without
+ * its unit is a wrong number.
  *
  * <p>Hibernate hands back a null embeddable when both columns are null, which
  * is exactly "the source published nothing for this component".

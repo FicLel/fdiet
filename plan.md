@@ -7,6 +7,13 @@ Research date: 2026-09-13. Every figure below says where it came from; a figure 
 *(verify)* was read through a text extraction or a secondary page and has to be checked
 against the original page before it is seeded.
 
+> **Historical note (2026-10-04, FD-033 phase E).** BEDCA has been removed from fdiet: its table,
+> columns, endpoint, classes and data files are gone (migration `V22`), and the composition figures
+> come from CIQUAL 2025 and BLS 4.0 (CC BY 4.0) through fdiet's Spanish crosswalk. **Every BEDCA
+> mention below is historical** — it describes the plan as written, when BEDCA was the composition
+> database — and is kept unedited as the record of the research. See `CLAUDE.md` and
+> `product/stories/FD-033-open-data-only.md`.
+
 ---
 
 ## Implementation status
@@ -243,7 +250,7 @@ commercial, the BEDCA authorisation and every C/D source below have to be revisi
 | Role | **The only openly licensed Spanish per-food portion and unit-weight table found.** First seed for fruit and vegetable unit weights and gross→net |
 | Official source | https://www.renhyd.org/renhyd/article/view/628 |
 
-#### R6. BEDCA — Base de Datos Española de Composición de Alimentos (already in fdiet)
+#### R6. BEDCA — Base de Datos Española de Composición de Alimentos (historical: removed in FD-033 phase E)
 
 | Field | Value |
 | --- | --- |

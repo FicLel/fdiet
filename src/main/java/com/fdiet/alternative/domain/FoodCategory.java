@@ -16,11 +16,11 @@ package com.fdiet.alternative.domain;
  * potato sits in {@link #TUBER} rather than with the vegetables, because
  * neither is a plausible swap for the other.
  *
- * <p>These are <strong>derived, never stored</strong>. The composition database
- * publishes a group for only 182 of its 957 foods, so the name is the only
- * signal every food has; see {@code helpers/FoodCategoriser}. Nothing writes a
- * category back to {@code bedca_foods}, for the same reason nothing writes back
- * a kcal figure converted from kilojoules.
+ * <p>These are <strong>derived, never stored</strong>. Each composition source
+ * publishes groups of its own, on its own split, so fdiet's Spanish name is the
+ * one signal every food on the shelf has; see {@code helpers/FoodCategoriser}.
+ * Nothing writes a category back to {@code composition_foods}, for the same
+ * reason nothing writes back a figure converted to another unit.
  */
 public enum FoodCategory {
 

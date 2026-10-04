@@ -36,8 +36,8 @@ public class DataReader {
     }
 
     /**
-     * Any CSV of the same dialect. The composition database ships one too, so
-     * the parser is shared rather than written twice.
+     * Any CSV of the same dialect — the composition crosswalk and the reference
+     * CSVs are read through it, so the parser is shared rather than written twice.
      */
     public List<List<String>> read(Path csv) {
         try (Reader reader = Files.newBufferedReader(csv, StandardCharsets.UTF_8)) {

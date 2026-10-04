@@ -83,7 +83,7 @@ public class CompositionFood implements CompositionFigures {
     /**
      * The edible fraction of the food as purchased, {@code 1 − refuse} of the
      * USDA SR Legacy food in {@link #ediblePortionFdcId}. Null when no SR Legacy
-     * food fits — and a null refuses a gross weight, as it does for BEDCA.
+     * food fits — and a null refuses a gross weight rather than guessing the refuse.
      */
     @Column(name = "edible_portion", precision = 8, scale = 6)
     private BigDecimal ediblePortion;

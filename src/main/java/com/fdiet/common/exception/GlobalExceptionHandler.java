@@ -3,7 +3,6 @@ package com.fdiet.common.exception;
 import com.fdiet.common.dto.ApiErrorDto;
 import com.fdiet.diet.exception.DietNotFoundException;
 import com.fdiet.diet.exception.InvalidDietException;
-import com.fdiet.food.exception.BedcaFoodNotFoundException;
 import com.fdiet.food.exception.CompositionFoodNotFoundException;
 import com.fdiet.food.exception.FoodItemNotFoundException;
 import com.fdiet.food.exception.InvalidCompositionDataException;
@@ -28,7 +27,7 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler({FoodItemNotFoundException.class, BedcaFoodNotFoundException.class,
+    @ExceptionHandler({FoodItemNotFoundException.class,
             CompositionFoodNotFoundException.class,
             DietNotFoundException.class, JournalEntryNotFoundException.class,
             PatientNotFoundException.class, ReferenceNotFoundException.class})

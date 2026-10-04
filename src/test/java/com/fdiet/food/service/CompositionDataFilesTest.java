@@ -194,8 +194,8 @@ class CompositionDataFilesTest {
     }
 
     /**
-     * The Spanish names are written head first, BEDCA style, so the categoriser
-     * tuned to BEDCA reads them: 121 of the 123. The two it leaves are a herb mix
+     * The Spanish names are written head first ({@code Pollo, pechuga, plancha}),
+     * so the categoriser reads them: 121 of the 123. The two it leaves are a herb mix
      * and a dip, which no categoriser rule claims yet.
      */
     @Test

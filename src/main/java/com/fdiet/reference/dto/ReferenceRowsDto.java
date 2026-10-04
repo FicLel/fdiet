@@ -18,7 +18,7 @@ import java.util.List;
 /**
  * Every row of the reference CSVs, typed but not yet stored. The importer reads
  * the files into this and hands it to the service that owns the tables, the way
- * {@code BedcaCsvRowDto} works for the composition database.
+ * the composition importer hands its rows to {@code CompositionFoodService}.
  *
  * <p>Rows point at each other by code — a ration names its population, a
  * population its source — so the files can be reviewed one at a time and the

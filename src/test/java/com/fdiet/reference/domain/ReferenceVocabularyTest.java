@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ReferenceVocabularyTest {
 
     @Test
-    void readsTheStateABedcaNameStatesAndNothingMore() {
+    void readsTheStateAFoodNameStatesAndNothingMore() {
         assertThat(FoodState.ofFoodName("Lenteja, hervida")).isEqualTo(FoodState.COOKED);
         assertThat(FoodState.ofFoodName("Lenteja, seca, cruda")).isEqualTo(FoodState.DRY);
         assertThat(FoodState.ofFoodName("Patata, cruda")).isEqualTo(FoodState.RAW);

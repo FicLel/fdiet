@@ -1,6 +1,6 @@
 # FD-033 Open data only — replace and remove BEDCA and every non-open source
 
-Status: in progress (A done; B done, committed 2e999db; C done, committed 901f635; D done, committed 3ced939 2026-10-04; E next) · Size: L (epic — phases below become their own ids when refined) · Created: 2026-10-02
+Status: in progress (A done; B done, committed 2e999db; C done, committed 901f635; D done, committed 3ced939 2026-10-04; E done 2026-10-04, uncommitted) · Size: L (epic — phases below become their own ids when refined) · Created: 2026-10-02
 For: nutritionist (and anyone who installs or reuses fdiet)
 
 ## Problem
@@ -242,3 +242,37 @@ the two combine (which answers first, how gaps fill, per food family).
   them touches an applied migration. Follow-ups: FD-043–FD-051.
 - Live check 2026-10-03 (5000 restarted, UI on 5173): D10 confirmed. Diet 9 shows 4600 kcal with 90 of 211 counted. The fix-up panel ranks CIQUAL candidates. The composer shows "CIQUAL 2025" in search and on the picked food. A patient extra logs against CIQUAL; the test extra was deleted. `bedcaFoodId` is a 400. No console errors. The only BEDCA text left is the footer (FD-041). The check found FD-052: a composed dry ration on `Lenteja, cocida` is counted as cooked.
 - Phase D done 2026-10-04: committed by the user in 3ced939 with FD-048, FD-052 and FD-041 still open; they are fixed in the next sections, not in D.
+
+## Decisions (user, 2026-10-04 — phase E)
+23. `bedca_foods.csv` and `BEDCA-ATTRIBUTION.txt` are **deleted from the tree**; git history is **not** rewritten.
+24. `bedcaFoodId` in any request **stays a 400** (`RetiredFields`) after removal.
+25. The **licence audit is part of E** (not FD-034 A).
+
+## Phase E — refined 2026-10-04 (size M; backend, then tech-lead; no frontend work: `UI/src` names BEDCA nowhere)
+Acceptance criteria:
+- [x] E1 Migration `V22` drops `recipe_ingredients.bedca_food_id`, `extra_foods.bedca_food_id` (with their FKs/indexes) and the `bedca_foods` table. A fresh database migrates V1→V22 with no BEDCA table or column.
+- [x] E2 `/api/bedca` gone (404). `BedcaController`, `BedcaFoodService`, `BedcaImportService`, `BedcaFood`, their DTOs, mapper, repository, exception, `FoodSuggestionDto`, `IBedcaFoodService.suggest`/`entitiesAll`, the `fdiet.bedca.*` property and `BEDCA_CSV_PATH` removed; BEDCA-only tests removed.
+- [x] E3 `bedcaFoodId` in any request is still a 400 (decision 24); its test stays.
+- [x] E4 `bedca_foods.csv`, `BEDCA-ATTRIBUTION.txt` deleted from the tree (decision 23). Applied migrations (V4…V18) are not edited.
+- [x] E5 Comments and Javadoc in `FoodCategoriser`, `FoodCategory`, `FoodState`, `Nutrient`, `CompositionFigures`, `NutritionService` describe the composition foods, not BEDCA.
+- [x] E6 Licence audit: `reference-data/sources.csv` gains `spdx` and `commercial_use` columns (reader by header, sync still green); composition `manifest.csv` already has SPDX; `fooddata.csv` (AESAN branded) appears in the audit. Every source `commercial_use = true`; AESAN reuse notice and US public domain named plainly (no SPDX). `exchange_systems.csv` documented as method-only, CC BY 4.0, crediting the authors, in `sources.csv` and `reference-data/README.md`.
+- [x] E7 Gated sources (SENC, DIAL, FINUT, Russolillo lists, Murillo/SJD, TABULA, Moreiras, ASPCAT, AEP 2018, FAO/INFOODS, NEVO, Frida, INSA) absent from repo and DB: grep + listing written into this story's notes.
+- [x] E8 `ExampleDietCompositionMatchTest` still ≥ 144/210; all tests green; app starts on 5000 against the migrated dev DB.
+- [x] E9 CLAUDE.md (BEDCA sections, migration table, data files) and `reference-data/README.md` updated; `plan.md` BEDCA mentions marked historical.
+- [x] E10 tech-lead review: nothing BEDCA-derived remains in code, data or schema (grep `bedca` -i shows only migrations V4–V18, `RetiredFields` and history notes).
+
+Tasks: backend — E1–E9 (**migration: `mysqldump` the `.env` DB first; `gradlew test` migrates it; restart 5000 after**). tech-lead — E10.
+
+### Hand-off: backend — phase E (2026-10-04)
+FD-033 phase E, story `product/stories/FD-033-open-data-only.md` (section "Phase E — refined", decisions 23–25, AC E1–E9). Remove BEDCA. Before any migration or `gradlew test`, `mysqldump` the `.env` database to a file outside the repo and report its path. Add `V22` dropping `recipe_ingredients.bedca_food_id`, `extra_foods.bedca_food_id` (FKs and indexes first) and the `bedca_foods` table; never edit an applied migration. Delete `/api/bedca` and every BEDCA class, DTO, test and property (`fdiet.bedca.*`, `BEDCA_CSV_PATH` in `.env.example`), `IBedcaFoodService.suggest`/`entitiesAll`, `FoodSuggestionDto`; check V18 and any Java migration still compile without them. Keep `RetiredFields` so `bedcaFoodId` stays a 400. `git rm` `bedca_foods.csv` and `BEDCA-ATTRIBUTION.txt` (no history rewrite; do not commit). Reword comments off BEDCA (E5). Licence audit (E6): add `spdx` and `commercial_use` columns to `reference-data/sources.csv` (reader by header; `POST /api/reference/sync` green), cover `fooddata.csv`, document `exchange_systems.csv` as method-only CC BY 4.0 in `sources.csv` and `reference-data/README.md`. Grep the repo for the gated sources (E7) and report the listing. Update CLAUDE.md (BEDCA sections, migration table, data files and licensing) and mark BEDCA mentions in `plan.md` as historical. Run all tests, confirm ≥ 144/210, restart the backend on 5000. Report: migration applied, dump path, files removed, test count, grep result for `bedca`. List out-of-scope bugs; do not fix them.
+
+### Hand-off: tech-lead — phase E (after backend)
+Review FD-033 phase E (uncommitted diff; AC E1–E10 in `product/stories/FD-033-open-data-only.md`). Check nothing BEDCA-derived remains in code, data, schema or docs except applied migrations, `RetiredFields` and history notes; V22 safe on a fresh DB and the dev DB; licence audit complete. Fix what you find, run all tests. List out-of-scope bugs as new-story candidates; do not fix them.
+
+## Phase E — backend done 2026-10-04 (uncommitted; deletions staged by `git rm`)
+- Dump: `C:\Users\victo\fdiet-backups\fdiet-before-V22-20261004.sql` (17.4 MB). V22 applied to dev DB 2026-10-04 20:48; fresh V1→V22 checked on a temp schema (dropped). 372 tests green; 144/210 holds; 5000 restarted (`/api/bedca` 404, `bedcaFoodId` 400).
+- `fooddata.csv` is in the audit table of `reference-data/README.md`, not `sources.csv` (that file feeds `ref_sources`, which the UI lists as reference sources). New `ReferenceLicenceAuditTest`.
+- E7 listing: DB `ref_sources` = AESAN-2022-007, AESAN-MEC-2010, 5ALDIA-2019, FUNDACION-DIABETES-HC, RUSSOLILLO-MARQUES-2011, USDA-YIELDS-2014; no gated table. Repo hits are mentions only: SENC (a comparison note in `aesan-2022/food_measures.csv`, a V8 comment, a fictional code in `ReferenceMatcherTest`), INFOODS (CIQUAL tag vocabulary in `manifest.csv`), SJD (substring in BLS xlsx cells), Russolillo (5 al día authors; method-only 10 g definition). DIAL, FINUT, Murillo, TABULA, Moreiras, ASPCAT, AEP 2018, NEVO, Frida, INSA only in docs/research.
+- `bedca` grep left: applied migrations V4–V18, V22, `RetiredFields` + request DTOs/doc strings, history notes in tests and docs, `reports/`, `research_notes/`, `.claude/agents/*.md` + backend skill (→ FD-074).
+- Follow-ups: FD-074–FD-077.
+- Tech-lead review 2026-10-04 (E10): no bug. Fixed comments still stating BEDCA facts as current (`NutrientValue`, `NutrientDto`, `NutritionService`, `DataReader`, `NutritionSimilarity`, CLAUDE.md:78); added `everyCompositionFileCarriesAnOpenSpdxId` (15 manifest rows). 373 tests, 144/210. Open: the audit says AESAN notice "commercial use: yes" while the README still says the notice page was a 404 → FD-078.

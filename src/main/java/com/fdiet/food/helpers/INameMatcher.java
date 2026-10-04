@@ -7,7 +7,7 @@ import java.util.Set;
  * Scores how well the words of a food's name are accounted for by the words a
  * diet used.
  *
- * <p>It ranks; it never decides. See {@link com.fdiet.food.dto.FoodSuggestionDto}
+ * <p>It ranks; it never decides. See {@link com.fdiet.food.dto.CompositionSuggestionDto}
  * for why the decision stays with a person.
  */
 public interface INameMatcher {

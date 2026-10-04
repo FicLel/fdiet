@@ -13,7 +13,7 @@ A work of the United States federal government, and so in the public domain in t
 `yield_pct` and `samples` are the table's *Yield Description*, *Preparation Method*, *Cooking
 Yield %* and *n*. `page_ref` names the row by its NDB number, or by its description where the
 table gives none. Rows with no `samples` are the 1975 figures the table carries over from AH-102.
-`keywords`, `method_keywords` and `note` are fdiet's: which BEDCA foods a row is offered for, and
+`keywords`, `method_keywords` and `note` are fdiet's: which foods a row is offered for (by fdiet's family and Spanish name), and
 which Spanish cooking words its method is written as.
 
 A cooking yield is the cooked weight per 100 g raw. fdiet only ever **offers** one — beside an

@@ -36,10 +36,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * The catalogue here was a slice of bedca_foods.csv — names and published
- * figures, kilojoules and all — kept as crosswalked composition foods: the
- * shelf and the arithmetic do not care which table a figure came from, and a
- * kilojoule figure still exercises the unit conversion.
+ * The catalogue here is a handful of crosswalked composition foods, names
+ * written head first and figures as a source would publish them — a kilojoule
+ * figure among them, so the unit conversion is still exercised.
  */
 class AlternativeServiceTest {
 
@@ -346,7 +345,7 @@ class AlternativeServiceTest {
                 state, WeightBasis.NET_EDIBLE, null, null, "p. 52", null);
     }
 
-    /** Energy as published: kilojoules, which is what 947 of the 957 rows use. */
+    /** Energy in kilojoules, so every case goes through the kJ → kcal conversion. */
     private static CompositionFood food(Long id, String name,
                                   String kj, String protein, String fat, String fibre) {
         CompositionFood food = blank(id, name);

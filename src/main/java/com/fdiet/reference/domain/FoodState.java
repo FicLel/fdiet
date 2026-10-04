@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * is a threefold error. Nothing converts one into the other here. A state is
  * read, kept and compared, and a disagreement is shown rather than corrected.
  *
- * <p>{@link #UNSPECIFIED} is what most published rations and most BEDCA names
+ * <p>{@link #UNSPECIFIED} is what most published rations and most composition food names
  * say — nothing — and it never counts as a disagreement.
  */
 public enum FoodState {
@@ -84,7 +84,7 @@ public enum FoodState {
      * says nothing.
      *
      * <p>Read from the name because the name is what the source wrote in words.
-     * The LanguaL facets BEDCA also publishes were checked and are not
+     * Published LanguaL facets were checked and are not
      * dependable for this — {@code Lengua, de ternera, cruda} is coded as baked
      * and {@code Vinagre de manzana} as boiled.
      */

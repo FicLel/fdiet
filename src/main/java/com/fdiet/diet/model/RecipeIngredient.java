@@ -60,9 +60,6 @@ public class RecipeIngredient {
      * The generic composition food — the usual match, since a diet says
      * "lechuga" and that is what fdiet's Spanish crosswalk names. Null alongside
      * {@link #foodItem} means the ingredient is still unmatched.
-     *
-     * <p>{@code bedca_food_id} stays in the table, null on every row, until FD-033
-     * phase E drops it; nothing maps it.
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "composition_food_id")
