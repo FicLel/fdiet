@@ -496,7 +496,16 @@ diet is addressed by its own id:
 - `POST /api/diets/parse` — reads recipe text (`text`, optional `slotName`) into a recipe with
   its ingredients matched and priced, **storing nothing**. It exists so the editor never has a
   parser of its own: a second implementation would drift from the importer, and the two would then
-  disagree about what the same line of text means.
+  disagree about what the same line of text means. Optional `keep:
+  [{name, compositionFoodId | foodItemId, foodMeasureId?}]` (FD-048) carries the matches the editor
+  already holds, so a re-read after an edit does not undo them: an ingredient read under a kept name
+  — compared by `Texts.key`, the crosswalk index's key (case, accents, whitespace ignored); the same
+  name twice is paired in order — keeps that food instead of the resolver's answer, even a food with
+  no Spanish name or a non-preferred row, and the recipe is priced with it. Its measure is handed on
+  as the pick and re-validated as FD-039 does, so it is dropped once the unit no longer is the word it
+  measures. An edited name keeps nothing. Both ids, or neither, in one entry is a 400, as is
+  `bedcaFoodId`. `diet/helpers/KeptMatches`, O(n + k), no query of its own: kept foods go into the
+  same batched `entitiesByIds` and are never sent to the resolver.
 - `POST /api/diets/import` — multipart `file`, required `patientId`, optional `sheet`, `name`,
   `startedOn`, `referenceProfile`, `clinical`.
 - `PATCH /api/diets/{id}` — `{name?, referenceProfileCode?, clinical?}` without sending the week.

@@ -3,7 +3,7 @@ import { computed, ref, shallowRef } from 'vue'
 import { dietsApi } from '@/api/diets'
 import { referenceApi } from '@/api/reference'
 import type { CompositionFood } from '@/api/compositionTypes'
-import type { FoodMeasure, FoodState, Ration } from '@/api/types'
+import type { DishIngredient, FoodMeasure, FoodState, Ration } from '@/api/types'
 import {
   asksForWeight as needsWeight,
   choiceTotal,
@@ -45,7 +45,8 @@ const props = defineProps<{
   profileCode: string | null
 }>()
 
-const emit = defineEmits<{ append: [fragment: string] }>()
+/** The fragment to append, and the ingredient it reads as, pinned to the food chosen. */
+const emit = defineEmits<{ append: [fragment: string, pin: DishIngredient] }>()
 
 /** What the criterion form is open for: a published range, or a new unit (`from` null). */
 type Asking = { from: FoodMeasure | null } | null
@@ -246,7 +247,7 @@ async function add(): Promise<void> {
         ? { ...common, foodMeasureId: current.measure.id, count: count.value }
         : { ...common, grams: Math.round(total.value! * 100) / 100 },
     )
-    emit('append', composed.fragment)
+    emit('append', composed.fragment, composed.ingredient)
     added.value = unitsLine.value ? `${composed.fragment} · ${unitsLine.value}` : composed.fragment
   } catch (cause) {
     error.value = `No se pudo añadir${cause instanceof Error ? `: ${cause.message}` : ''}`

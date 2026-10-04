@@ -33,6 +33,24 @@ export interface ParseDishRequest {
   slotName?: string
   /** The diet the recipe is written in, so its own measure criteria are applied. */
   dietId?: number
+  /**
+   * The matches already held for this text. An ingredient read under one of these
+   * names keeps that food (and measure, while it still weighs the unit) instead of
+   * what its name would match; an edited name matches none, and parse decides.
+   */
+  keep?: KeptMatch[]
+}
+
+/**
+ * A match carried through a re-read of the text: the ingredient's name as the
+ * backend read it, and exactly one of the two food ids.
+ */
+export interface KeptMatch {
+  name: string
+  compositionFoodId?: number
+  foodItemId?: number
+  /** The household measure it is weighed through now; re-validated by the backend. */
+  foodMeasureId?: number
 }
 
 /**

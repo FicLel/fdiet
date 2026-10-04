@@ -91,7 +91,7 @@ public class DietComposeService implements IDietComposeService {
         }
 
         RecipeDto read = recipeService.read(fragment, name, request.dietId(), profile,
-                food.getId(), request.foodMeasureId());
+                food.getId(), request.foodMeasureId(), List.of());
         return new ComposedFragmentDto(fragment, read.ingredients().get(0));
     }
 

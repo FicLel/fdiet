@@ -63,3 +63,11 @@
 - 2026-10-03 — FD-048 (composed food loses its pin on publish), FD-049 (V18 re-match silent on unsynced crosswalk), FD-050 (`matchedSourceLabel` in DTOs), FD-051 (uniform retired-field 400) created from FD-033 D review.
 - 2026-10-03 — FD-033 D live check on 5000/5173 passed: diet 9 at 4600 kcal / 90 of 211 counted (657 kcal weekly average), fix-up panel offers CIQUAL candidates, composer adds by rations with the source shown, a patient extra logs against CIQUAL (test extra deleted), `bedcaFoodId` is a 400, no console errors. The only BEDCA text left is the footer (FD-041).
 - 2026-10-03 — FD-052 created from the D live check: a bracket state that contradicts the name is dropped, and composed `Lenteja, cocida (55 g en seco)` is counted as cooked.
+- 2026-10-04 — FD-033 D done: committed by the user (3ced939). FD-048, FD-052, FD-041 deferred to the next sections; not started.
+- 2026-10-04 — FD-048 refined: option b, every match (decision recorded); widened to fix-up matches lost on a cell edit; sized M. Ready, hand-off prompts in story.
+- 2026-10-04 — FD-048 started: handed to backend (parse `keep`).
+- 2026-10-04 — FD-048 backend done (parse `keep`, 349 tests green, CLAUDE.md updated; uncommitted; 5000 needs restart). Handed to frontend.
+- 2026-10-04 — FD-048 frontend done (draft `keep` per cell, composer emits pin; `pnpm build` clean; live: composer food without Spanish name, hand match through another edit, renamed ingredient drops match, quantity edit keeps it — all kept after publish; scenario 2 not reproducible: no non-preferred crosswalk row). Uncommitted. Backend on 5000 restarted by frontend agent. Handed to tech-lead.
+- 2026-10-04 — FD-053 (library recipe editor loses pins on re-read) created from FD-048 frontend.
+- 2026-10-04 — FD-048 tech-lead review done: one frontend fix (stale `keep` copy could undo a hand match); measure carry and library detach verified live; test data cleaned. Uncommitted; awaiting user commit.
+- 2026-10-04 — FD-054 (auto measure becomes a pick), FD-055 (fix-up rename leaves `raw_text`), FD-056 (half-typed name drops a pin), FD-057 (detached copy keeps library row ids) created from FD-048 review.

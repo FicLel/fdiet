@@ -125,6 +125,18 @@ public record DishIngredient(
                 bedcaFoodId);
     }
 
+    /**
+     * The same ingredient matched to exactly the food a caller kept — a composition
+     * food or a branded product, the other released — with the measure it picked,
+     * when it picked one (FD-048).
+     */
+    public DishIngredient matchedTo(Long compositionId, Long itemId, Long measureId) {
+        return new DishIngredient(id, name, quantity, quantityMax, unit, state, size, itemId,
+                compositionId, measureId == null ? foodMeasureId : measureId,
+                matchedName, matchedSource, measure, stateMismatch, yieldHint, nutrition, suggestions,
+                bedcaFoodId);
+    }
+
     /** The unit as the patient reads it, in both numbers; derived, never stored. */
     @JsonProperty(value = "unitWording", access = JsonProperty.Access.READ_ONLY)
     public UnitWording unitWording() {

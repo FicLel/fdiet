@@ -74,3 +74,5 @@ Append-only. Newest at the bottom. A reversed decision gets a new entry naming t
 - **2026-10-03** — **Every consumer moves to composition foods in phase D** (matching, totals, rations, measures, yields, compose, alternatives, journal extras); phase E only deletes BEDCA.
 - **2026-10-03** — **No new BEDCA matches during D**: the API refuses `bedcaFoodId`, the UI searches CIQUAL/BLS only. Reason: matches made now would be wiped in E.
 - **2026-10-03** — The before/after totals report is a **one-off file** (`product/reports/FD-033-D-before-after.md`), not an app feature.
+- **2026-10-04** — FD-033 D committed **without** FD-048, FD-052 and FD-041; they are fixed in the next sections. Reason: user's call.
+- **2026-10-04** — FD-048: the draft **keeps matches through a re-parse** (option b); the composer keeps offering every CIQUAL/BLS food (option a, narrowing to crosswalked foods, rejected). Applies to **every** match — composer pins and fix-up matches alike: an unchanged name keeps its food, an edited name lets parse decide. Reason: user's call; a person's choice must not be undone silently.

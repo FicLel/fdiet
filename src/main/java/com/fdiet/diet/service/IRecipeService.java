@@ -2,6 +2,7 @@ package com.fdiet.diet.service;
 
 import com.fdiet.common.dto.PageDto;
 import com.fdiet.diet.dto.DishIngredient;
+import com.fdiet.diet.dto.KeptMatchDto;
 import com.fdiet.diet.dto.RecipeDto;
 import com.fdiet.diet.dto.ResolveIngredientDto;
 import com.fdiet.diet.model.Recipe;
@@ -80,9 +81,11 @@ public interface IRecipeService {
      * @param compositionFoodId the food a one-ingredient text names, when the caller
      *                          already knows it (the composer); null to match by name
      * @param preferredMeasure  the measure to keep for a one-ingredient text, when it fits
+     * @param keep              matches a person already made, kept for every ingredient
+     *                          still read under the same name (FD-048); empty for none
      */
     RecipeDto read(String text, String fallbackName, Long dietId, String profile,
-                   Long compositionFoodId, Long preferredMeasure);
+                   Long compositionFoodId, Long preferredMeasure, List<KeptMatchDto> keep);
 
     /**
      * Attaches the diet's own measure to every ingredient of its private recipes

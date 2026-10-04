@@ -66,7 +66,8 @@ class DietComposeServiceTest {
         when(compositionFoodService.entityById(EGG)).thenReturn(egg);
         when(referenceService.measureEntities(List.of(CRITERION_ID))).thenReturn(Map.of(CRITERION_ID, criterion));
         when(referenceService.describe(criterion)).thenReturn(described);
-        when(recipeService.read(anyString(), anyString(), isNull(), isNull(), eq(EGG), eq(CRITERION_ID)))
+        when(recipeService.read(anyString(), anyString(), isNull(), isNull(), eq(EGG), eq(CRITERION_ID),
+                eq(List.of())))
                 .thenReturn(new RecipeDto(null, "Huevo", false, null, null,
                         List.of(mock(DishIngredient.class)), null));
     }
@@ -81,7 +82,7 @@ class DietComposeServiceTest {
 
         assertThat(composed.fragment()).isEqualTo("Huevo, entero, crudo (2 unidades medianas)");
         verify(recipeService).read("Huevo, entero, crudo (2 unidades medianas)", "Huevo, entero, crudo",
-                null, null, EGG, CRITERION_ID);
+                null, null, EGG, CRITERION_ID, List.of());
     }
 
     @Test

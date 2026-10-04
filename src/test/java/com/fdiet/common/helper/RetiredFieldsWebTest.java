@@ -143,6 +143,17 @@ class RetiredFieldsWebTest {
         verifyNoInteractions(composeService);
     }
 
+    /** FD-048: a kept match of a re-parse is a request body like any other. */
+    @Test
+    void aParseRefusesABedcaFoodIdOnAKeptMatch() throws Exception {
+        mvc.perform(post("/api/diets/parse").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"huevo (60 g)\",\"keep\":[{\"name\":\"huevo\","
+                                + "\"compositionFoodId\":7,\"bedcaFoodId\":1065}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("bedcaFoodId")));
+        verifyNoInteractions(dietService);
+    }
+
     @Test
     void anExtraRefusesABedcaFoodId() throws Exception {
         mvc.perform(post("/api/journal/1/extras").contentType(MediaType.APPLICATION_JSON)

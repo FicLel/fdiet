@@ -164,7 +164,10 @@ public class DietController {
     @Operation(summary = "Read recipe text into its ingredients, matched against the catalogues, "
             + "without storing anything. The editor asks for this so the text a recipe is written "
             + "in is read by the same parser the workbook import uses. The name is the one the "
-            + "text carried before a colon, or slotName")
+            + "text carried before a colon, or slotName. keep lists the matches the editor already "
+            + "holds ({name, compositionFoodId | foodItemId, foodMeasureId?}): an ingredient still "
+            + "read under one of those names keeps that food, and the measure while it still weighs "
+            + "the unit written")
     public RecipeDto parse(@RequestBody @Valid ParseDishRequestDto request) {
         return dietService.parse(request);
     }

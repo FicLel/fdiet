@@ -1,6 +1,6 @@
 # FD-033 Open data only — replace and remove BEDCA and every non-open source
 
-Status: in progress (A done; B done, committed 2e999db; C done, committed 901f635; D ready 2026-10-03, decisions 19–22) · Size: L (epic — phases below become their own ids when refined) · Created: 2026-10-02
+Status: in progress (A done; B done, committed 2e999db; C done, committed 901f635; D done, committed 3ced939 2026-10-04; E next) · Size: L (epic — phases below become their own ids when refined) · Created: 2026-10-02
 For: nutritionist (and anyone who installs or reuses fdiet)
 
 ## Problem
@@ -241,3 +241,4 @@ the two combine (which answers first, how gaps fill, per food family).
   time on `ExactNames`, `NameIndex`, `CompositionIndexRow`, `Texts`, `PortionSize` (rule cannot drift) — renaming
   them touches an applied migration. Follow-ups: FD-043–FD-051.
 - Live check 2026-10-03 (5000 restarted, UI on 5173): D10 confirmed. Diet 9 shows 4600 kcal with 90 of 211 counted. The fix-up panel ranks CIQUAL candidates. The composer shows "CIQUAL 2025" in search and on the picked food. A patient extra logs against CIQUAL; the test extra was deleted. `bedcaFoodId` is a 400. No console errors. The only BEDCA text left is the footer (FD-041). The check found FD-052: a composed dry ration on `Lenteja, cocida` is counted as cooked.
+- Phase D done 2026-10-04: committed by the user in 3ced939 with FD-048, FD-052 and FD-041 still open; they are fixed in the next sections, not in D.

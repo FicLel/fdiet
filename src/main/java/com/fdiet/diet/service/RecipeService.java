@@ -3,11 +3,13 @@ package com.fdiet.diet.service;
 import com.fdiet.common.dto.PageDto;
 import com.fdiet.common.helper.Texts;
 import com.fdiet.diet.dto.DishIngredient;
+import com.fdiet.diet.dto.KeptMatchDto;
 import com.fdiet.diet.dto.RecipeDto;
 import com.fdiet.diet.dto.ResolveIngredientDto;
 import com.fdiet.diet.exception.DietNotFoundException;
 import com.fdiet.diet.exception.InvalidDietException;
 import com.fdiet.diet.helpers.IMealTextParser;
+import com.fdiet.diet.helpers.KeptMatches;
 import com.fdiet.diet.mapper.IDietMapper;
 import com.fdiet.diet.model.Recipe;
 import com.fdiet.diet.model.RecipeIngredient;
@@ -327,17 +329,18 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
     /**
      * Nothing is stored: the ingredients are mapped through transient entities so
      * the editor is handed the same shape — matched name, scaled figures, the
-     * measure that weighs it — that a stored ingredient comes back as.
+     * measure that weighs it — that a stored ingredient comes back as. A kept
+     * match's food goes in by id, so its name is never sent to the resolver.
      */
     @Override
     @Transactional(readOnly = true)
     public RecipeDto read(String text, String fallbackName, Long dietId, String profile,
-                          Long compositionFoodId, Long preferredMeasure) {
+                          Long compositionFoodId, Long preferredMeasure, List<KeptMatchDto> keep) {
         RecipeDto written = mealTextParser.parse(text, fallbackName);
         if (written == null) {
             throw new InvalidDietException("The text is blank; there is no recipe to read");
         }
-        List<DishIngredient> ingredients = written.ingredients();
+        List<DishIngredient> ingredients = KeptMatches.apply(written.ingredients(), keep);
         if (ingredients.size() == 1) {
             ingredients = List.of(ingredients.get(0).pinnedTo(compositionFoodId, preferredMeasure));
         }

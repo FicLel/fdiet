@@ -178,9 +178,9 @@ function remove(): void {
   }
 }
 
-function append(fragment: string): void {
+function append(fragment: string, pin: DishIngredient): void {
   if (row.value && day.value) {
-    draft.appendFragment(row.value, day.value.day, fragment)
+    draft.appendFragment(row.value, day.value.day, fragment, pin)
   }
 }
 

@@ -352,7 +352,7 @@ public class DietService implements IDietService {
     @Transactional(readOnly = true)
     public RecipeDto parse(ParseDishRequestDto request) {
         return recipeService.read(request.text(), request.slotName(), request.dietId(),
-                profileOf(request.dietId()), null, null);
+                profileOf(request.dietId()), null, null, request.keep());
     }
 
     @Override

@@ -3,6 +3,7 @@ import { ApiError } from '@/api/http'
 import {
   dietsApi,
   type DietRequest,
+  type KeptMatch,
   type DietSettings,
   type ImportDietRequest,
   type RequestDish,
@@ -22,7 +23,12 @@ import type {
 import { buildRows, cellKey, dishAt, mealOf, type GridRow, type MealRow } from '@/domain/slots'
 import { joinFragment, renderRecipe } from '@/domain/dishText'
 import { dishTotals, ingredientsOf, type DishTotals } from '@/domain/nutrition'
+import { locate, type IngredientAt } from '@/domain/ingredientAt'
+import { matchesOf } from '@/domain/keptMatches'
 import { addDays, dayName, dayNumber, longDate, mondayOf, WEEK } from '@/domain/week'
+
+// Where an ingredient sits moved to `domain/ingredientAt`; its callers still reach it here.
+export { isUnweighed, locate, type IngredientAt } from '@/domain/ingredientAt'
 
 /**
  * The week the nutritionist is working on, and the changes not yet published.
@@ -81,68 +87,11 @@ export interface CellEdit {
    * rather than writing it again.
    */
   keepRecipeId: number | null
+  /** The matches the next read of `text` keeps by name (FD-048): stored, read or composed. */
+  keep: KeptMatch[]
   parsing: boolean
   /** The backend could not read the text; the cell keeps its old figures. */
   failed: boolean
-}
-
-/**
- * One stored ingredient and the cell it sits in — what the link drawer needs to
- * address it and to show where in the week it is.
- *
- * The id is the stored row's, so only a *stored* ingredient can be one of
- * these. An ingredient read out of a cell being edited has no row of its own
- * yet, and nothing for a PATCH to address; it is matched by publishing first.
- */
-export type IngredientAt = Pick<
-  DishIngredient,
-  | 'name'
-  | 'quantity'
-  | 'quantityMax'
-  | 'unit'
-  | 'unitWording'
-  | 'matchedName'
-  | 'matchedSource'
-  | 'compositionFoodId'
-  | 'foodItemId'
-  | 'state'
-  | 'size'
-  | 'measure'
-  | 'stateMismatch'
-  | 'yieldHint'
-> & {
-  /** The stored row's id — what `PATCH …/ingredients/{id}` addresses. */
-  id: number
-  /** Matched, but nothing weighs the unit it is written in. */
-  unweighed: boolean
-  row: MealRow
-  day: DayOfWeek
-}
-
-/** Matched to a food, and still in no total: nothing weighs the unit it is written in. */
-export function isUnweighed(ingredient: DishIngredient): boolean {
-  return (
-    (ingredient.compositionFoodId !== null || ingredient.foodItemId !== null) &&
-    (ingredient.nutrition === null ||
-      Object.values(ingredient.nutrition).every((value) => value === null))
-  )
-}
-
-/** Where an ingredient of a stored cell sits, or null if it has no row yet. */
-export function locate(
-  row: MealRow,
-  day: DayOfWeek,
-  ingredient: DishIngredient,
-): IngredientAt | null {
-  return ingredient.id === null
-    ? null
-    : {
-        ...ingredient,
-        id: ingredient.id,
-        unweighed: isUnweighed(ingredient),
-        row,
-        day,
-      }
 }
 
 export interface DayColumn {
@@ -489,11 +438,15 @@ async function reparse(key: string, slotName: string): Promise<void> {
       text,
       slotName: edit.name.trim() || slotName,
       dietId: diet.value?.id,
+      keep: edit.keep,
     })
     // The text may have moved on while the request was in flight.
     const current = edits[key]
     if (current?.mode === 'own' && current.text === text) {
       current.recipe = recipe
+      // What the answer holds matched is what the next read keeps: a name gone
+      // from the text is gone from the answer, and its match with it.
+      current.keep = matchesOf(recipe.ingredients)
       // "Ensalada: lechuga (80 gr)" names its plate; a description nobody has
       // written yet takes that name rather than staying blank.
       if (current.name.trim() === '' && recipe.name !== slotName) {
@@ -533,6 +486,7 @@ function editOf(row: MealRow, day: DayOfWeek): CellEdit {
     steps: own ? (recipe.steps ?? '') : '',
     recipe,
     keepRecipeId: own ? recipe.id : null,
+    keep: own ? matchesOf(recipe.ingredients) : [],
     parsing: false,
     failed: false,
   }
@@ -584,13 +538,20 @@ function setRecipeText(row: MealRow, day: DayOfWeek, text: string): void {
   const key = cellKey(row, day)
   const edit = editOf(row, day)
   clearTimer(key)
+  const stored = storedDish(day, row.mealType, row.dishIndex)
+  if (edit.keepRecipeId !== null && edit.keepRecipeId === stored?.recipeId) {
+    // The text was still the stored one: carry what is stored now, which a PATCH
+    // or a refresh may have matched differently since the edit opened.
+    edit.keep = matchesOf(ingredientsOf(stored))
+  }
   edit.mode = 'own'
   edit.text = text
   edit.keepRecipeId = null
   edit.failed = false
   if (text.trim() === '') {
-    // No ingredients written: nothing to read, and nothing on the plate.
+    // No ingredients written: nothing to read, nothing on the plate, nothing kept.
     edit.recipe = null
+    edit.keep = []
     edit.parsing = false
     settle(row, day)
     return
@@ -646,6 +607,7 @@ function detachRecipe(row: MealRow, day: DayOfWeek): void {
   edit.text = renderRecipe(recipe)
   edit.steps = recipe.steps ?? ''
   edit.recipe = { ...recipe, id: null, library: false }
+  edit.keep = matchesOf(recipe.ingredients)
   edit.keepRecipeId = null
 }
 
@@ -656,6 +618,7 @@ function clearRecipe(row: MealRow, day: DayOfWeek): void {
   clearTimer(key)
   edit.mode = 'none'
   edit.recipe = null
+  edit.keep = []
   edit.keepRecipeId = null
   edit.parsing = false
   settle(row, day)
@@ -671,11 +634,15 @@ function removeDish(row: MealRow, day: DayOfWeek): void {
 /**
  * Appends a composed food to the plate's own recipe. The text is the one the
  * backend wrote for it, so the recipe text stays the only source of truth and is
- * read back by the same parser as anything typed.
+ * read back by the same parser as anything typed — keeping the food the composer
+ * pinned, which its name alone might not match.
  */
-function appendFragment(row: MealRow, day: DayOfWeek, fragment: string): void {
+function appendFragment(row: MealRow, day: DayOfWeek, fragment: string, pin: DishIngredient): void {
   const edit = editOf(row, day)
-  setRecipeText(row, day, joinFragment(edit.mode === 'own' ? edit.text : '', fragment))
+  const own = edit.mode === 'own'
+  setRecipeText(row, day, joinFragment(own ? edit.text : '', fragment))
+  // After the text is set, which may have re-seeded what an own recipe keeps.
+  edit.keep = [...(own ? edit.keep : []), ...matchesOf([pin])]
 }
 
 /** Puts one cell back the way it is stored. */
