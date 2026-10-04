@@ -56,7 +56,6 @@ class RecipeServiceKeepTest {
             new DietMapper(mock(IDietNutritionService.class), reference),
             new MealTextParser(),
             new IngredientFoodService(compositionFoods, foodItems, resolver, 5),
-            reference,
             new MeasureResolverService(reference, new PortionScaler()));
 
     /** Most CIQUAL / BLS foods have no Spanish name, so the name alone would match nothing. */
@@ -117,6 +116,7 @@ class RecipeServiceKeepTest {
         DishIngredient kept = read.ingredients().get(0);
         assertThat(kept.compositionFoodId()).isEqualTo(PREFERRED_EGG);
         assertThat(kept.foodMeasureId()).isNull();
+        assertThat(kept.measurePicked()).isFalse();
         verify(reference, never()).chooseMeasures(anyList(), isNull(), isNull());
     }
 

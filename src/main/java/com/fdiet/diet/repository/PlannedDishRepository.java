@@ -1,5 +1,6 @@
 package com.fdiet.diet.repository;
 
+import com.fdiet.diet.dto.DietProfileDto;
 import com.fdiet.diet.dto.MealType;
 import com.fdiet.diet.model.PlannedDish;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -7,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.DayOfWeek;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -39,6 +41,16 @@ public interface PlannedDishRepository extends JpaRepository<PlannedDish, Long> 
     @Query("select distinct d.recipe.id from PlannedDish d "
             + "where d.meal.diet.id = :dietId and d.recipe is not null")
     List<Long> recipeIdsOf(@Param("dietId") Long dietId);
+
+    /**
+     * The diet each of these private recipes is served in — one plate each — with
+     * that diet's profile, keyed by the recipe. Library recipes are left out: they
+     * are weighed without any diet's criteria.
+     */
+    @Query("select new com.fdiet.diet.dto.DietProfileDto(d.recipe.id, m.diet.id, m.diet.referenceProfileCode) "
+            + "from PlannedDish d join d.meal m "
+            + "where d.recipe.id in :recipeIds and d.recipe.library = false")
+    List<DietProfileDto> dietsServingPrivate(@Param("recipeIds") Collection<Long> recipeIds);
 
     /** How many plates, in any diet, serve this recipe. */
     long countByRecipeId(Long recipeId);

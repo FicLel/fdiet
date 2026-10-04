@@ -6,7 +6,7 @@ import com.fdiet.diet.dto.KeptMatchDto;
 import com.fdiet.diet.dto.RecipeDto;
 import com.fdiet.diet.dto.ResolveIngredientDto;
 import com.fdiet.diet.model.Recipe;
-import com.fdiet.reference.domain.HouseholdMeasure;
+import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
 
 import java.util.Collection;
@@ -88,9 +88,12 @@ public interface IRecipeService {
                    Long compositionFoodId, Long preferredMeasure, List<KeptMatchDto> keep);
 
     /**
-     * Attaches the diet's own measure to every ingredient of its private recipes
-     * that it now weighs — those matched to its composition food. Answers how many.
+     * The ingredients of any recipe matched to this composition food whose measure
+     * no person picked, with their recipes — what a criterion for the food may
+     * re-weigh (FD-054). One query.
      */
-    int attachDietMeasure(Collection<Long> recipeIds, Long compositionFoodId, HouseholdMeasure measure,
-                          Long dietId, String profile);
+    List<RecipeIngredient> autoMeasured(Long compositionFoodId);
+
+    /** Stores ingredients whose measure was chosen again. One batched write. */
+    void saveIngredients(Collection<RecipeIngredient> ingredients);
 }

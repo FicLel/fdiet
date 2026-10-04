@@ -6,10 +6,13 @@ import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.model.CompositionSource;
 import com.fdiet.food.service.ICompositionFoodService;
 import com.fdiet.reference.domain.HouseholdMeasure;
+import com.fdiet.reference.domain.MeasureScope;
 import com.fdiet.reference.domain.MeasureUser;
 import com.fdiet.reference.domain.PortionSize;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.MeasureCriterionRequestDto;
+import com.fdiet.reference.dto.MeasureCriterionSavedDto;
+import com.fdiet.reference.dto.MeasureReweighDto;
 import com.fdiet.reference.dto.MeasureUsageDto;
 import com.fdiet.reference.exception.InvalidReferenceException;
 import com.fdiet.reference.exception.ReferenceNotFoundException;
@@ -54,15 +57,21 @@ class MeasureCriterionServiceTest {
     private final IMeasureUsageCounter ingredients = counter(MeasureUser.RECIPE_INGREDIENT);
     private final IMeasureUsageCounter extras = counter(MeasureUser.EXTRA_FOOD);
 
+    private final IMeasureReweigher recipeOwner = reweigher(MeasureUser.RECIPE_INGREDIENT);
+    private final IMeasureReweigher journalOwner = reweigher(MeasureUser.EXTRA_FOOD);
+
     @SuppressWarnings("unchecked")
     private final ObjectProvider<IMeasureUsageCounter> counters = mock(ObjectProvider.class);
+    @SuppressWarnings("unchecked")
+    private final ObjectProvider<IMeasureReweigher> reweighers = mock(ObjectProvider.class);
 
     private final MeasureCriterionService service = new MeasureCriterionService(repository,
-            new ReferenceMapper(), categoriser, compositionFoodService, counters);
+            new ReferenceMapper(), categoriser, compositionFoodService, counters, reweighers);
 
     @BeforeEach
     void wireCounters() {
         when(counters.orderedStream()).thenAnswer(call -> Stream.of(ingredients, extras));
+        when(reweighers.orderedStream()).thenAnswer(call -> Stream.of(recipeOwner, journalOwner));
         when(compositionFoodService.entityById(EGG)).thenReturn(food(EGG, "Huevo, entero, crudo"));
         when(compositionFoodService.entityById(BREAD)).thenReturn(food(BREAD, "Pan de molde, blanco"));
         when(compositionFoodService.entityById(UNNAMED)).thenReturn(food(UNNAMED, null));
@@ -74,7 +83,7 @@ class MeasureCriterionServiceTest {
         when(repository.findByGlobalCriterionTrueAndCompositionFoodIdInOrderByIdAsc(anyCollection()))
                 .thenReturn(List.of());
 
-        FoodMeasureDto saved = service.createGlobal(eggs("58"));
+        FoodMeasureDto saved = service.createGlobal(eggs("58")).measure();
 
         assertThat(saved.globalOwn()).isTrue();
         assertThat(saved.dietOwn()).isFalse();
@@ -92,7 +101,7 @@ class MeasureCriterionServiceTest {
                 .thenReturn(List.of());
         when(categoriser.of("Huevo, entero, crudo")).thenReturn(FoodCategory.EGG);
 
-        FoodMeasureDto saved = service.createGlobal(eggs("58"));
+        FoodMeasureDto saved = service.createGlobal(eggs("58")).measure();
 
         assertThat(saved.compositionFoodId()).isEqualTo(EGG);
         assertThat(saved.foodLabel()).isEqualTo("Huevo, entero, crudo");
@@ -106,7 +115,7 @@ class MeasureCriterionServiceTest {
                 .thenReturn(List.of());
 
         FoodMeasureDto saved = service.createGlobal(new MeasureCriterionRequestDto(
-                HouseholdMeasure.UNIDAD, null, UNNAMED, new BigDecimal("40"), null, null));
+                HouseholdMeasure.UNIDAD, null, UNNAMED, new BigDecimal("40"), null, null)).measure();
 
         assertThat(saved.compositionFoodId()).isEqualTo(UNNAMED);
         assertThat(saved.foodLabel()).isEqualTo("Food " + UNNAMED);
@@ -165,7 +174,7 @@ class MeasureCriterionServiceTest {
         when(repository.findById(CRITERION_ID)).thenReturn(Optional.of(criterion));
         when(ingredients.countUsing(CRITERION_ID)).thenReturn(3L);
 
-        FoodMeasureDto saved = service.updateGlobal(CRITERION_ID, eggs("60"));
+        FoodMeasureDto saved = service.updateGlobal(CRITERION_ID, eggs("60")).measure();
 
         assertThat(saved.gramsPerMeasure()).isEqualByComparingTo("60");
         assertThat(criterion.isGlobalCriterion()).isTrue();
@@ -203,6 +212,41 @@ class MeasureCriterionServiceTest {
                 PortionSize.MEDIUM, EGG, new BigDecimal("58"), new BigDecimal("58"), null);
 
         assertThatThrownBy(() -> service.createGlobal(both)).isInstanceOf(InvalidReferenceException.class);
+    }
+
+    /** FD-054: a new global criterion re-weighs every diet's rows of its food and measure, and says how many. */
+    @Test
+    void reweighsWhatANewGlobalCriterionReachesInEveryDiet() {
+        when(repository.findByGlobalCriterionTrueAndCompositionFoodIdInOrderByIdAsc(anyCollection()))
+                .thenReturn(List.of());
+        MeasureScope everyDiet = new MeasureScope(EGG, HouseholdMeasure.UNIDAD, null);
+        when(recipeOwner.reweigh(everyDiet)).thenReturn(4);
+        when(journalOwner.reweigh(everyDiet)).thenReturn(1);
+
+        MeasureCriterionSavedDto saved = service.createGlobal(eggs("58"));
+
+        assertThat(saved.reweighed()).isEqualTo(new MeasureReweighDto(4, 1));
+        assertThat(saved.reweighed().total()).isEqualTo(5);
+    }
+
+    /** FD-054: a diet's criterion re-weighs that diet's rows only. */
+    @Test
+    void reweighsWhatADietsCriterionReachesInThatDietOnly() {
+        when(repository.findByDietIdOrderByIdAsc(7L)).thenReturn(List.of());
+        MeasureScope oneDiet = new MeasureScope(EGG, HouseholdMeasure.UNIDAD, 7L);
+        when(recipeOwner.reweigh(oneDiet)).thenReturn(2);
+
+        MeasureCriterionSavedDto saved = service.saveDietMeasure(7L, eggs("58"));
+
+        assertThat(saved.measure().dietOwn()).isTrue();
+        assertThat(saved.reweighed()).isEqualTo(new MeasureReweighDto(2, 0));
+        verify(journalOwner).reweigh(oneDiet);
+    }
+
+    private static IMeasureReweigher reweigher(MeasureUser user) {
+        IMeasureReweigher owner = mock(IMeasureReweigher.class);
+        when(owner.user()).thenReturn(user);
+        return owner;
     }
 
     private static MeasureCriterionRequestDto eggs(String grams) {

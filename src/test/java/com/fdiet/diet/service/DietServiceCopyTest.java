@@ -61,7 +61,6 @@ class DietServiceCopyTest {
             mock(IDietMapper.class),
             mock(IMealTextParser.class),
             mock(IIngredientFoodService.class),
-            mock(IReferenceService.class),
             mock(IMeasureResolverService.class));
 
     private final DietService dietService = new DietService(

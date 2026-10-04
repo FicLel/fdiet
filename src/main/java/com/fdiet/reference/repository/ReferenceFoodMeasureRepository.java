@@ -21,6 +21,9 @@ public interface ReferenceFoodMeasureRepository extends JpaRepository<ReferenceF
     /** One diet's own rows. */
     List<ReferenceFoodMeasure> findByDietIdOrderByIdAsc(Long dietId);
 
+    /** The own rows of several diets at once. */
+    List<ReferenceFoodMeasure> findByDietIdInOrderByIdAsc(Collection<Long> dietIds);
+
     /** The nutritionist's global criteria for these foods. */
     List<ReferenceFoodMeasure> findByGlobalCriterionTrueAndCompositionFoodIdInOrderByIdAsc(
             Collection<Long> compositionFoodIds);

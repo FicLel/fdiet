@@ -1,6 +1,7 @@
 package com.fdiet.reference.service;
 
 import com.fdiet.reference.dto.MeasureCriterionRequestDto;
+import com.fdiet.reference.dto.MeasureCriterionSavedDto;
 import com.fdiet.reference.dto.ExchangeSystemDto;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.HouseholdMeasureDto;
@@ -9,6 +10,7 @@ import com.fdiet.reference.dto.MeasureChoiceDto;
 import com.fdiet.reference.dto.MeasureQueryDto;
 import com.fdiet.reference.dto.RationDto;
 import com.fdiet.reference.dto.RecommendationDto;
+import com.fdiet.reference.dto.ScopedMeasureQueryDto;
 import com.fdiet.reference.dto.ReferenceProfileDetailDto;
 import com.fdiet.reference.dto.ReferenceProfileDto;
 import com.fdiet.reference.dto.ReferenceRowsDto;
@@ -125,6 +127,14 @@ public interface IReferenceService {
     List<MeasureChoiceDto> chooseMeasures(List<MeasureQueryDto> queries, Long dietId,
                                           String profileCode);
 
+    /**
+     * The measure each stored row is weighed by when the rule chooses afresh, each
+     * row inside its own diet (FD-054): a criterion written now re-weighs rows of
+     * many diets at once. Answers line up with the queries; null where the rule
+     * attaches nothing. Three queries whatever the number of rows or diets.
+     */
+    List<ReferenceFoodMeasure> rechoose(List<ScopedMeasureQueryDto> queries);
+
     /** Measure rows as managed entities, for a caller that has to point at them. */
     Map<Long, ReferenceFoodMeasure> measureEntities(Collection<Long> ids);
 
@@ -135,10 +145,11 @@ public interface IReferenceService {
 
     /**
      * Writes the diet's criterion for one measure of one food (and size),
-     * replacing an earlier one for the same measure, food and size. The caller
-     * has checked the diet exists.
+     * replacing an earlier one for the same measure, food and size, and re-weighs
+     * the diet's rows it now reaches whose measure nobody picked. The caller has
+     * checked the diet exists.
      */
-    FoodMeasureDto saveDietMeasure(Long dietId, MeasureCriterionRequestDto request);
+    MeasureCriterionSavedDto saveDietMeasure(Long dietId, MeasureCriterionRequestDto request);
 
     void deleteDietMeasure(Long dietId, Long measureId);
 

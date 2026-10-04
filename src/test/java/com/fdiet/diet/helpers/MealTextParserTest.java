@@ -190,6 +190,39 @@ class MealTextParserTest {
         assertThat(lentils.quantity()).isEqualByComparingTo("180");
     }
 
+    /** FD-052: the bracket says which state the grams were weighed in; the name keeps the food. */
+    @Test
+    void keepsTheBracketsStateWhenItContradictsTheName() {
+        RecipeDto dish = parser.parse("Lenteja, cocida (55 g en seco) + pechuga a la plancha "
+                + "(150 g en crudo) + arroz hervido (70 g crudo)", "Comida");
+
+        assertThat(dish.ingredients()).extracting(DishIngredient::state).containsExactly(
+                FoodState.DRY, FoodState.RAW, FoodState.RAW);
+        DishIngredient lentils = dish.ingredients().get(0);
+        assertThat(lentils.name()).isEqualTo("Lenteja, cocida");
+        assertThat(lentils.quantity()).isEqualByComparingTo("55");
+        assertThat(dish.ingredients().get(1).name()).isEqualTo("pechuga a la plancha");
+        assertThat(dish.ingredients().get(1).quantity()).isEqualByComparingTo("150");
+    }
+
+    @Test
+    void readsTheBracketsCookedStateAgainstARawName() {
+        DishIngredient rice = parser.parse("arroz crudo (180 g cocido)", "Comida")
+                .ingredients().get(0);
+
+        assertThat(rice.state()).isEqualTo(FoodState.COOKED);
+    }
+
+    @Test
+    void leavesAgreeingOrOneSidedStatesAsTheyWere() {
+        RecipeDto dish = parser.parse("lentejas cocidas (180 g hervidas) + atún en conserva "
+                + "(80 g escurrido) + pasta (70 g en seco) + pollo a la plancha (120 g) "
+                + "+ lentejas (60 g en crudo, 180 g cocidas)", "Comida");
+
+        assertThat(dish.ingredients()).extracting(DishIngredient::state).containsExactly(
+                FoodState.COOKED, FoodState.DRAINED, FoodState.DRY, FoodState.COOKED, null);
+    }
+
     @Test
     void readsAHouseholdMeasureOfSeveralWordsInsideBrackets() {
         DishIngredient oil = parser.parse("aceite de oliva virgen extra (1 cucharada sopera)", "Comida")

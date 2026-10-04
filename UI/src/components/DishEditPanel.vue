@@ -7,10 +7,11 @@ import { useRations } from '@/stores/rations'
 import { useRecipes } from '@/stores/recipes'
 import type { DishIngredient, Recipe } from '@/api/types'
 import { grams, integer, NO_VALUE } from '@/domain/format'
-import { complete, ingredientsOf } from '@/domain/nutrition'
-import { amount, measureSource, perMeasure, stateWord } from '@/domain/rations'
+import { complete, ingredientsOf, uncountedReasons } from '@/domain/nutrition'
+import { amount, measureOrigin, perMeasure, stateWord } from '@/domain/rations'
 import { cellKey } from '@/domain/slots'
 import { amountText } from '@/domain/dishText'
+import { requestIngredient } from '@/domain/requestIngredient'
 
 /**
  * One plate, as the nutritionist writes it: the description the patient reads,
@@ -106,14 +107,7 @@ const coverage = computed(() => {
   if (complete(of)) {
     return null
   }
-  const parts: string[] = []
-  if (of.unmatched > 0) {
-    parts.push(`${of.unmatched} sin vincular`)
-  }
-  if (of.unmeasured > 0) {
-    parts.push(`${of.unmeasured} sin peso`)
-  }
-  return `Cuentan ${of.counted} de ${of.ingredients} ingredientes — ${parts.join(', ')}.`
+  return `Cuentan ${of.counted} de ${of.ingredients} ingredientes — ${uncountedReasons(of).join(', ')}.`
 })
 
 /**
@@ -247,17 +241,7 @@ async function saveToLibrary(): Promise<void> {
     name,
     steps: (own ? own.steps : (current?.steps ?? '')).trim() || null,
     rawText: recipeText.value.trim() || null,
-    ingredients: (current?.ingredients ?? []).map((ingredient) => ({
-      name: ingredient.name,
-      quantity: ingredient.quantity,
-      quantityMax: ingredient.quantityMax,
-      unit: ingredient.unit,
-      foodItemId: ingredient.foodItemId,
-      compositionFoodId: ingredient.compositionFoodId,
-      state: ingredient.state,
-      size: ingredient.size,
-      foodMeasureId: ingredient.foodMeasureId,
-    })),
+    ingredients: (current?.ingredients ?? []).map(requestIngredient),
   })
   saving.value = false
   if (typeof answer === 'string') {
@@ -267,18 +251,18 @@ async function saveToLibrary(): Promise<void> {
   draft.useLibraryRecipe(row.value, day.value.day, answer)
 }
 
-/** `1 cdta → 5 g · Criterio de esta dieta`, when a measure weighs the ingredient. */
+/** `1 cdta → 5 g · Criterio de esta dieta · automática`, when a measure weighs the ingredient. */
 function measureLine(ingredient: DishIngredient): string | null {
   if (!ingredient.measure) {
     return null
   }
   const weight = perMeasure(ingredient.measure)
-  return weight ? `${weight} · ${measureSource(ingredient.measure)}` : null
+  return weight ? `${weight} · ${measureOrigin(ingredient)}` : null
 }
 
 function mismatchTitle(ingredient: DishIngredient): string {
   const written = stateWord(ingredient.state) || 'sin estado'
-  const base = `Escrito ${written}, vinculado a «${ingredient.matchedName}». El peso de uno no es el del otro: revisa el vínculo.`
+  const base = `Escrito ${written}, vinculado a «${ingredient.matchedName}». El peso de uno no es el del otro y no cuenta en las cifras: revisa el vínculo.`
   const hint = ingredient.yieldHint
   if (!hint || hint.equivalentGrams === null) {
     return base

@@ -12,9 +12,11 @@ import com.fdiet.reference.dto.MealShareDto;
 import com.fdiet.reference.dto.MealSharesDto;
 import com.fdiet.reference.dto.MeasureChoiceDto;
 import com.fdiet.reference.dto.MeasureCriterionRequestDto;
+import com.fdiet.reference.dto.MeasureCriterionSavedDto;
 import com.fdiet.reference.dto.MeasureQueryDto;
 import com.fdiet.reference.dto.RationDto;
 import com.fdiet.reference.dto.RecommendationDto;
+import com.fdiet.reference.dto.ScopedMeasureQueryDto;
 import com.fdiet.reference.dto.ReferenceProfileDetailDto;
 import com.fdiet.reference.dto.ReferenceProfileDto;
 import com.fdiet.reference.dto.ReferenceRowsDto;
@@ -309,15 +311,63 @@ public class ReferenceService implements IReferenceService {
                 ? List.of()
                 : criteria.dietRows(dietId);
         List<FoodMeasureDto> global = criteria.globalRows(foodIds);
-        PopulationView profile = profileCode == null ? null : current.populations().get(profileCode);
-        String profileSource = profile == null ? null : profile.sourceCode();
+        String profileSource = profileSource(current, profileCode);
 
         return queries.stream()
-                .map(query -> !query.namesAFood()
-                        ? MeasureChoiceDto.NONE
-                        : matcher.chooseMeasure(current.measures(), own, global, query,
-                        categoryOf(query.foodName()), profileSource))
+                .map(query -> choose(current, query, own, global, profileSource))
                 .toList();
+    }
+
+    /**
+     * Each row asked inside its own diet. Three queries whatever the number of
+     * rows or diets — every diet's criteria, the global ones, and the rows chosen —
+     * and the published rows from memory. O(n) over the queries.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<ReferenceFoodMeasure> rechoose(List<ScopedMeasureQueryDto> queries) {
+        if (queries.isEmpty()) {
+            return List.of();
+        }
+        ReferenceSnapshot current = snapshot();
+        Set<Long> foodIds = queries.stream()
+                .map(scoped -> scoped.query().compositionFoodId()).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<Long> dietIds = queries.stream()
+                .map(ScopedMeasureQueryDto::dietId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, List<FoodMeasureDto>> ownByDiet = criteria.dietRowsOf(dietIds);
+        List<FoodMeasureDto> global = criteria.globalRows(foodIds);
+
+        List<FoodMeasureDto> chosen = new ArrayList<>(queries.size());
+        for (ScopedMeasureQueryDto scoped : queries) {
+            List<FoodMeasureDto> own = scoped.dietId() == null
+                    ? List.of()
+                    : ownByDiet.getOrDefault(scoped.dietId(), List.of());
+            chosen.add(choose(current, scoped.query(), own, global,
+                    profileSource(current, scoped.profileCode())).chosen());
+        }
+        Map<Long, ReferenceFoodMeasure> entities = tables.measureEntities(chosen.stream()
+                .filter(Objects::nonNull).map(FoodMeasureDto::id).collect(Collectors.toSet()));
+        List<ReferenceFoodMeasure> answer = new ArrayList<>(chosen.size());
+        for (FoodMeasureDto row : chosen) {
+            answer.add(row == null ? null : entities.get(row.id()));
+        }
+        return answer;
+    }
+
+    private MeasureChoiceDto choose(ReferenceSnapshot current, MeasureQueryDto query,
+                                    List<FoodMeasureDto> own, List<FoodMeasureDto> global,
+                                    String profileSource) {
+        return !query.namesAFood()
+                ? MeasureChoiceDto.NONE
+                : matcher.chooseMeasure(current.measures(), own, global, query,
+                categoryOf(query.foodName()), profileSource);
+    }
+
+    private static String profileSource(ReferenceSnapshot current, String profileCode) {
+        PopulationView profile = profileCode == null ? null : current.populations().get(profileCode);
+        return profile == null ? null : profile.sourceCode();
     }
 
     @Override
@@ -337,7 +387,7 @@ public class ReferenceService implements IReferenceService {
     }
 
     @Override
-    public FoodMeasureDto saveDietMeasure(Long dietId, MeasureCriterionRequestDto request) {
+    public MeasureCriterionSavedDto saveDietMeasure(Long dietId, MeasureCriterionRequestDto request) {
         return criteria.saveDietMeasure(dietId, request);
     }
 

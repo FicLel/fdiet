@@ -15,7 +15,7 @@ import { usePatients } from '@/stores/patients'
 import { useRations } from '@/stores/rations'
 import { useReference } from '@/stores/reference'
 import { useRecipes } from '@/stores/recipes'
-import type { DishTotals } from '@/domain/nutrition'
+import { sumTotals, type DishTotals } from '@/domain/nutrition'
 
 /**
  * Where a diet is written. One week for one patient, one cell per dish slot per
@@ -67,34 +67,11 @@ watch(draft.diet, (plan) => {
 /** The day the rail is on, so the strip counts the day being written. */
 const rationDay = computed(() => draft.selectedDay.value?.day ?? draft.days.value[0]?.day ?? null)
 
-/** BEDCA always; every reference source the count used, once there is a count. */
+/** CIQUAL and BLS always (in the footer itself); every reference source the count used, once there is a count. */
 const sources = computed(() => rations.rations.value?.sources ?? [])
 
 /** Every ingredient of the week, so the goal strip can show what it counted. */
-const week = computed<DishTotals>(() =>
-  draft.days.value.reduce<DishTotals>(
-    (total, day) => ({
-      kcal: null,
-      proteinG: null,
-      carbohydratesG: null,
-      fatG: null,
-      ingredients: total.ingredients + day.totals.ingredients,
-      counted: total.counted + day.totals.counted,
-      unmatched: total.unmatched + day.totals.unmatched,
-      unmeasured: total.unmeasured + day.totals.unmeasured,
-    }),
-    {
-      kcal: null,
-      proteinG: null,
-      carbohydratesG: null,
-      fatG: null,
-      ingredients: 0,
-      counted: 0,
-      unmatched: 0,
-      unmeasured: 0,
-    },
-  ),
-)
+const week = computed<DishTotals>(() => sumTotals(draft.days.value.map((day) => day.totals)))
 </script>
 
 <template>

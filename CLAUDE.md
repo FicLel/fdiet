@@ -401,6 +401,17 @@ Its one assumption is that a millilitre is a gram, which a diet's liquids (water
 juice) are within a few percent of; for olive oil it overstates by about 9 %, and that is kept so
 `10 ml` and `1 cucharada sopera` of oil never disagree.
 
+**A quantity weighed in another state than its food is never totalled** (FD-052).
+`RecipeIngredient.isStateMismatch()` — the written `state` and the state read off the matched
+composition food's Spanish name on opposite sides of cooking (`55 g en seco` against `Lenteja,
+cocida`) — puts the ingredient in `unmeasured`, and `NutritionSummaryDto.unmeasuredByState` says how
+much of `unmeasured` that is; the counts still sum to `ingredients`. `DishIngredient` carries
+`stateMismatch: true` and, where a published cooking yield fits, `yieldHint` (≈ 108 g at 72 % for
+150 g raw breast against grilled breast). The yield is **offered, never applied**, with or without
+one: pricing the written grams at the food's state is a wrong number (55 g dry lentils priced as
+cooked is about a third of their energy), and converting by a yield would be a choice the text did
+not make. The grams are still read (`edibleGrams`), so the hint can say what they come to.
+
 **A household measure weighs only through a row that says so.** `recipe_ingredients.food_measure_id`
 (`V10`) points at a `ref_food_measures` row — published (`1 cucharada sopera` of olive oil, 10 ml,
 AESAN 2022), the diet's own criterion, or the nutritionist's global criterion (`1 huevo mediano = 58 g`)
@@ -409,6 +420,18 @@ divided by its count (`3 Uds. medianas = 180 g` is 60 g each), cut to the edible
 `edible_portion` when the row is a gross weight (and refused when that fraction is unpublished). A
 range (`53–63 g`) weighs nothing, and a measure weighs only the unit it measures. `countedByMeasure`
 says how much of `counted` rests on one.
+
+**A measure is either a person's pick or the rule's choice, and the row says which** (FD-054, `V19`):
+`recipe_ingredients.measure_picked` / `extra_foods.measure_picked`, carried as `measurePicked` on
+`DishIngredient` and `ExtraFoodDto`. Picked = a person chose it: a PATCH sending `foodMeasureId`, the
+composer's measure (`compose` with `foodMeasureId`), a parse `keep` entry carrying `foodMeasureId`, an
+extra logged with one. A pick is kept through every re-read, publish and criterion while it still
+weighs the food and unit (FD-039); the rule's choice is made again every time — on a `PUT`, a parse,
+a PATCH that names no measure, and **at once in every week, archived ones included, when a diet or
+global criterion it now reaches is written** (below). The flag means something only beside a measure
+(`measurePicked()` on both entities); the measure's FK sets NULL on delete and MySQL refuses a CHECK
+there. On the way in, `DishIngredient.measurePicked` left out beside a `foodMeasureId` counts as picked,
+so a caller from before FD-054 loses nothing; `false` hands the measure back to the rule.
 
 **The patient reads the unit, never works it out.** `DishIngredient` and `ExtraFoodDto` carry
 `unitWording: {singular, plural, sizeInName}` — `reference/domain/UnitWording`, derived on read from
@@ -426,7 +449,7 @@ Every class in `diet/`, `alternative/` and `patient/` is injected through an int
 (`IDietService`, `IDietComposeService`, `IRecipeService`, `IIngredientFoodService`, `IDietMapper`, `IMealTextParser`, `IPortionScaler`, `IDietNutritionService`,
 `IAlternativeService`, `IFoodCategoriser`, `INutritionSimilarity`, `IPatientService`,
 `IPatientMapper`, `IReferenceService`, `IMeasureCriterionService`, `IReferenceMapper`, `IDietRationService`,
-`IMeasureResolverService`, …), as are the food services
+`IMeasureResolverService`, `IDietMeasureService`, …), as are the food services
 they depend on: `IFoodItemService`, `IBedcaFoodService`, `INutritionService`, `INameMatcher`,
 `IBedcaImportService`, `IBedcaFoodMapper`, `ICompositionFoodService`, `ICompositionImportService`,
 `ICompositionFoodMapper`, `ICompositionTableReader`, `ICompositionLinkReader`, `ISheetStreamReader`. The older `food/` classes
@@ -503,7 +526,9 @@ diet is addressed by its own id:
   name twice is paired in order — keeps that food instead of the resolver's answer, even a food with
   no Spanish name or a non-preferred row, and the recipe is priced with it. Its measure is handed on
   as the pick and re-validated as FD-039 does, so it is dropped once the unit no longer is the word it
-  measures. An edited name keeps nothing. Both ids, or neither, in one entry is a 400, as is
+  measures. **`foodMeasureId` in a keep entry means "a person picked this"** (FD-054): send it only for
+  a picked measure; the ingredient comes back with `measurePicked: true` while it is kept. A measure
+  the rule chose is left out of the entry, so the rule chooses again. An edited name keeps nothing. Both ids, or neither, in one entry is a 400, as is
   `bedcaFoodId`. `diet/helpers/KeptMatches`, O(n + k), no query of its own: kept foods go into the
   same batched `entitiesByIds` and are never sent to the resolver.
 - `POST /api/diets/import` — multipart `file`, required `patientId`, optional `sheet`, `name`,
@@ -519,8 +544,11 @@ diet is addressed by its own id:
 - `GET /api/diets/{id}/rations?profile=` — the week counted in rations (see `reference`).
 - `GET /api/diets/{id}/measures`, `PUT /api/diets/{id}/measures`, `DELETE /api/diets/{id}/measures/{measureId}`
   — the diet's own measure criteria (`{measure, size?, compositionFoodId, grams | ml, note?}`). A PUT
-  attaches the criterion wherever it is now the chosen measure (private recipes only) and answers
-  how many.
+  re-chooses the measure of every ingredient of the diet's private recipes and every extra of its
+  journal matched to that food, written in that measure, whose measure nobody picked (FD-054), and
+  answers `{measure, attached, reweighed: {ingredients, extraFoods}}` — `attached` is the total
+  re-weighed. Answered by `service/DietMeasureService` (`IDietMeasureService`), split off
+  `DietService`; it owns no table.
 
 `RecipeController` at `/api/recipes` — the library only; a private recipe is reached through its plate:
 
@@ -552,7 +580,12 @@ only, so `(20 g: nueces + almendras)` stays one ingredient. A fragment with no r
 still becomes an ingredient of one `unidad`; nothing is ever discarded. Writing without brackets
 is read measure-first: `1 cdta AOVE` is `AOVE`, 1, `cdta`, and `1 kiwi` is `kiwi`, 1, `unidad`
 (multi-word measures such as `cucharada sopera` are read whole). State words (`cocidas`, `en crudo`)
-and size words (`mediano`) stay in the name and are also read into `state` and `size`. A row merged across the
+and size words (`mediano`) stay in the name and are also read into `state` and `size`. **When the
+name and the bracket state opposite sides of cooking, the bracket wins** (FD-052,
+`FoodState.ofWriting`): `Lenteja, cocida (55 g en seco)` is `DRY` and `pechuga a la plancha (150 g en
+crudo)` is `RAW` — the bracket says in which state the grams were weighed, the name still says which
+food it is. Where both agree, only one states anything, or the bracket contradicts itself
+(`(60 g en crudo, 180 g cocidas)`, left null), the reading is unchanged. A row merged across the
 day columns (`Comida`, `Cena`) names a meal whose dishes are the rows below it.
 
 **A range stays a range** (`V11`): `2-3 nueces`, `(40-60 gr)`, `1 a 2 cdta` are read as `quantity` (the
@@ -664,7 +697,7 @@ reason, not failed.
 the rows naming that food — the 5 al día rations and measures, every diet and global criterion — and
 the name reaches family + keyword rows. A food without a Spanish name reaches only the rows naming it.
 When no query of a batch names a composition food, the criteria are not read at all (every criterion
-names one). A **picked** measure (`food_measure_id`, sent back on a `PUT`) is kept while its row is
+names one). A **picked** measure (`food_measure_id` with `measurePicked`, sent back on a `PUT`) is kept while its row is
 still live for the same measure and still covers the food, even when the narrowing that ranks
 candidates would leave it out (FD-039, `ReferenceMatcher.chooseMeasure`); otherwise the rule decides
 again.
@@ -753,6 +786,19 @@ week (`compose`/`parse` without `dietId`) and logged extras alike; `FoodMeasureD
   owning services through the `IMeasureUsageCounter` port (`RecipeService`, `JournalService`): the
   reference module may not call into `diet` or `journal`, so it declares the question and they answer
   it. Looked up lazily (`ObjectProvider`) because those services depend on `IReferenceService`.
+- **Writing a criterion re-weighs what it reaches** (FD-054). After a global criterion is created or
+  changed, or a diet's criterion is PUT, `MeasureCriterionService` asks the `IMeasureReweigher` port —
+  `diet/service/RecipeMeasureReweigher` (owns no table: reads and writes through `IRecipeService`, asks
+  `IDietService.dietsServingPrivate` which diet each private recipe is served in) and `JournalService` —
+  in the same transaction. Each re-chooses, by the publish rule, the measure of every row matched to the
+  criterion's food and written in its measure whose measure nobody picked: in every diet, archived
+  included, plus library recipes for a global criterion; only that diet's private recipes and extras for
+  a diet's criterion. A private recipe is weighed inside its diet (its criteria and profile), a library
+  recipe inside none. The rows of many diets go through `IReferenceService.rechoose` in one batch: five
+  queries for the ingredients and four for the extras, whatever the number of rows or diets, then one
+  batched write each (`reference/helpers/Remeasure` applies the answer and counts the rows that changed).
+  A row whose new choice is "none" (the criterion made the choice a judgement) is counted and left
+  unweighed, as a publish would leave it.
 
 `MeasureCriterionController` at `/api/reference/criteria` — not paged: one person's criteria, and every
 weighing reads them anyway:
@@ -762,7 +808,8 @@ weighing reads them anyway:
   `{measureId, ingredients, extraFoods}`.
 - `POST /api/reference/criteria` (201), `PUT /api/reference/criteria/{id}` —
   `{measure, size?, compositionFoodId, grams | ml, note?}` (the same body as a diet's criterion). A second
-  criterion for the same food, measure and size is a 400.
+  criterion for the same food, measure and size is a 400. Answers `{measure, reweighed: {ingredients,
+  extraFoods}}`: what the save re-weighed in every diet and library recipe (FD-054).
 - `DELETE /api/reference/criteria/{id}` (204) — one nothing is weighed by; otherwise a 400.
 
 ### `journal`
@@ -800,7 +847,9 @@ while a patient logging an extra is normally holding a wrapper with an EAN on it
 **An extra is weighed by the same household measures as the week** (`V11`: `extra_foods.state`,
 `portion_size`, `food_measure_id`). `POST …/extras` takes an optional `foodMeasureId`; without one,
 `JournalService` asks `IReferenceService.chooseMeasures` with the diet's profile and own criteria, so a
-measure attaches on its own only when the choice is not a judgement. Both nutrition services weigh
+measure attaches on its own only when the choice is not a judgement. A `foodMeasureId` sent is stored
+as the person's pick (`measurePicked`); one the rule attached follows a criterion written later
+(FD-054). Both nutrition services weigh
 through `IPortionScaler.weigh(quantity, unit, measure, ediblePortion)`, one door for both.
 
 There is **no score of zero**. Having no opinion has to stay out of the average rather than drag it
@@ -848,6 +897,8 @@ changing an entity, add a migration to match or startup fails.
 | `V16__rekey_reference_foods_to_composition.sql` | `ref_rations` / `ref_food_measures`: `bedca_food_id` replaced by `composition_food_id` (FK, indexed), re-keyed through the approved BEDCA→CIQUAL/BLS mapping seeded in the migration; `criterion_key`, `ck_ref_food_measures_global` and `idx_ref_food_measures_global` rebuilt on it. A diet or global criterion without an equivalent stops the migration by name (`SIGNAL`), before anything changes; a published row without one is made inert until the next sync |
 | `V17__point_ingredients_and_extras_at_composition_foods.sql` | `recipe_ingredients` / `extra_foods`: `composition_food_id` (FK, indexed) and a check that at most one of it and `food_item_id` is set; every `bedca_food_id` reset to NULL (columns kept until phase E) |
 | `V18__rematch_ingredients_by_composition_name` (Java, `src/main/java/db/migration/`) | re-matches every ingredient and extra without a food by exact Spanish name / alias of the crosswalk (size-word retry), the import's rule; releases a measure whose row names another food |
+| `V19__measure_picked_flag.sql` | `recipe_ingredients.measure_picked` / `extra_foods.measure_picked` (FD-054): whether a person picked the measure; every stored measure starts as picked; `idx_*_food_picked (composition_food_id, measure_picked)` |
+| `V20__free_measures_the_rule_chooses` (Java) | marks as the rule's (`measure_picked = FALSE`) every stored measure the publish rule would choose today anyway — over the published rows, the row's diet's criteria (none for a library recipe), the global criteria and the diet's profile source; anything else stays picked, since nothing recorded who chose it. Applied to the dev DB 2026-10-04: 0 rows (no ingredient or extra had a measure) |
 
 ## Data files and licensing
 
@@ -878,8 +929,11 @@ attribution strings.
 
 `reference-data/` holds the reference CSVs, each folder under its own source's terms; the 5 al día
 figures are **CC BY-SA 4.0**, so a derived file stays ShareAlike; the USDA yields are US public domain.
-Both the builder and the patient screen show BEDCA's line and every reference source a count used in
-their footer.
+Both the builder and the patient screen show the CIQUAL 2025 and BLS 4.0 attribution lines (FD-041;
+`SOURCE_ATTRIBUTIONS` in `UI/src/domain/compositionFood.ts`, copied word for word from
+`CompositionSource`, since no endpoint hands them over without a sync) and every reference source a
+count used in their footer. No BEDCA figure is shown on any screen since FD-033 phase D, so its line
+is gone.
 
 ## Dependencies
 

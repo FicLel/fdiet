@@ -5,6 +5,7 @@ import { recipesApi } from '@/api/recipes'
 import type { Recipe, RecipeUsage } from '@/api/types'
 import { useRecipes } from '@/stores/recipes'
 import { renderRecipe } from '@/domain/dishText'
+import { requestIngredient } from '@/domain/requestIngredient'
 import { integer } from '@/domain/format'
 import RecipeIngredientsField from './RecipeIngredientsField.vue'
 
@@ -118,17 +119,7 @@ async function save(): Promise<void> {
     ingredients:
       text.value.trim() === ''
         ? []
-        : (read.value?.ingredients ?? []).map((ingredient) => ({
-            name: ingredient.name,
-            quantity: ingredient.quantity,
-            quantityMax: ingredient.quantityMax,
-            unit: ingredient.unit,
-            foodItemId: ingredient.foodItemId,
-            compositionFoodId: ingredient.compositionFoodId,
-            state: ingredient.state,
-            size: ingredient.size,
-            foodMeasureId: ingredient.foodMeasureId,
-          })),
+        : (read.value?.ingredients ?? []).map(requestIngredient),
   })
   busy.value = false
   if (typeof answer === 'string') {

@@ -33,18 +33,23 @@ public class DietNutritionService implements IDietNutritionService {
         this.portionScaler = portionScaler;
     }
 
+    /**
+     * A quantity weighed in another state than its food is published in is not
+     * priced: 55 g of dry lentils priced as cooked ones is about a third of their
+     * energy. A published yield is offered on the ingredient and never applied, so
+     * there is no right figure to give (FD-052).
+     */
     @Override
     public NutritionDto of(RecipeIngredient ingredient) {
-        return of(ingredient, BigDecimal.ONE);
+        return ingredient.isStateMismatch() ? null : priced(ingredient, weigh(ingredient), BigDecimal.ONE);
     }
 
     /**
      * The servings multiply the portion before the figures are scaled, so one and
      * a half servings of 80 g read exactly as 120 g would — never as a rounded
-     * figure rounded again.
+     * figure rounded again. The caller has already ruled out a state mismatch.
      */
-    private NutritionDto of(RecipeIngredient ingredient, BigDecimal servings) {
-        Weighed weighed = weigh(ingredient);
+    private NutritionDto priced(RecipeIngredient ingredient, Weighed weighed, BigDecimal servings) {
         if (weighed == null) {
             return null;
         }
@@ -71,6 +76,7 @@ public class DietNutritionService implements IDietNutritionService {
         int unmatched = 0;
         int unmeasured = 0;
         int byMeasure = 0;
+        int byState = 0;
 
         for (Serving serving : servings) {
             RecipeIngredient ingredient = serving.ingredient();
@@ -78,19 +84,25 @@ public class DietNutritionService implements IDietNutritionService {
                 unmatched++;
                 continue;
             }
-            NutritionDto scaled = of(ingredient, serving.servings());
+            if (ingredient.isStateMismatch()) {
+                unmeasured++;
+                byState++;
+                continue;
+            }
+            Weighed weighed = weigh(ingredient);
+            NutritionDto scaled = priced(ingredient, weighed, serving.servings());
             if (scaled == null) {
                 unmeasured++;
                 continue;
             }
             totals = totals.plus(scaled);
             counted++;
-            if (weigh(ingredient).byMeasure()) {
+            if (weighed.byMeasure()) {
                 byMeasure++;
             }
         }
         return new NutritionSummaryDto(
-                totals, servings.size(), counted, unmatched, unmeasured, byMeasure);
+                totals, servings.size(), counted, unmatched, unmeasured, byMeasure, byState);
     }
 
     /**

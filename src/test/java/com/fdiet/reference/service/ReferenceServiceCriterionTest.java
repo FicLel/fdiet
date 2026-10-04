@@ -16,6 +16,7 @@ import com.fdiet.reference.domain.WeightBasis;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.MeasureChoiceDto;
 import com.fdiet.reference.dto.MeasureQueryDto;
+import com.fdiet.reference.dto.ScopedMeasureQueryDto;
 import com.fdiet.reference.dto.ReferenceRowsDto;
 import com.fdiet.reference.helpers.ReferenceMatcher;
 import com.fdiet.reference.mapper.ReferenceMapper;
@@ -236,6 +237,29 @@ class ReferenceServiceCriterionTest {
                 "1 huevo mediano (53-63 g)", "p. 53", null);
         return new ReferenceRowsDto(List.of(source), List.of(), List.of(), List.of(range), List.of(),
                 List.of(), List.of(), List.of());
+    }
+
+    /**
+     * FD-054: rows of many diets re-chosen in one batch — each inside its own diet,
+     * so the diet's criterion wins in its diet and the global one in a library
+     * recipe — reading every diet's criteria in one query.
+     */
+    @Test
+    void rechoosesRowsOfManyDietsEachInsideItsOwnDiet() {
+        when(criteria.dietRowsOf(anyCollection())).thenReturn(Map.of(DIET_ID, List.of(dietEgg())));
+        ReferenceFoodMeasure own = new ReferenceFoodMeasure();
+        own.setId(41L);
+        ReferenceFoodMeasure hers = new ReferenceFoodMeasure();
+        hers.setId(40L);
+        when(measures.findAllById(anyCollection())).thenReturn(List.of(own, hers));
+
+        List<ReferenceFoodMeasure> chosen = service.rechoose(List.of(
+                new ScopedMeasureQueryDto(eggs(), DIET_ID, null),
+                new ScopedMeasureQueryDto(eggs(), null, null)));
+
+        assertThat(chosen).containsExactly(own, hers);
+        verify(criteria).dietRowsOf(java.util.Set.of(DIET_ID));
+        verify(criteria, never()).dietRows(any());
     }
 
     private static MeasureQueryDto eggs() {

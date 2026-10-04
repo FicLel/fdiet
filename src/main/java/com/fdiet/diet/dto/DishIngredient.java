@@ -36,8 +36,11 @@ import java.util.List;
  *
  * <p>{@code state} and {@code size} are the words the text carried ("crudo",
  * "pequeña"), null when it carried none. {@code foodMeasureId} is the household
- * measure that weighs a quantity written in one; sent back, it keeps a measure a
- * person picked.
+ * measure that weighs a quantity written in one. {@code measurePicked} says whether
+ * a person picked it (FD-054): sent back with {@code true}, the measure is kept
+ * while it still weighs the food and unit (FD-039); with {@code false} it was the
+ * rule's choice and the rule chooses again; left out beside a measure, it counts
+ * as picked, so nothing a person chose is lost.
  *
  * <p>The rest is filled on the way out and ignored on the way in: {@code id},
  * {@code matchedName} (what the matched food is called in the catalogue),
@@ -66,6 +69,7 @@ public record DishIngredient(
         Long foodItemId,
         Long compositionFoodId,
         Long foodMeasureId,
+        Boolean measurePicked,
         String matchedName,
         CompositionSource matchedSource,
         FoodMeasureDto measure,
@@ -77,11 +81,15 @@ public record DishIngredient(
         @Null(message = RetiredFields.BEDCA_FOOD_ID) Long bedcaFoodId) {
 
     /**
-     * Boxed so a request body may leave it out — it is filled on the way out and
-     * a primitive would refuse the missing field — and never null once built.
+     * Boxed so a request body may leave them out — they are filled on the way out
+     * and a primitive would refuse the missing field — and never null once built.
+     * {@code measurePicked} is true only beside a measure, and a measure sent
+     * without it counts as picked: a caller that predates FD-054 keeps what it
+     * sends, as it always did.
      */
     public DishIngredient {
         stateMismatch = Boolean.TRUE.equals(stateMismatch);
+        measurePicked = foodMeasureId != null && !Boolean.FALSE.equals(measurePicked);
         // A bound no higher than the value is no range at all.
         if (quantityMax != null && quantity != null && quantityMax.compareTo(quantity) <= 0) {
             quantityMax = null;
@@ -102,25 +110,27 @@ public record DishIngredient(
     /** A freshly written ingredient whose quantity may be a range. */
     public DishIngredient(String name, BigDecimal quantity, BigDecimal quantityMax, String unit,
                           FoodState state, PortionSize size) {
-        this(null, name, quantity, quantityMax, unit, state, size, null, null, null, null, null,
+        this(null, name, quantity, quantityMax, unit, state, size, null, null, null, false, null, null,
                 null, false, null, null, null, null);
     }
 
     /** The same ingredient with a list of candidates attached. */
     public DishIngredient withSuggestions(List<CompositionSuggestionDto> candidates) {
         return new DishIngredient(id, name, quantity, quantityMax, unit, state, size, foodItemId,
-                compositionFoodId, foodMeasureId, matchedName, matchedSource, measure, stateMismatch,
-                yieldHint, nutrition, candidates, bedcaFoodId);
+                compositionFoodId, foodMeasureId, measurePicked, matchedName, matchedSource, measure,
+                stateMismatch, yieldHint, nutrition, candidates, bedcaFoodId);
     }
 
     /**
      * The same ingredient pinned to a composition food and a household measure a
-     * caller already chose — either may be null to leave that one as it is.
+     * caller already chose — either may be null to leave that one as it is. A
+     * measure pinned here is a person's pick (the composer's measure choice).
      */
     public DishIngredient pinnedTo(Long foodId, Long measureId) {
         return new DishIngredient(id, name, quantity, quantityMax, unit, state, size, foodItemId,
                 foodId == null ? compositionFoodId : foodId,
                 measureId == null ? foodMeasureId : measureId,
+                measureId != null || measurePicked,
                 matchedName, matchedSource, measure, stateMismatch, yieldHint, nutrition, suggestions,
                 bedcaFoodId);
     }
@@ -128,13 +138,22 @@ public record DishIngredient(
     /**
      * The same ingredient matched to exactly the food a caller kept — a composition
      * food or a branded product, the other released — with the measure it picked,
-     * when it picked one (FD-048).
+     * when it picked one (FD-048). A kept measure is a pick (FD-054).
      */
     public DishIngredient matchedTo(Long compositionId, Long itemId, Long measureId) {
         return new DishIngredient(id, name, quantity, quantityMax, unit, state, size, itemId,
                 compositionId, measureId == null ? foodMeasureId : measureId,
+                measureId != null || measurePicked,
                 matchedName, matchedSource, measure, stateMismatch, yieldHint, nutrition, suggestions,
                 bedcaFoodId);
+    }
+
+    /**
+     * The measure a person picked, which the rule keeps while it still fits; null
+     * when the measure is the rule's own choice, so the rule chooses again.
+     */
+    public Long pickedMeasureId() {
+        return measurePicked ? foodMeasureId : null;
     }
 
     /** The unit as the patient reads it, in both numbers; derived, never stored. */

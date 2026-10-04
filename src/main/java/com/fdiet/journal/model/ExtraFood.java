@@ -84,6 +84,13 @@ public class ExtraFood {
     private ReferenceFoodMeasure foodMeasure;
 
     /**
+     * Whether a person picked {@link #foodMeasure} when logging the extra (FD-054).
+     * A new or changed criterion re-chooses only a measure nobody picked.
+     */
+    @Column(name = "measure_picked", nullable = false)
+    private boolean measurePicked;
+
+    /**
      * The generic composition food (CIQUAL 2025 / BLS 4.0), when that is the
      * match. {@code bedca_food_id} stays in the table, null, until FD-033 phase E.
      */
@@ -117,6 +124,11 @@ public class ExtraFood {
         this.compositionFood = compositionFood;
         this.foodItem = foodItem;
         this.loggedAt = LocalDateTime.now();
+    }
+
+    /** Whether the attached measure is a person's pick; the flag alone outlives a deleted measure. */
+    public boolean measurePicked() {
+        return measurePicked && foodMeasure != null;
     }
 
     /** True once the entry points at a food, whichever half it came from. */

@@ -3,21 +3,21 @@
 Updated 2026-10-04.
 
 ## In progress
-- FD-048 — keep matches through re-parse. Reviewed, live-checked; uncommitted — waiting on user commit.
+- FD-054 — backend done (V19, V20 applied, 5000 restarted); frontend running.
+- FD-056 — frontend, same run after FD-054.
+- FD-041, FD-052 — review done; awaiting user commit.
 
-## Next up
-- FD-052, FD-041 — D follow-ups, fixed in the next sections (not started).
-- FD-033 phase E (BEDCA removed last).
-- FD-034 phase A (manifest + provenance) — no dependency, can go any time.
+## Next up (order accepted 2026-10-04)
+1. FD-043 — re-parse stored names. Migration, after FD-054.
+2. FD-033 phase E — remove BEDCA.
+3. FD-034 phase A — manifest + provenance.
 
 ## Blocked
 _Nothing._
 
 ## Waiting on the user
-- Prioritise the rest of the backlog (FD-010…FD-032, FD-036…FD-042).
-- FD-008 — `DROP DATABASE fdiet_ui_verify;`
-- FD-043 — decide: re-parse stored names (changes `raw_name`)?
-- FD-041 — footer credit as its own pass or inside FD-033 E?
-- FD-048 — commit.
-- FD-054 — should a new criterion replace auto-chosen measures in written weeks?
-- FD-056 — half-typed name drops a pin: accept or restore?
+- Commit FD-041 + FD-052.
+- FD-060 (`cocinado` not read as cooked) — move ahead of FD-056?
+- FD-052 outcome: no mismatch ever totalled, even with a yield — keep?
+- Backend on 5000: restart after FD-054 and FD-043 migrations (agents restart it during live checks).
+- FD-008 — run `DROP DATABASE fdiet_ui_verify;` yourself (agent drop blocked by permissions).

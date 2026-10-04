@@ -76,3 +76,13 @@ Append-only. Newest at the bottom. A reversed decision gets a new entry naming t
 - **2026-10-03** — The before/after totals report is a **one-off file** (`product/reports/FD-033-D-before-after.md`), not an app feature.
 - **2026-10-04** — FD-033 D committed **without** FD-048, FD-052 and FD-041; they are fixed in the next sections. Reason: user's call.
 - **2026-10-04** — FD-048: the draft **keeps matches through a re-parse** (option b); the composer keeps offering every CIQUAL/BLS food (option a, narrowing to crosswalked foods, rejected). Applies to **every** match — composer pins and fix-up matches alike: an unchanged name keeps its food, an edited name lets parse decide. Reason: user's call; a person's choice must not be undone silently.
+
+## 2026-10-04 — after FD-048 ("yes to all")
+
+- **2026-10-04** — FD-041 is done as its own pass now, not inside FD-033 E; the BEDCA footer line goes, since no BEDCA figure is shown since D. Reason: licence gap is live.
+- **2026-10-04** — FD-052 / FD-001: **the bracket state wins for the quantity** (it says in which state the grams were weighed); the name still names the food. A mismatch without a published yield is not totalled. Proposed default, accepted.
+- **2026-10-04** — FD-054: a new or changed criterion **replaces auto-chosen measures in written weeks**, archived included; a measure a person picked is never replaced. Absorbs FD-018.
+- **2026-10-04** — FD-056: a pin dropped by a half-typed name is **restored** when the name comes back, until publish.
+- **2026-10-04** — FD-043: stored recipes' `raw_text` is **re-parsed** with today's parser (rewrites `raw_name`); existing matches and picked measures kept. One-off migration, all diets.
+- **2026-10-04** — FD-008: drop the `fdiet_ui_verify` schema. Backlog order accepted as proposed.
+- **2026-10-04** — FD-052 outcome (backend): **no state mismatch is ever totalled, even when a yield fits**; the yield stays offered (`yieldHint`). Changes one behaviour: `150 g en crudo` against a plancha food was totalled at cooked figures, now it is not. Follows from "never wrong state" + "never convert by a yield". Open to the user to reverse.

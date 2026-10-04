@@ -4,6 +4,7 @@ import com.fdiet.common.exception.GlobalExceptionHandler;
 import com.fdiet.diet.controller.DietController;
 import com.fdiet.diet.service.IDietComposeService;
 import com.fdiet.diet.service.IDietImportService;
+import com.fdiet.diet.service.IDietMeasureService;
 import com.fdiet.diet.service.IDietService;
 import com.fdiet.journal.controller.JournalController;
 import com.fdiet.journal.service.IJournalService;
@@ -62,7 +63,7 @@ class RetiredFieldsWebTest {
                         validated(new ReferenceController(referenceService,
                                 mock(IReferenceImportService.class)), validator),
                         validated(new DietController(dietService, mock(IDietImportService.class),
-                                composeService), validator),
+                                composeService, mock(IDietMeasureService.class)), validator),
                         validated(new JournalController(journalService), validator))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)

@@ -86,7 +86,7 @@ watch(
   { immediate: true },
 )
 
-/** BEDCA always; every reference source the count used, once there is one. */
+/** CIQUAL and BLS always (in the footer itself); every reference source the count used, once there is one. */
 const sources = computed(() => rations.rations.value?.sources ?? [])
 
 function openAdd(): void {

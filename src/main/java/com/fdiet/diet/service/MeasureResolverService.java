@@ -36,10 +36,11 @@ public class MeasureResolverService implements IMeasureResolverService {
     /**
      * One call chooses for every ingredient (a query for the diet's criteria and
      * one for the global criteria of the foods named, the published rows already
-     * in memory), and one batched load fetches the rows chosen. A measure the
-     * request carries is kept when it still fits the food and the unit;
-     * otherwise the rule decides again, and "decides" means only when the choice
-     * is not a judgement. O(n) over the ingredients.
+     * in memory), and one batched load fetches the rows chosen. A measure a
+     * person picked is kept when it still fits the food and the unit; a measure
+     * the rule chose before, or a pick that no longer fits, is chosen again by
+     * the rule, and "decides" means only when the choice is not a judgement
+     * (FD-054). O(n) over the ingredients.
      */
     @Override
     @Transactional(readOnly = true)
@@ -56,7 +57,7 @@ public class MeasureResolverService implements IMeasureResolverService {
             }
             written.add(ingredient);
             queries.add(queryOf(food, ingredient.unit(), ingredient.size(),
-                    ingredient.foodMeasureId()));
+                    ingredient.pickedMeasureId()));
         }
         if (queries.isEmpty()) {
             return Map.of();

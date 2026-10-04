@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, shallowRef } from 'vue'
-import { dietsApi } from '@/api/diets'
+import { dietsApi, type ComposeRequest } from '@/api/diets'
 import { referenceApi } from '@/api/reference'
 import type { CompositionFood } from '@/api/compositionTypes'
 import type { DishIngredient, FoodMeasure, FoodState, Ration } from '@/api/types'
@@ -10,10 +10,13 @@ import {
   GRAMS_CHOICE,
   rationRange,
   rationStart,
+  STATE_OPTIONS,
+  stateMismatchWarning,
   weightHint as hintFor,
   writesMl,
   type ComposerChoice,
 } from '@/domain/composerChoice'
+import { useComposePreview } from '@/composables/useComposePreview'
 import { criterionFor, unitsWeight, weighs } from '@/domain/measureCriteria'
 import { amount, stateWord } from '@/domain/rations'
 import { compositionFoodName } from '@/domain/compositionFood'
@@ -66,15 +69,6 @@ const state = ref<FoodState | ''>('')
 const busy = ref(false)
 const error = ref<string | null>(null)
 const added = ref<string | null>(null)
-
-const STATES: { value: FoodState | ''; label: string }[] = [
-  { value: '', label: 'Sin indicar' },
-  { value: 'RAW', label: 'En crudo' },
-  { value: 'DRY', label: 'En seco' },
-  { value: 'COOKED', label: 'Cocinado' },
-  { value: 'CANNED', label: 'En conserva' },
-  { value: 'DRAINED', label: 'Escurrido' },
-]
 
 function loadMeasures(chosen: CompositionFood): Promise<FoodMeasure[]> {
   return referenceApi.measures({ compositionFoodId: chosen.id }, {
@@ -219,34 +213,38 @@ const writtenLine = computed(() =>
         .join(' '),
 )
 
-const canAdd = computed(
-  () =>
-    food.value !== null &&
-    !busy.value &&
-    asking.value === null &&
-    total.value !== null &&
-    count.value > 0,
-)
-
-async function add(): Promise<void> {
+/** What "Añadir" will ask the backend to write, or null while it cannot be asked. */
+const request = computed<ComposeRequest | null>(() => {
   const chosen = food.value
   const current = choice.value
-  if (!chosen || !canAdd.value) {
-    return
+  if (!chosen || asking.value !== null || total.value === null || count.value <= 0) {
+    return null
   }
-  busy.value = true
-  error.value = null
   const common = {
     compositionFoodId: chosen.id,
     state: state.value || null,
     dietId: props.dietId ?? undefined,
   }
+  return current.kind === 'measure'
+    ? { ...common, foodMeasureId: current.measure.id, count: count.value }
+    : { ...common, grams: Math.round(total.value * 100) / 100 }
+})
+
+const canAdd = computed(() => request.value !== null && !busy.value)
+
+/** Said before adding: the backend reads the fragment as weighed in another state than the food's. */
+const { reading } = useComposePreview(() => request.value)
+const stateWarning = computed(() => stateMismatchWarning(choice.value, reading.value))
+
+async function add(): Promise<void> {
+  const asked = request.value
+  if (!asked || !canAdd.value) {
+    return
+  }
+  busy.value = true
+  error.value = null
   try {
-    const composed = await dietsApi.compose(
-      current.kind === 'measure'
-        ? { ...common, foodMeasureId: current.measure.id, count: count.value }
-        : { ...common, grams: Math.round(total.value! * 100) / 100 },
-    )
+    const composed = await dietsApi.compose(asked)
     emit('append', composed.fragment, composed.ingredient)
     added.value = unitsLine.value ? `${composed.fragment} · ${unitsLine.value}` : composed.fragment
   } catch (cause) {
@@ -327,7 +325,7 @@ async function add(): Promise<void> {
             <label class="mini">
               <span>Estado</span>
               <select v-model="state" class="input">
-                <option v-for="option in STATES" :key="option.value" :value="option.value">
+                <option v-for="option in STATE_OPTIONS" :key="option.value" :value="option.value">
                   {{ option.label }}
                 </option>
               </select>
@@ -345,6 +343,8 @@ async function add(): Promise<void> {
             <template v-else-if="writtenLine">Se escribirá {{ writtenLine }}.</template>
             <template v-else>Indica un peso para poder añadirlo.</template>
           </p>
+
+          <p v-if="stateWarning" class="error" role="alert">{{ stateWarning }}</p>
 
           <button class="add" type="button" :disabled="!canAdd" @click="add()">
             {{ busy ? 'Añadiendo…' : 'Añadir al plato' }}

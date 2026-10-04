@@ -1,17 +1,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { ReferenceSource } from '@/api/types'
+import { SOURCE_ATTRIBUTIONS } from '@/domain/compositionFood'
 
 /**
- * Where the figures on screen come from. Not decoration: BEDCA's terms require
- * its attribution wherever its values are shown, and each reference source's
- * figures are shown only with the line it asks for.
+ * Where the figures on screen come from. Not decoration: CIQUAL's and BLS's
+ * licence (CC BY 4.0) requires their attribution wherever their values are
+ * shown, and each reference source's figures are shown only with the line it
+ * asks for.
  */
 
 const props = defineProps<{ sources: ReferenceSource[] }>()
-
-const BEDCA =
-  'Composición: AESAN/BEDCA Base de Datos Española de Composición de Alimentos v1.0 (2010). Uso no comercial.'
 
 const open = ref(false)
 
@@ -27,7 +26,10 @@ const lines = computed(() =>
 
 <template>
   <footer class="footer">
-    <span class="line">{{ BEDCA }}</span>
+    <span v-for="credit in SOURCE_ATTRIBUTIONS" :key="credit.source" class="line">
+      {{ credit.text }}
+      <a :href="credit.url" target="_blank" rel="noopener noreferrer">enlace</a>
+    </span>
     <template v-if="lines.length > 0">
       <button class="more" type="button" :aria-expanded="open" @click="open = !open">
         {{ open ? 'Ocultar fuentes' : `Raciones y medidas: ${lines.length} ${lines.length === 1 ? 'fuente' : 'fuentes'}` }}
@@ -74,6 +76,7 @@ const lines = computed(() =>
   color: var(--ink-disabled);
 }
 
+.line a,
 .sources a {
   margin-left: 4px;
   color: var(--sage-700);

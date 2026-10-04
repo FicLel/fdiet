@@ -18,6 +18,7 @@ import com.fdiet.diet.dto.ResolveIngredientDto;
 import com.fdiet.diet.exception.InvalidDietException;
 import com.fdiet.diet.service.IDietComposeService;
 import com.fdiet.diet.service.IDietImportService;
+import com.fdiet.diet.service.IDietMeasureService;
 import com.fdiet.diet.service.IDietService;
 import com.fdiet.reference.dto.MeasureCriterionRequestDto;
 import com.fdiet.reference.dto.FoodMeasureDto;
@@ -61,12 +62,15 @@ public class DietController {
     private final IDietService dietService;
     private final IDietImportService dietImportService;
     private final IDietComposeService dietComposeService;
+    private final IDietMeasureService dietMeasureService;
 
     public DietController(IDietService dietService, IDietImportService dietImportService,
-                          IDietComposeService dietComposeService) {
+                          IDietComposeService dietComposeService,
+                          IDietMeasureService dietMeasureService) {
         this.dietService = dietService;
         this.dietImportService = dietImportService;
         this.dietComposeService = dietComposeService;
+        this.dietMeasureService = dietMeasureService;
     }
 
     @PostMapping
@@ -203,15 +207,16 @@ public class DietController {
     @Operation(summary = "The diet's own weights for household measures — the nutritionist's "
             + "criterion, never presented as a published figure")
     public List<FoodMeasureDto> measures(@PathVariable Long id) {
-        return dietService.measures(id);
+        return dietMeasureService.measures(id);
     }
 
     @PutMapping("/{id}/measures")
     @Operation(summary = "Set the diet's own weight for one household measure of one food (and "
-            + "size), replacing an earlier one, and attach it to the diet's ingredients it weighs")
+            + "size), replacing an earlier one, and re-weigh the diet's ingredients and extras of that "
+            + "food and measure whose measure nobody picked. attached = reweighed total")
     public DietMeasureSavedDto saveMeasure(@PathVariable Long id,
                                            @RequestBody @Valid MeasureCriterionRequestDto request) {
-        return dietService.saveMeasure(id, request);
+        return dietMeasureService.saveMeasure(id, request);
     }
 
     @DeleteMapping("/{id}/measures/{measureId}")
@@ -219,7 +224,7 @@ public class DietController {
     @Operation(summary = "Remove one of the diet's own measures. The ingredients it weighed are "
             + "left unmeasured rather than weighed by something else")
     public void deleteMeasure(@PathVariable Long id, @PathVariable Long measureId) {
-        dietService.deleteMeasure(id, measureId);
+        dietMeasureService.deleteMeasure(id, measureId);
     }
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

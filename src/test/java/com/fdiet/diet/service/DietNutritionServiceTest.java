@@ -8,6 +8,7 @@ import com.fdiet.food.dto.NutritionDto;
 import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.model.NutrientValue;
 import com.fdiet.food.service.NutritionService;
+import com.fdiet.reference.domain.FoodState;
 import com.fdiet.reference.domain.HouseholdMeasure;
 import com.fdiet.reference.domain.WeightBasis;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
@@ -84,6 +85,30 @@ class DietNutritionServiceTest {
         // 12.45 + 15.57
         assertThat(summary.totals().energyKcal()).isEqualByComparingTo("28.02");
         assertThat(summary.complete()).isFalse();
+    }
+
+    /** FD-052: 55 g of dry lentils matched to cooked ones is left out, never priced as cooked. */
+    @Test
+    void leavesOutAQuantityWeighedInAnotherStateThanItsFood() {
+        CompositionFood cooked = lechuga();
+        cooked.setNameEs("Lenteja, cocida");
+        RecipeIngredient dry = ingredient(cooked, "55", "g");
+        dry.setState(FoodState.DRY);
+        RecipeIngredient agreeing = ingredient(cooked, "180", "g");
+        agreeing.setState(FoodState.COOKED);
+
+        NutritionSummaryDto summary = summarise(List.of(dry, agreeing, ingredient(null, "1", "g")));
+
+        assertThat(nutrition.of(dry)).isNull();
+        // The grams are still read, so a yield hint can say what they come to.
+        assertThat(nutrition.edibleGrams(dry)).isEqualByComparingTo("55");
+        assertThat(summary.counted()).isEqualTo(1);
+        assertThat(summary.unmeasured()).isEqualTo(1);
+        assertThat(summary.unmeasuredByState()).isEqualTo(1);
+        assertThat(summary.unmatched()).isEqualTo(1);
+        assertThat(summary.counted() + summary.unmeasured() + summary.unmatched())
+                .isEqualTo(summary.ingredients());
+        assertThat(summary.totals().energyKcal()).isEqualByComparingTo(nutrition.of(agreeing).energyKcal());
     }
 
     @Test

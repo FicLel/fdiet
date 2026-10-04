@@ -1,6 +1,6 @@
-import type { FoodMeasure, Ration, WeightBasis } from '@/api/types'
+import type { DishIngredient, FoodMeasure, FoodState, Ration, WeightBasis } from '@/api/types'
 import { midpointProposal } from './measureCriteria'
-import { range, rationIsFixed, rationWeight } from './rations'
+import { amount, range, rationIsFixed, rationWeight, stateWord } from './rations'
 
 /**
  * What "Añadir por raciones" is about to write: a count of a published ration,
@@ -96,4 +96,57 @@ export function choiceTotal(
     return null
   }
   return choice.kind === 'ration' ? grams * count : grams
+}
+
+/** The states the composer offers for what it writes; empty is none. */
+export const STATE_OPTIONS: { value: FoodState | ''; label: string }[] = [
+  { value: '', label: 'Sin indicar' },
+  { value: 'RAW', label: 'En crudo' },
+  { value: 'DRY', label: 'En seco' },
+  { value: 'COOKED', label: 'Cocinado' },
+  { value: 'CANNED', label: 'En conserva' },
+  { value: 'DRAINED', label: 'Escurrido' },
+]
+
+/** The states weighed before cooking; a mismatch puts the food on the other side. */
+const BEFORE_COOKING: readonly FoodState[] = ['RAW', 'DRY']
+
+/** Who states the state: the published ration or measure when it does, else what she chose. */
+function subjectOf(choice: ComposerChoice, state: FoodState): string {
+  if (choice.kind === 'ration' && choice.ration.state === state) {
+    return 'La ración'
+  }
+  if (choice.kind === 'measure' && choice.measure.state === state) {
+    return 'La medida'
+  }
+  return 'La cantidad'
+}
+
+/**
+ * What to say before adding when the backend reads the fragment as a state
+ * mismatch: `La ración es en seco; el alimento elegido está cocinado.` The
+ * food's own state is the yield hint's when there is one; otherwise only the
+ * side of cooking is known. Null when nothing disagrees.
+ */
+export function stateMismatchWarning(
+  choice: ComposerChoice,
+  read: DishIngredient | null,
+): string | null {
+  if (!read?.stateMismatch || !read.state) {
+    return null
+  }
+  const hint = read.yieldHint
+  const foodSide = hint
+    ? stateWord(hint.foodState)
+    : BEFORE_COOKING.includes(read.state)
+      ? stateWord('COOKED')
+      : 'en crudo o en seco'
+  const reference =
+    hint && hint.equivalentGrams !== null
+      ? ` Como referencia, ${hint.sourceShortName}: ≈ ${amount(hint.equivalentGrams, 1)} g ${stateWord(hint.foodState)}.`
+      : ''
+  return (
+    `${subjectOf(choice, read.state)} es ${stateWord(read.state)}; el alimento elegido está ${foodSide}. ` +
+    `Así no contará en las cifras: elige el alimento en ese estado o cambia el estado.${reference}`
+  )
 }

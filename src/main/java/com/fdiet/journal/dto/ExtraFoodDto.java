@@ -21,7 +21,9 @@ import java.time.LocalDateTime;
  * (CIQUAL or BLS), null for a branded product. {@code nutrition} is the catalogue's per-100 g figures scaled to the
  * quantity logged, worked out on read and never stored — null when nothing was
  * matched, or when the unit is one nothing can weigh. {@code measure} is the
- * household measure that weighed it, with its source, when one did.
+ * household measure that weighed it, with its source, when one did, and
+ * {@code measurePicked} whether a person picked it when logging (FD-054) — a
+ * measure the rule chose follows a new or changed criterion, a picked one never.
  * {@code unitWording} is the unit in both numbers with its size agreeing — the
  * same shape the week's ingredients carry; see {@link UnitWording}.
  */
@@ -40,6 +42,7 @@ public record ExtraFoodDto(
         /** The maker, when the match came from the branded catalogue. */
         String brand,
         Long foodMeasureId,
+        boolean measurePicked,
         FoodMeasureDto measure,
         NutritionDto nutrition,
         LocalDateTime loggedAt) {

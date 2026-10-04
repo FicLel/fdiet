@@ -16,6 +16,10 @@ import { NO_VALUE } from './format'
  * the nutritionist to confirm: `midpointProposal` in `measureCriteria.ts`.)
  */
 
+/** Who chose a measure: a person, or the rule. */
+export const MEASURE_PICKED = 'elegida por ti'
+export const MEASURE_AUTOMATIC = 'automática'
+
 const UP_TO_TWO = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 })
 const UP_TO_ONE = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 })
 
@@ -121,6 +125,22 @@ export function measureSource(measure: FoodMeasure): string {
     return 'Criterio de esta dieta'
   }
   return measure.globalOwn ? 'Tu criterio' : (measure.sourceShortName ?? 'Sin fuente')
+}
+
+/**
+ * Where the measure weighing an ingredient or extra comes from, and who chose it
+ * (FD-054): `Tu criterio · automática`, `AESAN 2022 · elegida por ti`. The rule
+ * chooses an automatic one again when a criterion is written or changed; a
+ * person's choice stays.
+ */
+export function measureOrigin(weighed: {
+  measure: FoodMeasure | null
+  measurePicked: boolean
+}): string {
+  if (!weighed.measure) {
+    return ''
+  }
+  return `${measureSource(weighed.measure)} · ${weighed.measurePicked ? MEASURE_PICKED : MEASURE_AUTOMATIC}`
 }
 
 /** `≥ 4 a la semana`, `≤ 3 al día`, `2–3 al día`. */

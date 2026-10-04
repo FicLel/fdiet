@@ -66,7 +66,6 @@ class RecipeServiceTest {
             new DietMapper(mock(IDietNutritionService.class), reference),
             new MealTextParser(),
             new IngredientFoodService(compositionFoods, foodItems, resolver, 5),
-            reference,
             new MeasureResolverService(reference, new PortionScaler()));
 
     @Test
@@ -95,7 +94,7 @@ class RecipeServiceTest {
         when(recipes.findFirstByLibraryTrueAndName(any())).thenReturn(Optional.empty());
         when(reference.measureEntities(anyCollection())).thenReturn(Map.of(11L, own));
         DishIngredient oil = new DishIngredient(null, "AOVE", BigDecimal.ONE, null, "cdta", null, null,
-                null, null, 11L, null, null, null, false, null, null, null, null);
+                null, null, 11L, null, null, null, null, false, null, null, null, null);
 
         assertThatThrownBy(() -> service.create(content("Aliño", List.of(oil))))
                 .isInstanceOf(InvalidDietException.class)
@@ -120,7 +119,7 @@ class RecipeServiceTest {
         when(reference.chooseMeasures(anyList(), isNull(), isNull()))
                 .thenReturn(List.of(new MeasureChoiceDto(chosen, List.of(chosen))));
         DishIngredient eggs = new DishIngredient(null, "Huevo", new BigDecimal("2"), null, "unidades", null,
-                PortionSize.MEDIUM, null, 2127L, 40L, null, null, null, false, null, null, null, null);
+                PortionSize.MEDIUM, null, 2127L, 40L, null, null, null, null, false, null, null, null, null);
 
         service.create(content("Huevos revueltos", List.of(eggs)));
 
@@ -224,22 +223,124 @@ class RecipeServiceTest {
                 .hasMessageContaining("compositionFoodId");
     }
 
-    /** The C-review note: a diet's criterion is chosen with the food's Spanish name, so family rows still rank. */
+    /** FD-054: a measure sent in a PATCH is a person's pick, and is stored as one. */
     @Test
-    void attachesADietMeasureAskingWithTheFoodsSpanishName() {
+    void storesAMeasureSentInAPatchAsPicked() {
+        ReferenceFoodMeasure global = globalEgg(measure(40L));
+        RecipeIngredient eggs = storedEggs(null, false);
+        stubChoice(global);
+
+        DishIngredient patched = service.resolveIngredient(List.of(1L), 5L,
+                new ResolveIngredientDto(null, null, null, null, null, 40L), 3L, null);
+
+        assertThat(patched.measurePicked()).isTrue();
+        assertThat(eggs.isMeasurePicked()).isTrue();
+        verify(reference).chooseMeasures(org.mockito.ArgumentMatchers.argThat(queries ->
+                Long.valueOf(40L).equals(queries.get(0).preferredMeasureId())), eq(3L), isNull());
+    }
+
+    /** FD-054: a measure the rule chose is chosen again on a PATCH that does not name one. */
+    @Test
+    void choosesAgainAMeasureTheRuleChoseWhenAPatchNamesNone() {
+        ReferenceFoodMeasure global = globalEgg(measure(40L));
+        RecipeIngredient eggs = storedEggs(measure(41L), false);
+        stubChoice(global);
+
+        DishIngredient patched = service.resolveIngredient(List.of(1L), 5L,
+                new ResolveIngredientDto(null, null, null, new BigDecimal("3"), null, null), 3L, null);
+
+        assertThat(eggs.getFoodMeasure()).isSameAs(global);
+        assertThat(patched.measurePicked()).isFalse();
+        verify(reference).chooseMeasures(org.mockito.ArgumentMatchers.argThat(queries ->
+                queries.get(0).preferredMeasureId() == null
+                        && "Huevo, entero, crudo".equals(queries.get(0).foodName())), eq(3L), isNull());
+    }
+
+    /** FD-054: a picked measure stays the preference through a PATCH that does not name one. */
+    @Test
+    void keepsAPickedMeasureThroughAPatchThatNamesNone() {
+        ReferenceFoodMeasure picked = globalEgg(measure(41L));
+        RecipeIngredient eggs = storedEggs(picked, true);
+        stubChoice(picked);
+
+        DishIngredient patched = service.resolveIngredient(List.of(1L), 5L,
+                new ResolveIngredientDto(null, null, null, new BigDecimal("3"), null, null), 3L, null);
+
+        assertThat(patched.measurePicked()).isTrue();
+        assertThat(eggs.getFoodMeasure()).isSameAs(picked);
+        verify(reference).chooseMeasures(org.mockito.ArgumentMatchers.argThat(queries ->
+                Long.valueOf(41L).equals(queries.get(0).preferredMeasureId())), eq(3L), isNull());
+    }
+
+    /** FD-054: an ingredient sent back with the rule's measure is weighed by the rule again, not kept. */
+    @Test
+    void choosesAgainAMeasureSentBackAsTheRules() {
+        ReferenceFoodMeasure global = globalEgg(measure(40L));
+        stubLibraryEggs(global);
+        DishIngredient eggs = new DishIngredient(null, "Huevo", new BigDecimal("2"), null, "unidades", null,
+                PortionSize.MEDIUM, null, 2127L, 41L, false, null, null, null, false, null, null, null, null);
+
+        service.create(content("Huevos revueltos", List.of(eggs)));
+
+        verify(reference).chooseMeasures(org.mockito.ArgumentMatchers.argThat(queries ->
+                queries.get(0).preferredMeasureId() == null), isNull(), isNull());
+        verify(recipes).saveAndFlush(org.mockito.ArgumentMatchers.argThat(saved ->
+                saved.getIngredients().get(0).getFoodMeasure() == global
+                        && !saved.getIngredients().get(0).isMeasurePicked()));
+    }
+
+    /** FD-054: a measure sent without the flag counts as picked — a caller from before loses nothing. */
+    @Test
+    void keepsAMeasureSentWithoutTheFlagAsPicked() {
+        ReferenceFoodMeasure global = globalEgg(measure(40L));
+        stubLibraryEggs(global);
+        DishIngredient eggs = new DishIngredient(null, "Huevo", new BigDecimal("2"), null, "unidades", null,
+                PortionSize.MEDIUM, null, 2127L, 40L, null, null, null, null, false, null, null, null, null);
+
+        service.create(content("Huevos revueltos", List.of(eggs)));
+
+        verify(reference).chooseMeasures(org.mockito.ArgumentMatchers.argThat(queries ->
+                Long.valueOf(40L).equals(queries.get(0).preferredMeasureId())), isNull(), isNull());
+        verify(recipes).saveAndFlush(org.mockito.ArgumentMatchers.argThat(saved ->
+                saved.getIngredients().get(0).isMeasurePicked()));
+    }
+
+    private RecipeIngredient storedEggs(ReferenceFoodMeasure measure, boolean picked) {
+        RecipeIngredient eggs = new RecipeIngredient("huevo", null, egg(), new BigDecimal("2"), "unidades");
+        eggs.setRecipe(recipe(1L, "Tortilla", false));
+        eggs.setFoodMeasure(measure);
+        eggs.setMeasurePicked(picked);
+        when(ingredients.findByIdAndRecipeIdIn(eq(5L), anyCollection())).thenReturn(Optional.of(eggs));
+        when(ingredients.save(any())).thenAnswer(call -> call.getArgument(0));
+        return eggs;
+    }
+
+    private void stubChoice(ReferenceFoodMeasure chosen) {
+        FoodMeasureDto described = new ReferenceMapper().toDto(chosen);
+        when(reference.chooseMeasures(anyList(), any(), any()))
+                .thenReturn(List.of(new MeasureChoiceDto(described, List.of(described))));
+        when(reference.measureEntities(anyCollection())).thenReturn(Map.of(chosen.getId(), chosen));
+    }
+
+    private void stubLibraryEggs(ReferenceFoodMeasure chosen) {
+        when(recipes.findFirstByLibraryTrueAndName(any())).thenReturn(Optional.empty());
+        when(recipes.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+        when(compositionFoods.entitiesByIds(anyCollection())).thenReturn(Map.of(2127L, egg()));
+        stubChoice(chosen);
+    }
+
+    private static CompositionFood egg() {
         CompositionFood egg = new CompositionFood();
         egg.setId(2127L);
         egg.setNameEs("Huevo, entero, crudo");
-        RecipeIngredient eggs = new RecipeIngredient("huevo", null, egg, new BigDecimal("2"), "unidades");
-        eggs.setRecipe(recipe(1L, "Tortilla", false));
-        when(ingredients.findByRecipeIdIn(anyCollection())).thenReturn(List.of(eggs));
-        when(reference.chooseMeasures(anyList(), eq(3L), isNull())).thenReturn(List.of(MeasureChoiceDto.NONE));
+        return egg;
+    }
 
-        service.attachDietMeasure(List.of(1L), 2127L, HouseholdMeasure.UNIDAD, 3L, null);
-
-        verify(reference).chooseMeasures(org.mockito.ArgumentMatchers.argThat(queries ->
-                queries.size() == 1 && "Huevo, entero, crudo".equals(queries.get(0).foodName())
-                        && Long.valueOf(2127L).equals(queries.get(0).compositionFoodId())), eq(3L), isNull());
+    private static ReferenceFoodMeasure measure(Long id) {
+        ReferenceFoodMeasure row = new ReferenceFoodMeasure();
+        row.setId(id);
+        row.setGlobalCriterion(true);
+        return row;
     }
 
     private static ReferenceFoodMeasure globalEgg(ReferenceFoodMeasure row) {

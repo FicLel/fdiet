@@ -34,10 +34,14 @@ export type IngredientAt = Pick<
   day: DayOfWeek
 }
 
-/** Matched to a food, and still in no total: nothing weighs the unit it is written in. */
+/**
+ * Matched to a food, and still in no total: nothing weighs the unit it is written in.
+ * A state mismatch is left out of the total for another reason, and says so itself.
+ */
 export function isUnweighed(ingredient: DishIngredient): boolean {
   return (
     (ingredient.compositionFoodId !== null || ingredient.foodItemId !== null) &&
+    !ingredient.stateMismatch &&
     (ingredient.nutrition === null ||
       Object.values(ingredient.nutrition).every((value) => value === null))
   )

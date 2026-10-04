@@ -31,8 +31,15 @@ public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredie
     @EntityGraph(attributePaths = {"foodItem", "compositionFood"})
     Page<RecipeIngredient> findByRecipeIdIn(Collection<Long> recipeIds, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"compositionFood", "recipe"})
-    List<RecipeIngredient> findByRecipeIdIn(Collection<Long> recipeIds);
+    /**
+     * The ingredients of any recipe matched to one composition food whose measure no
+     * person picked — a flag left behind by a deleted measure counts as none — with
+     * their recipes and measures: what a criterion for that food may re-weigh (FD-054).
+     */
+    @EntityGraph(attributePaths = {"compositionFood", "recipe", "foodMeasure"})
+    @Query("select i from RecipeIngredient i where i.compositionFood.id = :foodId "
+            + "and (i.measurePicked = false or i.foodMeasure is null)")
+    List<RecipeIngredient> findAutoMeasured(@Param("foodId") Long compositionFoodId);
 
     /** The ones still waiting to be matched — the fix-up list. */
     @EntityGraph(attributePaths = {"foodItem", "compositionFood"})

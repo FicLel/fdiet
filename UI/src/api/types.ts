@@ -5,6 +5,8 @@
  */
 
 import type { CompositionSource } from './compositionTypes'
+import type { Nutrition, NutritionSummary } from './nutritionTypes'
+import type { FoodMeasure } from './measureTypes'
 
 export type DietStatus = 'ACTIVE' | 'ARCHIVED'
 
@@ -47,28 +49,6 @@ export interface Patient {
 
 export type Sex = 'FEMALE' | 'MALE'
 
-export interface Nutrition {
-  energyKcal: number | null
-  proteinG: number | null
-  fatG: number | null
-  saturatedFatG: number | null
-  carbohydratesG: number | null
-  sugarsG: number | null
-  fiberG: number | null
-  sodiumMg: number | null
-}
-
-/** A total never travels without the counts it was worked out over. */
-export interface NutritionSummary {
-  totals: Nutrition
-  ingredients: number
-  counted: number
-  unmatched: number
-  unmeasured: number
-  /** Of `counted`, how many were weighed through a household measure rather than written in grams. */
-  countedByMeasure: number
-}
-
 /** A ranked CIQUAL / BLS candidate for an unmatched ingredient, by name alone. */
 export interface FoodSuggestion {
   compositionFoodId: number
@@ -76,12 +56,6 @@ export interface FoodSuggestion {
   source: CompositionSource
   sourceLabel: string
   score: number
-}
-
-/** One published figure as it left the source: the number and its own unit. */
-export interface Nutrient {
-  value: number
-  unit: string
 }
 
 /**
@@ -141,6 +115,12 @@ export interface DishIngredient {
   matchedSource: CompositionSource | null
   /** The household measure that weighs `1 cdta`, when one is attached. */
   foodMeasureId: number | null
+  /**
+   * A person chose the measure (fix-up, composer) rather than the rule (FD-054).
+   * Sent back as it came: `false` lets the rule choose again, so the measure
+   * follows a criterion written later; `true` keeps it. False without a measure.
+   */
+  measurePicked: boolean
   /** The catalogue's own name for the food, once matched. */
   matchedName: string | null
   measure: FoodMeasure | null
@@ -336,64 +316,6 @@ export interface ReferenceProfile {
   suggested: boolean
 }
 
-/**
- * A household measure and what it weighs: `1 cucharada sopera · 10 ml · AESAN 2022`.
- * A range (`53–63 g`) weighs nothing and is never attached on its own.
- */
-export interface FoodMeasure {
-  id: number
-  code: string | null
-  measure: HouseholdMeasure
-  measureLabel: string
-  size: PortionSize | null
-  count: number
-  foodLabel: string | null
-  compositionFoodId: number | null
-  foodCategory: string | null
-  keywords: string | null
-  gramsMin: number | null
-  gramsMax: number | null
-  mlMin: number | null
-  mlMax: number | null
-  /** Null for a range: nothing picks a midpoint. */
-  gramsPerMeasure: number | null
-  state: FoodState
-  weightBasis: WeightBasis
-  grossGrams: number | null
-  householdText: string | null
-  pageRef: string | null
-  note: string | null
-  sourceCode: string | null
-  sourceShortName: string | null
-  sourceTier: number | null
-  dietId: number | null
-  /** The nutritionist's own criterion for this diet, not a published row. */
-  dietOwn: boolean
-  /** The nutritionist's own criterion for every diet ("tu criterio"), not a published row. */
-  globalOwn: boolean
-}
-
-/**
- * The nutritionist's own weight for one household measure of one food: for one
- * diet (`dietsApi.saveMeasure`) or for every diet (`referenceApi.createCriterion`).
- * Exactly one of grams or ml, for one measure, edible part.
- */
-export interface MeasureCriterionRequest {
-  measure: HouseholdMeasure
-  size?: PortionSize | null
-  compositionFoodId: number
-  grams?: number | null
-  ml?: number | null
-  note?: string | null
-}
-
-/** What a change to a criterion reaches, live: the ingredients and extras it weighs now. */
-export interface MeasureUsage {
-  measureId: number
-  ingredients: number
-  extraFoods: number
-}
-
 export interface Ration {
   id: number
   code: string
@@ -539,18 +461,6 @@ export interface ComposedFragment {
   ingredient: DishIngredient
 }
 
-export interface DietMeasureSaved {
-  measure: FoodMeasure
-  /** How many of the diet's ingredients now weigh through it. */
-  attached: number
-}
-
-export interface HouseholdMeasureWord {
-  code: HouseholdMeasure
-  label: string
-  aliases: string[]
-}
-
 export interface Page<T> {
   content: T[]
   page: number
@@ -561,5 +471,7 @@ export interface Page<T> {
   last: boolean
 }
 
-/** The journal's types live in their own file; re-exported so imports stay as they were. */
+/** The journal's and the nutrition types live in their own files; re-exported so imports stay as they were. */
 export type * from './journalTypes'
+export type * from './nutritionTypes'
+export type * from './measureTypes'

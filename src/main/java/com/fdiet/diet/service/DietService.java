@@ -6,7 +6,7 @@ import com.fdiet.diet.domain.Diet;
 import com.fdiet.diet.dto.CopyDietRequestDto;
 import com.fdiet.diet.dto.DietDay;
 import com.fdiet.diet.dto.DietDto;
-import com.fdiet.diet.dto.DietMeasureSavedDto;
+import com.fdiet.diet.dto.DietProfileDto;
 import com.fdiet.diet.dto.DietRationsDto;
 import com.fdiet.diet.dto.DietRequestDto;
 import com.fdiet.diet.dto.DietSettingsDto;
@@ -32,8 +32,6 @@ import com.fdiet.diet.repository.DietRepository;
 import com.fdiet.diet.repository.PlannedDishRepository;
 import com.fdiet.patient.model.Patient;
 import com.fdiet.patient.service.IPatientService;
-import com.fdiet.reference.dto.MeasureCriterionRequestDto;
-import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
 import com.fdiet.reference.service.IReferenceService;
 import org.springframework.data.domain.Page;
@@ -368,33 +366,14 @@ public class DietService implements IDietService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<FoodMeasureDto> measures(Long dietId) {
-        requireDiet(dietId);
-        return referenceService.dietMeasures(dietId);
-    }
-
-    /**
-     * Writes the diet's own weight for a measure, then attaches it to every
-     * stored ingredient of the diet's private recipes it can weigh. A library
-     * recipe is left alone: it is shared, and one diet's criterion is not
-     * everybody's.
-     */
-    @Override
-    @Transactional
-    public DietMeasureSavedDto saveMeasure(Long dietId, MeasureCriterionRequestDto request) {
-        DietPlan plan = dietRepository.findById(dietId)
-                .orElseThrow(() -> DietNotFoundException.diet(dietId));
-        FoodMeasureDto saved = referenceService.saveDietMeasure(dietId, request);
-        int attached = recipeService.attachDietMeasure(dishRepository.recipeIdsOf(dietId),
-                request.compositionFoodId(), request.measure(), dietId, plan.getReferenceProfileCode());
-        return new DietMeasureSavedDto(saved, attached);
+    public Map<Long, DietProfileDto> dietsServingPrivate(Collection<Long> recipeIds) {
+        return recipeIds.isEmpty() ? Map.of() : byKey(dishRepository.dietsServingPrivate(recipeIds));
     }
 
     @Override
-    @Transactional
-    public void deleteMeasure(Long dietId, Long measureId) {
-        requireDiet(dietId);
-        referenceService.deleteDietMeasure(dietId, measureId);
+    @Transactional(readOnly = true)
+    public Map<Long, DietProfileDto> profilesOf(Collection<Long> dietIds) {
+        return dietIds.isEmpty() ? Map.of() : byKey(dietRepository.profilesOf(dietIds));
     }
 
     @Override
@@ -414,6 +393,13 @@ public class DietService implements IDietService {
         return dietRepository.findById(dietId)
                 .orElseThrow(() -> DietNotFoundException.diet(dietId))
                 .getReferenceProfileCode();
+    }
+
+    /** A row per key; a key read twice (a recipe on two plates, which nothing writes) keeps the first. */
+    private static Map<Long, DietProfileDto> byKey(List<DietProfileDto> rows) {
+        Map<Long, DietProfileDto> byKey = new HashMap<>();
+        rows.forEach(row -> byKey.putIfAbsent(row.key(), row));
+        return byKey;
     }
 
     /** Runs the week through the in-memory rules and hands it back ordered. */

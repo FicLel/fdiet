@@ -56,6 +56,8 @@ export interface ExtraFood {
   brand: string | null
   /** The household measure that weighed `1 cucharada`, the same rule the week weighs by. */
   foodMeasureId: number | null
+  /** Picked by a person when logging, rather than chosen by the rule (FD-054). */
+  measurePicked: boolean
   measure: FoodMeasure | null
   /** Scaled to the quantity logged; null when unmatched or unweighable. */
   nutrition: Nutrition | null

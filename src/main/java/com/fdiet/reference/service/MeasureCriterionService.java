@@ -5,10 +5,13 @@ import com.fdiet.common.helper.Texts;
 import com.fdiet.food.model.CompositionFood;
 import com.fdiet.food.service.ICompositionFoodService;
 import com.fdiet.reference.domain.FoodState;
+import com.fdiet.reference.domain.MeasureScope;
 import com.fdiet.reference.domain.MeasureUser;
 import com.fdiet.reference.domain.WeightBasis;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.MeasureCriterionRequestDto;
+import com.fdiet.reference.dto.MeasureCriterionSavedDto;
+import com.fdiet.reference.dto.MeasureReweighDto;
 import com.fdiet.reference.dto.MeasureUsageDto;
 import com.fdiet.reference.exception.InvalidReferenceException;
 import com.fdiet.reference.exception.ReferenceNotFoundException;
@@ -57,16 +60,21 @@ public class MeasureCriterionService implements IMeasureCriterionService {
      */
     private final ObjectProvider<IMeasureUsageCounter> counters;
 
+    /** The owners of the rows a criterion re-weighs; looked up late for the same reason. */
+    private final ObjectProvider<IMeasureReweigher> reweighers;
+
     public MeasureCriterionService(ReferenceFoodMeasureRepository measureRepository,
                                    IReferenceMapper mapper,
                                    IFoodCategoriser categoriser,
                                    ICompositionFoodService compositionFoodService,
-                                   ObjectProvider<IMeasureUsageCounter> counters) {
+                                   ObjectProvider<IMeasureUsageCounter> counters,
+                                   ObjectProvider<IMeasureReweigher> reweighers) {
         this.measureRepository = measureRepository;
         this.mapper = mapper;
         this.categoriser = categoriser;
         this.compositionFoodService = compositionFoodService;
         this.counters = counters;
+        this.reweighers = reweighers;
     }
 
     @Override
@@ -75,6 +83,20 @@ public class MeasureCriterionService implements IMeasureCriterionService {
         return measureRepository.findByDietIdOrderByIdAsc(dietId).stream()
                 .map(mapper::toDto)
                 .toList();
+    }
+
+    /** One query, none for an empty set; grouped by diet, in id order within each. */
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, List<FoodMeasureDto>> dietRowsOf(Collection<Long> dietIds) {
+        if (dietIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<FoodMeasureDto>> byDiet = new HashMap<>();
+        for (ReferenceFoodMeasure row : measureRepository.findByDietIdInOrderByIdAsc(dietIds)) {
+            byDiet.computeIfAbsent(row.getDietId(), diet -> new ArrayList<>()).add(mapper.toDto(row));
+        }
+        return byDiet;
     }
 
     @Override
@@ -92,7 +114,7 @@ public class MeasureCriterionService implements IMeasureCriterionService {
 
     @Override
     @Transactional
-    public FoodMeasureDto saveDietMeasure(Long dietId, MeasureCriterionRequestDto request) {
+    public MeasureCriterionSavedDto saveDietMeasure(Long dietId, MeasureCriterionRequestDto request) {
         requireOneWeight(request);
         CompositionFood food = compositionFoodService.entityById(request.compositionFoodId());
         ReferenceFoodMeasure measure = measureRepository.findByDietIdOrderByIdAsc(dietId).stream()
@@ -102,7 +124,7 @@ public class MeasureCriterionService implements IMeasureCriterionService {
         measure.setDietId(dietId);
         measure.setGlobalCriterion(false);
         write(measure, food, request);
-        return mapper.toDto(measureRepository.save(measure));
+        return saved(measureRepository.saveAndFlush(measure));
     }
 
     @Override
@@ -168,7 +190,7 @@ public class MeasureCriterionService implements IMeasureCriterionService {
 
     @Override
     @Transactional
-    public FoodMeasureDto createGlobal(MeasureCriterionRequestDto request) {
+    public MeasureCriterionSavedDto createGlobal(MeasureCriterionRequestDto request) {
         requireOneWeight(request);
         CompositionFood food = compositionFoodService.entityById(request.compositionFoodId());
         requireSlotFree(request, null);
@@ -176,12 +198,12 @@ public class MeasureCriterionService implements IMeasureCriterionService {
         measure.setDietId(null);
         measure.setGlobalCriterion(true);
         write(measure, food, request);
-        return mapper.toDto(save(measure));
+        return saved(save(measure));
     }
 
     @Override
     @Transactional
-    public FoodMeasureDto updateGlobal(Long id, MeasureCriterionRequestDto request) {
+    public MeasureCriterionSavedDto updateGlobal(Long id, MeasureCriterionRequestDto request) {
         requireOneWeight(request);
         ReferenceFoodMeasure measure = globalEntity(id);
         if (!sameSlot(measure, request)) {
@@ -195,7 +217,7 @@ public class MeasureCriterionService implements IMeasureCriterionService {
         }
         CompositionFood food = compositionFoodService.entityById(request.compositionFoodId());
         write(measure, food, request);
-        return mapper.toDto(save(measure));
+        return saved(save(measure));
     }
 
     /**
@@ -226,6 +248,23 @@ public class MeasureCriterionService implements IMeasureCriterionService {
                 .forEach(counter -> counts.merge(counter.user(), counter.countUsing(id), Long::sum));
         return new MeasureUsageDto(id, counts.getOrDefault(MeasureUser.RECIPE_INGREDIENT, 0L),
                 counts.getOrDefault(MeasureUser.EXTRA_FOOD, 0L));
+    }
+
+    /**
+     * The criterion as written, after the rows it now reaches whose measure nobody
+     * picked are chosen again by their owners — one diet's for a diet criterion,
+     * every diet's and the library's for a global one (FD-054). In the same
+     * transaction, so a criterion is never saved without what it re-weighed.
+     */
+    private MeasureCriterionSavedDto saved(ReferenceFoodMeasure measure) {
+        MeasureScope scope = new MeasureScope(measure.getCompositionFoodId(), measure.getMeasure(),
+                measure.isGlobalCriterion() ? null : measure.getDietId());
+        Map<MeasureUser, Long> counts = new EnumMap<>(MeasureUser.class);
+        reweighers.orderedStream()
+                .forEach(owner -> counts.merge(owner.user(), (long) owner.reweigh(scope), Long::sum));
+        return new MeasureCriterionSavedDto(mapper.toDto(measure), new MeasureReweighDto(
+                counts.getOrDefault(MeasureUser.RECIPE_INGREDIENT, 0L),
+                counts.getOrDefault(MeasureUser.EXTRA_FOOD, 0L)));
     }
 
     private ReferenceFoodMeasure globalEntity(Long id) {

@@ -19,8 +19,13 @@ export interface DishTotals {
   counted: number
   /** Not yet matched to a food: nothing is known about it. */
   unmatched: number
-  /** Matched, but written in a unit nothing can weigh — `1 cdta`. */
+  /** Matched, but in no total: a unit nothing can weigh (`1 cdta`), or a state mismatch. */
   unmeasured: number
+  /**
+   * Of `unmeasured`, weighed on one side of cooking and matched to a food on the
+   * other — `55 g en seco` against `Lenteja, cocida`. Never totalled, yield or not.
+   */
+  unmeasuredByState: number
 }
 
 export const EMPTY_TOTALS: DishTotals = {
@@ -32,9 +37,11 @@ export const EMPTY_TOTALS: DishTotals = {
   counted: 0,
   unmatched: 0,
   unmeasured: 0,
+  unmeasuredByState: 0,
 }
 
-function add(total: number | null, value: number | null | undefined): number | null {
+/** A running total that stays null until a known figure arrives; an unknown adds nothing. */
+export function addKnown(total: number | null, value: number | null | undefined): number | null {
   if (value === null || value === undefined) {
     return total
   }
@@ -69,13 +76,16 @@ export function recipeTotals(ingredients: DishIngredient[], servings = 1): DishT
     }
     if (!measured(ingredient.nutrition)) {
       totals.unmeasured++
+      if (ingredient.stateMismatch) {
+        totals.unmeasuredByState++
+      }
       continue
     }
     totals.counted++
-    totals.kcal = add(totals.kcal, scaled(ingredient.nutrition?.energyKcal))
-    totals.proteinG = add(totals.proteinG, scaled(ingredient.nutrition?.proteinG))
-    totals.carbohydratesG = add(totals.carbohydratesG, scaled(ingredient.nutrition?.carbohydratesG))
-    totals.fatG = add(totals.fatG, scaled(ingredient.nutrition?.fatG))
+    totals.kcal = addKnown(totals.kcal, scaled(ingredient.nutrition?.energyKcal))
+    totals.proteinG = addKnown(totals.proteinG, scaled(ingredient.nutrition?.proteinG))
+    totals.carbohydratesG = addKnown(totals.carbohydratesG, scaled(ingredient.nutrition?.carbohydratesG))
+    totals.fatG = addKnown(totals.fatG, scaled(ingredient.nutrition?.fatG))
   }
   return totals
 }
@@ -83,4 +93,41 @@ export function recipeTotals(ingredients: DishIngredient[], servings = 1): DishT
 /** Whether every ingredient of a dish landed in the total. */
 export function complete(totals: DishTotals): boolean {
   return totals.ingredients > 0 && totals.counted === totals.ingredients
+}
+
+/** Several cells or days as one: figures added where known, every count summed. */
+export function sumTotals(parts: DishTotals[]): DishTotals {
+  return parts.reduce<DishTotals>(
+    (total, part) => ({
+      kcal: addKnown(total.kcal, part.kcal),
+      proteinG: addKnown(total.proteinG, part.proteinG),
+      carbohydratesG: addKnown(total.carbohydratesG, part.carbohydratesG),
+      fatG: addKnown(total.fatG, part.fatG),
+      ingredients: total.ingredients + part.ingredients,
+      counted: total.counted + part.counted,
+      unmatched: total.unmatched + part.unmatched,
+      unmeasured: total.unmeasured + part.unmeasured,
+      unmeasuredByState: total.unmeasuredByState + part.unmeasuredByState,
+    }),
+    EMPTY_TOTALS,
+  )
+}
+
+/**
+ * Why the ingredients left out of a total were left out: `2 sin vincular`,
+ * `1 sin peso`, `1 crudo/cocinado no coincide`. Empty when nothing was.
+ */
+export function uncountedReasons(totals: DishTotals): string[] {
+  const unweighed = totals.unmeasured - totals.unmeasuredByState
+  const parts: string[] = []
+  if (totals.unmatched > 0) {
+    parts.push(`${totals.unmatched} sin vincular`)
+  }
+  if (unweighed > 0) {
+    parts.push(`${unweighed} sin peso`)
+  }
+  if (totals.unmeasuredByState > 0) {
+    parts.push(`${totals.unmeasuredByState} crudo/cocinado no coincide`)
+  }
+  return parts
 }

@@ -74,6 +74,31 @@ class DishIngredientJsonTest {
         assertThat(ingredient.unitWording().plural()).isEqualTo("unidades medianas");
     }
 
+    /** FD-054: a measure sent without the flag counts as picked, so a caller from before loses nothing. */
+    @Test
+    void readsAMeasureSentWithoutTheFlagAsPicked() {
+        DishIngredient ingredient = mapper.readValue(
+                "{\"name\":\"huevo\",\"quantity\":2,\"unit\":\"unidades\",\"foodMeasureId\":40}",
+                DishIngredient.class);
+
+        assertThat(ingredient.measurePicked()).isTrue();
+        assertThat(ingredient.pickedMeasureId()).isEqualTo(40L);
+    }
+
+    /** FD-054: the rule's measure sent back is no pick, and a flag beside no measure picks nothing. */
+    @Test
+    void readsTheRulesMeasureAsNoPick() {
+        DishIngredient rules = mapper.readValue("{\"name\":\"huevo\",\"quantity\":2,\"unit\":\"unidades\","
+                + "\"foodMeasureId\":40,\"measurePicked\":false}", DishIngredient.class);
+        DishIngredient none = mapper.readValue("{\"name\":\"huevo\",\"quantity\":2,\"unit\":\"unidades\","
+                + "\"measurePicked\":true}", DishIngredient.class);
+
+        assertThat(rules.pickedMeasureId()).isNull();
+        assertThat(none.measurePicked()).isFalse();
+        assertThat(mapper.valueToTree(rules).get("measurePicked").asBoolean()).isFalse();
+    }
+
+
     private DishIngredient only(String text) {
         return parser.parse(text, "Plato").ingredients().get(0);
     }

@@ -1,5 +1,6 @@
 package com.fdiet.journal.service;
 
+import com.fdiet.diet.dto.DietProfileDto;
 import com.fdiet.diet.dto.MealType;
 import com.fdiet.diet.exception.DietNotFoundException;
 import com.fdiet.diet.helpers.IPortionScaler;
@@ -23,11 +24,15 @@ import com.fdiet.journal.model.ExtraFood;
 import com.fdiet.journal.repository.DishScoreRepository;
 import com.fdiet.journal.repository.ExtraFoodRepository;
 import com.fdiet.reference.domain.HouseholdMeasure;
+import com.fdiet.reference.domain.MeasureScope;
 import com.fdiet.reference.domain.MeasureUser;
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.MeasureChoiceDto;
 import com.fdiet.reference.dto.MeasureQueryDto;
+import com.fdiet.reference.dto.ScopedMeasureQueryDto;
+import com.fdiet.reference.helpers.Remeasure;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
+import com.fdiet.reference.service.IMeasureReweigher;
 import com.fdiet.reference.service.IMeasureUsageCounter;
 import com.fdiet.reference.service.IReferenceService;
 import org.springframework.stereotype.Service;
@@ -43,7 +48,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-public class JournalService implements IJournalService, IMeasureUsageCounter {
+public class JournalService implements IJournalService, IMeasureUsageCounter, IMeasureReweigher {
 
     /** One decimal is as fine as an average of five whole stars can honestly be. */
     private static final int AVERAGE_SCALE = 1;
@@ -170,6 +175,9 @@ public class JournalService implements IJournalService, IMeasureUsageCounter {
         extra.setState(request.state());
         extra.setSize(request.size());
         extra.setFoodMeasure(measureFor(dietId, food, unit, request));
+        // measureFor refuses a measure asked for that the rule would not keep, so one
+        // sent and attached is the person's pick.
+        extra.setMeasurePicked(request.foodMeasureId() != null);
         return journalMapper.toDto(extraRepository.save(extra));
     }
 
@@ -183,6 +191,41 @@ public class JournalService implements IJournalService, IMeasureUsageCounter {
     @Transactional(readOnly = true)
     public long countUsing(Long measureId) {
         return extraRepository.countByFoodMeasureId(measureId);
+    }
+
+    /**
+     * The extras a criterion reaches whose measure nobody picked, weighed by the
+     * rule again inside their own diet (FD-054): every diet's for a global
+     * criterion, one diet's for its own. Four queries whatever the number of
+     * extras or diets — the extras, their diets' profiles, the criteria and the
+     * rows chosen; two when nothing is reached — and one batched write. O(n).
+     */
+    @Override
+    @Transactional
+    public int reweigh(MeasureScope scope) {
+        List<ExtraFood> reached = extraRepository.findAutoMeasured(scope.compositionFoodId()).stream()
+                .filter(extra -> scope.measures(extra.getUnit()))
+                .filter(extra -> scope.global() || scope.dietId().equals(extra.getDietId()))
+                .toList();
+        if (reached.isEmpty()) {
+            return 0;
+        }
+        Map<Long, DietProfileDto> diets = dietService.profilesOf(reached.stream()
+                .map(ExtraFood::getDietId).distinct().toList());
+        List<ScopedMeasureQueryDto> queries = new ArrayList<>(reached.size());
+        for (ExtraFood extra : reached) {
+            DietProfileDto diet = diets.get(extra.getDietId());
+            queries.add(new ScopedMeasureQueryDto(new MeasureQueryDto(scope.compositionFoodId(),
+                    extra.getCompositionFood().getNameEs(), extra.getUnit(), extra.getSize(), null),
+                    extra.getDietId(), diet == null ? null : diet.profileCode()));
+        }
+        List<ExtraFood> changed = Remeasure.apply(reached, referenceService.rechoose(queries),
+                ExtraFood::getFoodMeasure, (extra, measure) -> {
+                    extra.setFoodMeasure(measure);
+                    extra.setMeasurePicked(false);
+                });
+        extraRepository.saveAll(changed);
+        return changed.size();
     }
 
     /**

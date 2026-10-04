@@ -100,12 +100,31 @@ public enum FoodState {
      * {@code lentejas (60 g en crudo, 180 g cocidas)} names both and is left
      * unknown rather than guessed at.
      *
+     * <p>When the name and the bracket each state one side of cooking and the two
+     * disagree — {@code Lenteja, cocida (55 g en seco)}, {@code pechuga a la plancha
+     * (150 g en crudo)} — <strong>the bracket wins</strong>: it says in which state
+     * the grams were weighed, while the name still says which food it is (FD-052).
+     * Read as one, the two used to cancel out into null, and the weight was then
+     * priced against whatever the food was published as. Anything else — one side
+     * silent, both on the same side, a bracket contradicting itself — reads as
+     * before.
+     *
      * <p>"Seco" alone is only read inside brackets: outside them it is far more
      * often part of the food — {@code frutos secos}.
      */
     public static FoodState ofWriting(String outside, String inside) {
         String out = words(outside);
         String in = words(inside);
+        FoodState named = read(out, "");
+        FoodState weighed = read("", in);
+        if (disagree(weighed, named)) {
+            return weighed;
+        }
+        return read(out, in);
+    }
+
+    /** The state that the words outside and inside a bracket state together, or null. */
+    private static FoodState read(String out, String in) {
         String both = (out + " " + in).trim();
         boolean uncooked = matches(RAW, both) || both.matches(".*\\ben seco\\b.*")
                 || matches(DRY, in);

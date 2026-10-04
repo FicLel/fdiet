@@ -93,6 +93,25 @@ class DietMapperTest {
         assertThat(read.quantity()).isEqualByComparingTo("150");
     }
 
+    /** FD-052: 55 g en seco against cooked lentils — flagged, no yield published, not priced. */
+    @Test
+    void flagsAMismatchNoPublishedYieldFits() {
+        CompositionFood cooked = new CompositionFood();
+        cooked.setId(4001L);
+        cooked.setNameEs("Lenteja, cocida");
+        RecipeIngredient dry = new RecipeIngredient("Lenteja, cocida", null, cooked,
+                new BigDecimal("55"), "g");
+        dry.setState(FoodState.DRY);
+        when(reference.yieldFactors(any(), any())).thenReturn(List.of());
+
+        DishIngredient read = mapper.toDto(dry);
+
+        assertThat(read.stateMismatch()).isTrue();
+        assertThat(read.state()).isEqualTo(FoodState.DRY);
+        assertThat(read.yieldHint()).isNull();
+        assertThat(read.quantity()).isEqualByComparingTo("55");
+    }
+
     @Test
     void asksForNoYieldWhenNothingDisagrees() {
         CompositionFood grilled = new CompositionFood();

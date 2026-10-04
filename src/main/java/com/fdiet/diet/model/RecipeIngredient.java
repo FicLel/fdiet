@@ -77,6 +77,16 @@ public class RecipeIngredient {
     @JoinColumn(name = "food_measure_id")
     private ReferenceFoodMeasure foodMeasure;
 
+    /**
+     * Whether a person picked {@link #foodMeasure} (FD-054): kept through every
+     * re-read and publish while it still weighs the food and unit, and never
+     * replaced by a new criterion. False when the rule chose it, which a new or
+     * changed criterion chooses again. Meaningful only beside a measure; see
+     * {@link #measurePicked()}.
+     */
+    @Column(name = "measure_picked", nullable = false)
+    private boolean measurePicked;
+
     /** What the diet called this food. Never null, matched or not. */
     @Column(name = "raw_name", length = 255, nullable = false)
     private String rawName;
@@ -132,6 +142,26 @@ public class RecipeIngredient {
     /** True once the ingredient points at a food, whichever half it came from. */
     public boolean isMatched() {
         return foodItem != null || compositionFood != null;
+    }
+
+    /**
+     * Whether the quantity was written in one side of cooking and the matched
+     * composition food is published in the other ({@code 55 g en seco} against
+     * {@code Lenteja, cocida}), read off the food's Spanish name. A branded product
+     * states nothing, and an unknown on either side never raises the flag.
+     */
+    public boolean isStateMismatch() {
+        return compositionFood != null
+                && FoodState.disagree(state, FoodState.ofFoodName(compositionFood.getNameEs()));
+    }
+
+    /**
+     * Whether the attached measure is a person's pick. The flag alone says nothing
+     * once the measure is gone: the measure's foreign key sets NULL on delete and
+     * leaves the flag behind.
+     */
+    public boolean measurePicked() {
+        return measurePicked && foodMeasure != null;
     }
 
     /**

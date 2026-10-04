@@ -2,6 +2,7 @@ package com.fdiet.reference.service;
 
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.MeasureCriterionRequestDto;
+import com.fdiet.reference.dto.MeasureCriterionSavedDto;
 import com.fdiet.reference.dto.MeasureUsageDto;
 
 import java.util.Collection;
@@ -22,15 +23,19 @@ public interface IMeasureCriterionService {
     /** One diet's own criteria. One query. */
     List<FoodMeasureDto> dietRows(Long dietId);
 
+    /** The own criteria of several diets, by diet. One query, none for an empty set. */
+    Map<Long, List<FoodMeasureDto>> dietRowsOf(Collection<Long> dietIds);
+
     /** The global criteria for these composition foods. One query, none for an empty set. */
     List<FoodMeasureDto> globalRows(Collection<Long> compositionFoodIds);
 
     /**
      * Writes the diet's criterion for one measure of one food (and size),
-     * replacing an earlier one for the same measure, food and size. The caller
+     * replacing an earlier one for the same measure, food and size, then re-weighs
+     * the diet's rows it reaches whose measure nobody picked (FD-054). The caller
      * has checked the diet exists.
      */
-    FoodMeasureDto saveDietMeasure(Long dietId, MeasureCriterionRequestDto request);
+    MeasureCriterionSavedDto saveDietMeasure(Long dietId, MeasureCriterionRequestDto request);
 
     void deleteDietMeasure(Long dietId, Long measureId);
 
@@ -42,15 +47,20 @@ public interface IMeasureCriterionService {
 
     FoodMeasureDto globalCriterion(Long id);
 
-    /** A new global criterion. One already held for the same food, measure and size is a 400. */
-    FoodMeasureDto createGlobal(MeasureCriterionRequestDto request);
+    /**
+     * A new global criterion, then every row of every diet and library recipe it
+     * reaches whose measure nobody picked is chosen again (FD-054). One already
+     * held for the same food, measure and size is a 400.
+     */
+    MeasureCriterionSavedDto createGlobal(MeasureCriterionRequestDto request);
 
     /**
      * Rewrites a global criterion — live for everything it weighs. While it
      * weighs anything its food, measure and size are fixed: moving it would
-     * weigh those rows as another food.
+     * weigh those rows as another food. Re-weighs what it reaches, as
+     * {@link #createGlobal} does.
      */
-    FoodMeasureDto updateGlobal(Long id, MeasureCriterionRequestDto request);
+    MeasureCriterionSavedDto updateGlobal(Long id, MeasureCriterionRequestDto request);
 
     /** Deletes a global criterion nothing is weighed by; one still in use is a 400. */
     void deleteGlobal(Long id);

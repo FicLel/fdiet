@@ -2,6 +2,7 @@ package com.fdiet.reference.controller;
 
 import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.MeasureCriterionRequestDto;
+import com.fdiet.reference.dto.MeasureCriterionSavedDto;
 import com.fdiet.reference.dto.MeasureUsageDto;
 import com.fdiet.reference.service.IMeasureCriterionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -62,15 +63,17 @@ public class MeasureCriterionController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "A new global criterion: {measure, size?, compositionFoodId, grams | ml, note?}. "
-            + "One per food, measure and size")
-    public FoodMeasureDto create(@Valid @RequestBody MeasureCriterionRequestDto request) {
+            + "One per food, measure and size. Re-weighs at once every ingredient and extra of that food "
+            + "and measure whose measure nobody picked, in every diet and library recipe, and answers "
+            + "how many: {measure, reweighed: {ingredients, extraFoods}}")
+    public MeasureCriterionSavedDto create(@Valid @RequestBody MeasureCriterionRequestDto request) {
         return criterionService.createGlobal(request);
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "Rewrites a global criterion, live for everything it weighs. While in use "
-            + "only its weight and note may change")
-    public FoodMeasureDto update(@PathVariable Long id,
+            + "only its weight and note may change. Re-weighs what it reaches, as a new one does")
+    public MeasureCriterionSavedDto update(@PathVariable Long id,
                                  @Valid @RequestBody MeasureCriterionRequestDto request) {
         return criterionService.updateGlobal(id, request);
     }

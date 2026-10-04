@@ -18,6 +18,30 @@ const SOURCE_LABELS: Record<CompositionSource, string> = {
   BLS: 'BLS 4.0',
 }
 
+/**
+ * The attribution each table's licence (CC BY 4.0) requires wherever its
+ * figures are shown, copied word for word from the backend's
+ * `CompositionSource` (no endpoint hands both over without a sync), and the
+ * page each one is credited to.
+ */
+export const SOURCE_ATTRIBUTIONS: readonly { source: CompositionSource; text: string; url: string }[] = [
+  {
+    source: 'CIQUAL',
+    text:
+      'ANSES. Ciqual French food composition table 2025. https://ciqual.anses.fr/ — ' +
+      'doi:10.5281/zenodo.17550133. CC BY 4.0.',
+    url: 'https://ciqual.anses.fr/',
+  },
+  {
+    source: 'BLS',
+    text:
+      'Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0 — ' +
+      'Deutsche Nährstoffdatenbank. Karlsruhe. DOI: 10.25826/Data20251217-134202-0. ' +
+      'CC BY 4.0.',
+    url: 'https://blsdb.de/',
+  },
+]
+
 export function compositionSourceLabel(source: CompositionSource | null | undefined): string | null {
   return source ? SOURCE_LABELS[source] : null
 }

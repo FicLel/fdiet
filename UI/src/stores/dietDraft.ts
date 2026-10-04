@@ -22,9 +22,10 @@ import type {
 } from '@/api/types'
 import { buildRows, cellKey, dishAt, mealOf, type GridRow, type MealRow } from '@/domain/slots'
 import { joinFragment, renderRecipe } from '@/domain/dishText'
-import { dishTotals, ingredientsOf, type DishTotals } from '@/domain/nutrition'
+import { dishTotals, ingredientsOf, sumTotals, type DishTotals } from '@/domain/nutrition'
 import { locate, type IngredientAt } from '@/domain/ingredientAt'
 import { matchesOf } from '@/domain/keptMatches'
+import { requestIngredient } from '@/domain/requestIngredient'
 import { addDays, dayName, dayNumber, longDate, mondayOf, WEEK } from '@/domain/week'
 
 // Where an ingredient sits moved to `domain/ingredientAt`; its callers still reach it here.
@@ -220,33 +221,8 @@ function totalsFor(row: MealRow, day: DayOfWeek): DishTotals {
   return dishTotals(dishFor(day, row.mealType, row.dishIndex))
 }
 
-function plus(total: number | null, value: number | null): number | null {
-  return value === null ? total : (total ?? 0) + value
-}
-
 function dayTotals(day: DayOfWeek): DishTotals {
-  const totals: DishTotals = {
-    kcal: null,
-    proteinG: null,
-    carbohydratesG: null,
-    fatG: null,
-    ingredients: 0,
-    counted: 0,
-    unmatched: 0,
-    unmeasured: 0,
-  }
-  for (const row of mealRows.value) {
-    const cell = totalsFor(row, day)
-    totals.ingredients += cell.ingredients
-    totals.counted += cell.counted
-    totals.unmatched += cell.unmatched
-    totals.unmeasured += cell.unmeasured
-    totals.kcal = plus(totals.kcal, cell.kcal)
-    totals.proteinG = plus(totals.proteinG, cell.proteinG)
-    totals.carbohydratesG = plus(totals.carbohydratesG, cell.carbohydratesG)
-    totals.fatG = plus(totals.fatG, cell.fatG)
-  }
-  return totals
+  return sumTotals(mealRows.value.map((row) => totalsFor(row, day)))
 }
 
 function isEdited(row: MealRow, day: DayOfWeek): boolean {
@@ -683,17 +659,7 @@ function recipeRequest(edit: CellEdit): RequestRecipe | null {
     rawText: edit.text.trim() || null,
     steps: edit.steps.trim() || null,
     ingredients: (edit.text.trim() === '' ? [] : (edit.recipe?.ingredients ?? [])).map(
-      (ingredient) => ({
-        name: ingredient.name,
-        quantity: ingredient.quantity,
-        quantityMax: ingredient.quantityMax,
-        unit: ingredient.unit,
-        foodItemId: ingredient.foodItemId,
-        compositionFoodId: ingredient.compositionFoodId,
-        state: ingredient.state,
-        size: ingredient.size,
-        foodMeasureId: ingredient.foodMeasureId,
-      }),
+      requestIngredient,
     ),
   }
 }

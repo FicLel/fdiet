@@ -3,7 +3,7 @@ package com.fdiet.diet.service;
 import com.fdiet.common.dto.PageDto;
 import com.fdiet.diet.dto.CopyDietRequestDto;
 import com.fdiet.diet.dto.DietDto;
-import com.fdiet.diet.dto.DietMeasureSavedDto;
+import com.fdiet.diet.dto.DietProfileDto;
 import com.fdiet.diet.dto.DietRationsDto;
 import com.fdiet.diet.dto.DietRequestDto;
 import com.fdiet.diet.dto.DietSettingsDto;
@@ -14,11 +14,11 @@ import com.fdiet.diet.dto.ParseDishRequestDto;
 import com.fdiet.diet.dto.RecipeDto;
 import com.fdiet.diet.dto.RecipeUsageDto;
 import com.fdiet.diet.dto.ResolveIngredientDto;
-import com.fdiet.reference.dto.MeasureCriterionRequestDto;
-import com.fdiet.reference.dto.FoodMeasureDto;
 
 import java.time.DayOfWeek;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Owns the stored diet: the {@code diets} row and the meals, dishes and
@@ -128,14 +128,14 @@ public interface IDietService {
     /** The week counted in rations against its profile, or against {@code profileCode}. */
     DietRationsDto rations(Long dietId, String profileCode);
 
-    /** The diet's own household-measure weights. */
-    List<FoodMeasureDto> measures(Long dietId);
+    /**
+     * The diet each private recipe is served in, with its profile, keyed by the
+     * recipe; a library recipe is absent — no diet's criteria weigh it. One query.
+     */
+    Map<Long, DietProfileDto> dietsServingPrivate(Collection<Long> recipeIds);
 
-    /** Writes the diet's own weight for a measure and attaches it where it now weighs. */
-    DietMeasureSavedDto saveMeasure(Long dietId, MeasureCriterionRequestDto request);
-
-    /** Removes one of the diet's own measures; the ingredients it weighed are left unmeasured. */
-    void deleteMeasure(Long dietId, Long measureId);
+    /** These diets' profiles, keyed by diet; an unknown id is absent. One query. */
+    Map<Long, DietProfileDto> profilesOf(Collection<Long> dietIds);
 
     /** Which plates serve a recipe, and in whose diets — asked before a library recipe is edited. */
     RecipeUsageDto recipeUsage(Long recipeId);

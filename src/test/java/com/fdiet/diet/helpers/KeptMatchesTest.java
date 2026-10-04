@@ -22,6 +22,8 @@ class KeptMatchesTest {
 
         assertThat(applied.get(0).compositionFoodId()).isEqualTo(31L);
         assertThat(applied.get(0).foodMeasureId()).isEqualTo(40L);
+        // FD-054: a measure a keep entry carries is a person's pick.
+        assertThat(applied.get(0).measurePicked()).isTrue();
         assertThat(applied.get(1).resolved()).isFalse();
     }
 

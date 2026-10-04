@@ -12,9 +12,12 @@ import jakarta.validation.constraints.Null;
  *
  * <p>Exactly one of {@code compositionFoodId} and {@code foodItemId} names the
  * food; both or neither is a 400. {@code bedcaFoodId} is read only to be refused
- * (FD-033). {@code foodMeasureId} is only a preference: it is kept while it still
- * weighs the unit written for that food, the way a picked measure is on a publish
- * (FD-039), and dropped otherwise.
+ * (FD-033). {@code foodMeasureId} is a measure a person <em>picked</em>, and only
+ * that (FD-054): it is kept while it still weighs the unit written for that food,
+ * the way a picked measure is on a publish (FD-039), and dropped otherwise; the
+ * ingredient read back carries {@code measurePicked: true} while it is kept. A
+ * measure the rule chose is left out, so the rule chooses again on every read —
+ * and follows a criterion written since.
  */
 public record KeptMatchDto(
         @NotBlank String name,

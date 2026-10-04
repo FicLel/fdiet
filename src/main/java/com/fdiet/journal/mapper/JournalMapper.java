@@ -52,6 +52,7 @@ public class JournalMapper implements IJournalMapper {
                 food == null ? null : food.getSource(),
                 item == null ? null : item.getBrand(),
                 measure == null ? null : measure.getId(),
+                extra.measurePicked(),
                 referenceService.describe(measure),
                 nutritionService.of(extra),
                 extra.getLoggedAt());

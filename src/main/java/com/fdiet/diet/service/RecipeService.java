@@ -15,14 +15,10 @@ import com.fdiet.diet.model.Recipe;
 import com.fdiet.diet.model.RecipeIngredient;
 import com.fdiet.diet.repository.RecipeIngredientRepository;
 import com.fdiet.diet.repository.RecipeRepository;
-import com.fdiet.reference.domain.HouseholdMeasure;
 import com.fdiet.reference.domain.MeasureUser;
-import com.fdiet.reference.dto.FoodMeasureDto;
 import com.fdiet.reference.dto.MeasureChoiceDto;
-import com.fdiet.reference.dto.MeasureQueryDto;
 import com.fdiet.reference.model.ReferenceFoodMeasure;
 import com.fdiet.reference.service.IMeasureUsageCounter;
-import com.fdiet.reference.service.IReferenceService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -67,7 +63,6 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
     private final IDietMapper dietMapper;
     private final IMealTextParser mealTextParser;
     private final IIngredientFoodService ingredientFoods;
-    private final IReferenceService referenceService;
     private final IMeasureResolverService measureResolver;
 
     public RecipeService(RecipeRepository recipeRepository,
@@ -75,14 +70,12 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
                          IDietMapper dietMapper,
                          IMealTextParser mealTextParser,
                          IIngredientFoodService ingredientFoods,
-                         IReferenceService referenceService,
                          IMeasureResolverService measureResolver) {
         this.recipeRepository = recipeRepository;
         this.ingredientRepository = ingredientRepository;
         this.dietMapper = dietMapper;
         this.mealTextParser = mealTextParser;
         this.ingredientFoods = ingredientFoods;
-        this.referenceService = referenceService;
         this.measureResolver = measureResolver;
     }
 
@@ -213,6 +206,7 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
             copied.setState(ingredient.getState());
             copied.setSize(ingredient.getSize());
             copied.setFoodMeasure(ingredient.getFoodMeasure());
+            copied.setMeasurePicked(ingredient.measurePicked());
             copy.addIngredient(copied);
         }
         return recipeRepository.save(copy);
@@ -310,9 +304,11 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
         if (shared && change.foodMeasureId() != null) {
             measureResolver.requireNoDietMeasures(List.of(change.foodMeasureId()));
         }
+        // A measure sent is a person's pick; one left out is kept only when a person
+        // picked it before — the rule's own choice is made again (FD-054).
         Long preferred = change.foodMeasureId() != null
                 ? change.foodMeasureId()
-                : ingredient.getFoodMeasure() == null ? null : ingredient.getFoodMeasure().getId();
+                : ingredient.measurePicked() ? ingredient.getFoodMeasure().getId() : null;
         MeasureChoiceDto choice = measureResolver.choose(ingredient.getCompositionFood(),
                 ingredient.getUnit(), ingredient.getSize(), preferred,
                 shared ? null : dietId, shared ? null : profile);
@@ -323,6 +319,8 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
                     + "GET /api/reference/measures lists the ones that do");
         }
         ingredient.setFoodMeasure(measureResolver.entityOf(choice.chosen()));
+        ingredient.setMeasurePicked(preferred != null && choice.chosen() != null
+                && preferred.equals(choice.chosen().id()));
         return dietMapper.toDto(ingredientRepository.save(ingredient));
     }
 
@@ -356,43 +354,16 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
         return dietMapper.toDto(transientRecipe);
     }
 
-    /**
-     * Only private recipes: a library recipe is never weighed by one diet's
-     * criterion. Goes through the same rule a publish would, so what the week
-     * holds now is what it will hold after the next one.
-     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<RecipeIngredient> autoMeasured(Long compositionFoodId) {
+        return ingredientRepository.findAutoMeasured(compositionFoodId);
+    }
+
     @Override
     @Transactional
-    public int attachDietMeasure(Collection<Long> recipeIds, Long compositionFoodId,
-                                 HouseholdMeasure measure, Long dietId, String profile) {
-        if (recipeIds.isEmpty()) {
-            return 0;
-        }
-        List<RecipeIngredient> candidates = ingredientRepository.findByRecipeIdIn(recipeIds).stream()
-                .filter(ingredient -> !ingredient.getRecipe().isLibrary()
-                        && compositionFoodId.equals(ingredient.compositionFoodId())
-                        && HouseholdMeasure.ofUnit(ingredient.getUnit())
-                        .filter(written -> written == measure).isPresent())
-                .toList();
-        List<MeasureChoiceDto> choices = referenceService.chooseMeasures(candidates.stream()
-                .map(ingredient -> new MeasureQueryDto(ingredient.compositionFoodId(),
-                        ingredient.getCompositionFood().getNameEs(), ingredient.getUnit(),
-                        ingredient.getSize(), null))
-                .toList(), dietId, profile);
-        Map<Long, ReferenceFoodMeasure> entities = referenceService.measureEntities(choices.stream()
-                .map(MeasureChoiceDto::chosen).filter(Objects::nonNull).map(FoodMeasureDto::id)
-                .toList());
-
-        int attached = 0;
-        for (int at = 0; at < candidates.size(); at++) {
-            FoodMeasureDto chosen = choices.get(at).chosen();
-            if (chosen != null && chosen.dietOwn()) {
-                candidates.get(at).setFoodMeasure(entities.get(chosen.id()));
-                attached++;
-            }
-        }
-        ingredientRepository.saveAll(candidates);
-        return attached;
+    public void saveIngredients(Collection<RecipeIngredient> ingredients) {
+        ingredientRepository.saveAll(ingredients);
     }
 
     @Override
@@ -455,7 +426,7 @@ public class RecipeService implements IRecipeService, IMeasureUsageCounter {
     /** A library recipe's ingredients, matched and weighed without any diet's criteria. */
     private void fill(Recipe recipe, List<DishIngredient> ingredients, Long dietId, String profile) {
         measureResolver.requireNoDietMeasures(ingredients.stream()
-                .map(DishIngredient::foodMeasureId).filter(Objects::nonNull).toList());
+                .map(DishIngredient::pickedMeasureId).filter(Objects::nonNull).toList());
         IngredientFoods foods = ingredientFoods.foodsOf(ingredients);
         Map<DishIngredient, ReferenceFoodMeasure> measures =
                 measureResolver.measuresOf(ingredients, foods::compositionFood, dietId, profile);

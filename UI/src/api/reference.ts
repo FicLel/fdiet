@@ -4,6 +4,7 @@ import type {
   FoodMeasure,
   HouseholdMeasureWord,
   MeasureCriterionRequest,
+  MeasureCriterionSaved,
   MeasureUsage,
   Ration,
   ReferenceProfile,
@@ -74,13 +75,17 @@ export const referenceApi = {
   /** What a change to the criterion would reach now, in every diet. */
   criterionUsage: (id: number) => http.get<MeasureUsage>(`${CRITERIA}/${id}/usage`),
 
-  /** One per food, measure and size; a second is a 400 naming the first. */
+  /**
+   * One per food, measure and size; a second is a 400 naming the first. Every
+   * ingredient and extra it now applies to whose measure nobody picked is
+   * weighed by the rule again, in every diet; the answer counts them.
+   */
   createCriterion: (request: MeasureCriterionRequest) =>
-    http.post<FoodMeasure>(CRITERIA, request),
+    http.post<MeasureCriterionSaved>(CRITERIA, request),
 
   /** Live for everything it weighs; while in use only the weight and the note may change. */
   updateCriterion: (id: number, request: MeasureCriterionRequest) =>
-    http.put<FoodMeasure>(`${CRITERIA}/${id}`, request),
+    http.put<MeasureCriterionSaved>(`${CRITERIA}/${id}`, request),
 
   /** Refused (400, with the reason) while an ingredient or an extra is weighed by it. */
   deleteCriterion: (id: number) => http.delete<void>(`${CRITERIA}/${id}`),

@@ -1,5 +1,6 @@
 package com.fdiet.diet.repository;
 
+import com.fdiet.diet.dto.DietProfileDto;
 import com.fdiet.diet.model.DietPlan;
 import com.fdiet.diet.model.DietStatus;
 import org.springframework.data.domain.Page;
@@ -10,6 +11,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -48,6 +50,11 @@ public interface DietRepository extends JpaRepository<DietPlan, Long> {
      */
     @EntityGraph(attributePaths = "patient")
     List<DietPlan> findByStatusOrderByPatientNameAsc(DietStatus status);
+
+    /** These diets' profiles, keyed by the diet itself. One query. */
+    @Query("select new com.fdiet.diet.dto.DietProfileDto(p.id, p.id, p.referenceProfileCode) "
+            + "from DietPlan p where p.id in :ids")
+    List<DietProfileDto> profilesOf(@Param("ids") Collection<Long> ids);
 
     /** Every diet with a plate serving this recipe, most recently started first. */
     @EntityGraph(attributePaths = "patient")

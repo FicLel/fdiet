@@ -49,7 +49,10 @@ export interface KeptMatch {
   name: string
   compositionFoodId?: number
   foodItemId?: number
-  /** The household measure it is weighed through now; re-validated by the backend. */
+  /**
+   * A measure a person picked, re-validated by the backend. One the rule chose is
+   * left out, so the rule chooses again and follows a criterion written since (FD-054).
+   */
   foodMeasureId?: number
 }
 
@@ -69,6 +72,8 @@ export interface RequestIngredient {
   state?: FoodState | null
   size?: PortionSize | null
   foodMeasureId?: number | null
+  /** Whether a person chose `foodMeasureId`; false hands it back to the rule (FD-054). */
+  measurePicked?: boolean
 }
 
 /** A plate's own recipe on the way back: the text as written, the steps, and what was read. */
@@ -255,7 +260,10 @@ export const dietsApi = {
   /** The diet's own measure criteria. */
   measures: (id: number) => http.get<FoodMeasure[]>(`/diets/${id}/measures`),
 
-  /** Writes (or rewrites) a criterion and attaches it wherever it is now the one chosen. */
+  /**
+   * Writes (or rewrites) a criterion. The diet's ingredients and extras whose
+   * measure nobody picked are chosen again at once; the answer counts them.
+   */
   saveMeasure: (id: number, request: MeasureCriterionRequest) =>
     http.put<DietMeasureSaved>(`/diets/${id}/measures`, request),
 

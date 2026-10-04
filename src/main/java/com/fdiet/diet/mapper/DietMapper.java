@@ -153,8 +153,7 @@ public class DietMapper implements IDietMapper {
         FoodItem foodItem = ingredient.getFoodItem();
         CompositionFood food = ingredient.getCompositionFood();
         ReferenceFoodMeasure measure = ingredient.getFoodMeasure();
-        boolean stateMismatch = food != null && FoodState.disagree(
-                ingredient.getState(), FoodState.ofFoodName(food.getNameEs()));
+        boolean stateMismatch = ingredient.isStateMismatch();
         return new DishIngredient(
                 ingredient.getId(),
                 ingredient.getRawName(),
@@ -166,6 +165,7 @@ public class DietMapper implements IDietMapper {
                 foodItem == null ? null : foodItem.getId(),
                 food == null ? null : food.getId(),
                 measure == null ? null : measure.getId(),
+                ingredient.measurePicked(),
                 matchedNameOf(foodItem, food),
                 food == null ? null : food.getSource(),
                 referenceService.describe(measure),
@@ -194,6 +194,10 @@ public class DietMapper implements IDietMapper {
         entity.setState(ingredient.state());
         entity.setSize(ingredient.size());
         entity.setFoodMeasure(measure);
+        // Picked only when the measure attached is the one the person picked: a
+        // pick the rule dropped (FD-039) leaves the rule's choice behind.
+        entity.setMeasurePicked(measure != null && measure.getId() != null
+                && measure.getId().equals(ingredient.pickedMeasureId()));
         return entity;
     }
 

@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useFoodLink } from '@/stores/foodLink'
 import { integer, NO_VALUE } from '@/domain/format'
-import { measureSource, measureText, perMeasure, stateWord } from '@/domain/rations'
+import { measureOrigin, measureSource, measureText, perMeasure, stateWord } from '@/domain/rations'
 import { amountText } from '@/domain/dishText'
 import { dayName } from '@/domain/week'
 import { compositionSourceLabel } from '@/domain/compositionFood'
@@ -69,7 +69,7 @@ const currentMeasure = computed(() => {
   if (!measure) {
     return null
   }
-  return `${perMeasure(measure) ?? measureText(measure)} · ${measureSource(measure)}`
+  return `${perMeasure(measure) ?? measureText(measure)} · ${measureOrigin(at.value!)}`
 })
 
 watch(
@@ -116,7 +116,7 @@ watch(
         </div>
         <div v-if="at.stateMismatch" class="current warn">
           Escrito en otro estado que el alimento vinculado (crudo frente a cocinado). Sus pesos no
-          son intercambiables: busca la versión que corresponde.
+          son intercambiables y no cuenta en las cifras: busca la versión que corresponde.
           <template v-if="at.yieldHint">
             <span v-if="yieldLine" class="yield">
               Como referencia: <strong class="num">{{ yieldLine }}</strong>

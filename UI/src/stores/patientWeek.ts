@@ -13,7 +13,7 @@ import type {
   Nutrition,
 } from '@/api/types'
 import { buildRows, dishAt, type GridRow, type MealRow } from '@/domain/slots'
-import { dishTotals, type DishTotals } from '@/domain/nutrition'
+import { addKnown, dishTotals, sumTotals, type DishTotals } from '@/domain/nutrition'
 import { addDays, dayName, dayNumber, longDate, mondayOf, shortDayName, WEEK } from '@/domain/week'
 
 /**
@@ -130,34 +130,9 @@ function totalsFor(row: MealRow, day: DayOfWeek): DishTotals {
   return dishTotals(storedDish(day, row.mealType, row.dishIndex))
 }
 
-function plus(total: number | null, value: number | null | undefined): number | null {
-  return value === null || value === undefined ? total : (total ?? 0) + value
-}
-
 /** The plan's total for a day, added up from the cells the grid draws. */
 function planTotals(day: DayOfWeek): DishTotals {
-  const totals: DishTotals = {
-    kcal: null,
-    proteinG: null,
-    carbohydratesG: null,
-    fatG: null,
-    ingredients: 0,
-    counted: 0,
-    unmatched: 0,
-    unmeasured: 0,
-  }
-  for (const row of mealRows.value) {
-    const cell = totalsFor(row, day)
-    totals.ingredients += cell.ingredients
-    totals.counted += cell.counted
-    totals.unmatched += cell.unmatched
-    totals.unmeasured += cell.unmeasured
-    totals.kcal = plus(totals.kcal, cell.kcal)
-    totals.proteinG = plus(totals.proteinG, cell.proteinG)
-    totals.carbohydratesG = plus(totals.carbohydratesG, cell.carbohydratesG)
-    totals.fatG = plus(totals.fatG, cell.fatG)
-  }
-  return totals
+  return sumTotals(mealRows.value.map((row) => totalsFor(row, day)))
 }
 
 function extrasOf(day: DayOfWeek): ExtraFood[] {
@@ -168,7 +143,7 @@ function sumOf(entries: ExtraFood[], read: (n: Nutrition) => number | null): num
   let total: number | null = null
   for (const entry of entries) {
     if (entry.nutrition) {
-      total = plus(total, read(entry.nutrition))
+      total = addKnown(total, read(entry.nutrition))
     }
   }
   return total
@@ -197,10 +172,10 @@ const days = computed<PatientDay[]>(() => {
       plan: planned,
       extras,
       extraKcal,
-      kcal: plus(planned.kcal, extraKcal),
-      proteinG: plus(planned.proteinG, sumOf(extras, (n) => n.proteinG)),
-      carbohydratesG: plus(planned.carbohydratesG, sumOf(extras, (n) => n.carbohydratesG)),
-      fatG: plus(planned.fatG, sumOf(extras, (n) => n.fatG)),
+      kcal: addKnown(planned.kcal, extraKcal),
+      proteinG: addKnown(planned.proteinG, sumOf(extras, (n) => n.proteinG)),
+      carbohydratesG: addKnown(planned.carbohydratesG, sumOf(extras, (n) => n.carbohydratesG)),
+      fatG: addKnown(planned.fatG, sumOf(extras, (n) => n.fatG)),
       isToday: isoOf(date) === now,
     }
   })
@@ -222,30 +197,7 @@ const weekAverageKcal = computed(() => {
 })
 
 /** Every ingredient of the week, so an average is read against its coverage. */
-const weekCoverage = computed<DishTotals>(() =>
-  days.value.reduce<DishTotals>(
-    (total, day) => ({
-      kcal: null,
-      proteinG: null,
-      carbohydratesG: null,
-      fatG: null,
-      ingredients: total.ingredients + day.plan.ingredients,
-      counted: total.counted + day.plan.counted,
-      unmatched: total.unmatched + day.plan.unmatched,
-      unmeasured: total.unmeasured + day.plan.unmeasured,
-    }),
-    {
-      kcal: null,
-      proteinG: null,
-      carbohydratesG: null,
-      fatG: null,
-      ingredients: 0,
-      counted: 0,
-      unmatched: 0,
-      unmeasured: 0,
-    },
-  ),
-)
+const weekCoverage = computed<DishTotals>(() => sumTotals(days.value.map((day) => day.plan)))
 
 const today = computed<PatientDay | null>(
   () => days.value.find((column) => column.day === selectedDay.value) ?? days.value[0] ?? null,
