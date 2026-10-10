@@ -932,6 +932,21 @@ Both the builder and the patient screen show the CIQUAL 2025 and BLS 4.0 attribu
 count used in their footer. No BEDCA figure is shown on any screen since FD-033 phase D, so its line
 is gone.
 
+## `scrapper/` — supermarket catalogue sync (Python, FastAPI)
+
+A separate Python 3.12+ service, not part of the Gradle build; `scrapper/README.md` is its
+guide (run: `.venv/Scripts/python -m uvicorn app.main:app --port 8000`, test: `python -m pytest`).
+It syncs the food catalogues of Carrefour, Mercadona, ALDI, Dia, Eroski, Lupa and Lidl into JSON
+Lines snapshots under `scrapper/data/` (git-ignored: retailer data has no open licence, unlike
+`reference-data/`). All traffic goes through `app/net/client.py`: robots.txt obeyed, one request in
+flight per host with a 2 s + jitter gap, retries only on timeouts/429/5xx with host-wide backoff,
+and a refusal (403, bot challenge) ends the run without a retry. It never bypasses bot protection:
+on 2026-10-10 Carrefour and Dia were `blocked`, Lupa `blocked` for a non-browser user agent; ALDI, Eroski and Lidl (weekly offers only) worked.
+Mercadona's robots.txt forbids `/api`, so it runs only with `tienda.mercadona.es` in
+`SCRAPER_ROBOTS_EXEMPT_HOSTS` (per-host, so robots stays obeyed elsewhere); the local
+`scrapper/.env` sets it. It reads the public API that datania/mercadona-catalog documents
+(categories, then `/api/products/<id>/` for EAN and ingredients; no nutrition table).
+
 ## Dependencies
 
 Declared in `build.gradle`: Spring Web, Spring Data JPA, Bean Validation, MySQL connector,
