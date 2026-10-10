@@ -1,0 +1,158 @@
+# The whole of fdiet on one machine: MySQL, the Spring backend, the Vue UI, the scrapper,
+# OpenSearch (the supermarket products and the food matches) with its Dashboards, and Fluent Bit
+# shipping every service's logs into OpenSearch.
+#
+#   docker compose up -d --build
+#
+# Ports are bound to 127.0.0.1 only: there is no authentication anywhere in this stack
+# (fdiet has none, and OpenSearch runs with its security plugin off), so nothing here may be
+# reachable from another machine.
+#
+# Settings come from the root .env (see .env.example, "docker compose" section); every one has
+# a default. The MYSQL_* entries there are for gradlew and are not read here.
+
+name: fdiet
+
+# Every application container logs through Fluent Bit into OpenSearch (index fdiet-logs-*).
+# `docker compose logs` still works: Docker keeps a local copy beside the fluentd driver.
+# fluentd-async: a container starts even while Fluent Bit is not up yet.
+x-logging: &logging
+  driver: fluentd
+  options:
+    fluentd-address: localhost:24224
+    fluentd-async: "true"
+    tag: "fdiet.{{.Name}}"
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${FDIET_DB_NAME:-fdiet}
+      MYSQL_USER: ${FDIET_DB_USER:-fdiet}
+      MYSQL_PASSWORD: ${FDIET_DB_PASSWORD:-fdiet}
+      MYSQL_ROOT_PASSWORD: ${FDIET_DB_ROOT_PASSWORD:-fdiet-root}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
+    ports:
+      - "127.0.0.1:${FDIET_DB_HOST_PORT:-3307}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging: *logging
+
+  backend:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${FDIET_DB_NAME:-fdiet}
+      MYSQL_USER: ${FDIET_DB_USER:-fdiet}
+      MYSQL_PASSWORD: ${FDIET_DB_PASSWORD:-fdiet}
+      SERVER_PORT: "5000"
+      # One JSON object per line (Elastic Common Schema), which Fluent Bit lifts into fields.
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+    ports:
+      - "127.0.0.1:${FDIET_BACKEND_PORT:-5000}:5000"
+    healthcheck:
+      # The JRE image has no curl; a TCP connect to the port is enough.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/5000'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      # The first start loads CIQUAL + BLS (15 MB of spreadsheets) before it serves.
+      start_period: 180s
+    logging: *logging
+
+  ui:
+    build: UI
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:${FDIET_UI_PORT:-8080}:80"
+    logging: *logging
+
+  scrapper:
+    build: scrapper
+    restart: unless-stopped
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    env_file:
+      # Your scrapper settings (user agent, robots exemptions, ...). Optional.
+      - path: scrapper/.env
+        required: false
+    environment:
+      # These win over scrapper/.env: inside compose the services are reached by name.
+      SCRAPER_DATA_DIR: /app/data
+      SCRAPER_LOG_FORMAT: json
+      SCRAPER_OPENSEARCH_URL: http://opensearch:9200
+      SCRAPER_FDIET_API_URL: http://backend:5000
+    ports:
+      - "127.0.0.1:${FDIET_SCRAPPER_PORT:-8000}:8000"
+    volumes:
+      # The snapshots stay on the host (git-ignored), so the ones scraped outside docker are reused.
+      - ./scrapper/data:/app/data
+    logging: *logging
+
+  opensearch:
+    image: opensearchproject/opensearch:2.19.1
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      bootstrap.memory_lock: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms${FDIET_OPENSEARCH_HEAP:-1g} -Xmx${FDIET_OPENSEARCH_HEAP:-1g}
+      # Development only: no TLS, no users. The port is bound to 127.0.0.1 below.
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 65536, hard: 65536 }
+    ports:
+      - "127.0.0.1:${FDIET_OPENSEARCH_PORT:-9200}:9200"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow\\&timeout=5s || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.19.1
+    restart: unless-stopped
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    environment:
+      OPENSEARCH_HOSTS: '["http://opensearch:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+    ports:
+      - "127.0.0.1:${FDIET_DASHBOARDS_PORT:-5601}:5601"
+
+  fluent-bit:
+    image: fluent/fluent-bit:3.2.4
+    restart: unless-stopped
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    volumes:
+      - ./docker/fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./docker/fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf:ro
+    ports:
+      # The Docker daemon itself connects here to hand over each container's output.
+      - "127.0.0.1:24224:24224"
+
+volumes:
+  mysql-data:
+  opensearch-data:

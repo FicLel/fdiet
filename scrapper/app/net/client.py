@@ -16,6 +16,7 @@ What keeps a sync from looking like an attack:
 
 import asyncio
 import email.utils
+import logging
 import random
 import time
 from collections.abc import AsyncIterator
@@ -26,6 +27,8 @@ import httpx
 
 from app.config import Settings
 from app.net.robots import RobotsPolicy, parse_robots
+
+log = logging.getLogger(__name__)
 
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 REFUSAL_STATUSES = frozenset({401, 403})
@@ -181,6 +184,7 @@ class PoliteClient:
                 if status < 400:
                     return response
                 if status in REFUSAL_STATUSES or _looks_like_challenge(response):
+                    log.warning("%s refused %s with HTTP %d", url.host, url, status, extra={"http_status": status})
                     raise BlockedError(f"{url.host} refused {url} with HTTP {status}")
                 if status in (404, 410):
                     raise NotFoundError(f"HTTP {status} for {url}")
@@ -198,6 +202,7 @@ class PoliteClient:
                 backoff = self.settings.backoff_base_seconds * 2 ** (attempt - 1)
                 wait = min(self.settings.backoff_max_seconds, backoff)
                 wait += random.uniform(0, self.settings.jitter_seconds)
+            log.warning("retrying %s in %.1f s (attempt %d of %d): %s", url, wait, attempt, self.settings.max_retries, problem)
             throttle.hold_back(wait)
 
     def _throttle(self, host: str) -> HostThrottle:

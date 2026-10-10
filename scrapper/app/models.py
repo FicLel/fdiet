@@ -88,3 +88,81 @@ class ProductPage(BaseModel):
     page: int
     size: int
     items: list[Product]
+
+
+class FoodSyncStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    # The service stopped while the food sync ran; found so on the next start.
+    INTERRUPTED = "interrupted"
+
+
+class FoodSyncPhase(StrEnum):
+    PREFLIGHT = "preflight"
+    SCRAPE = "scrape"
+    INGEST = "ingest"
+    MATCH = "match"
+    DONE = "done"
+
+
+class FoodSyncOptions(BaseModel):
+    scrape: bool = Field(description="Scrape the supermarkets first; false indexes the snapshots already on disk")
+    force: bool = Field(description="Scrape even inside a supermarket's cooldown")
+    supermarkets: list[str] = Field(description="The supermarkets scraped; every snapshot on disk is indexed either way")
+
+
+class ScrapeEntry(BaseModel):
+    supermarket: str
+    job_id: str | None = None
+    started_here: bool = Field(default=False, description="This food sync started the job (and cancels it if cancelled)")
+    status: str
+    products: int = 0
+    note: str | None = None
+
+
+class IngestProgress(BaseModel):
+    index: str | None = None
+    products: int = 0
+    by_supermarket: dict[str, int] = Field(default_factory=dict)
+    without_snapshot: list[str] = Field(default_factory=list)
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+class MatchCounts(BaseModel):
+    """How one half of fdiet's catalogue went. `processed + skipped` reaches `total` at the end."""
+
+    total: int | None = Field(default=None, description="Foods the fdiet API reported; null until its first page")
+    processed: int = 0
+    skipped: int = Field(default=0, description="Foods with nothing to search by (no EAN and no name, or no Spanish name)")
+    ean_matched: int = Field(default=0, description="At least one product with the same EAN")
+    name_matched: int = Field(default=0, description="Candidates by name only - offered, never decided")
+    unmatched: int = 0
+
+
+class MatchProgress(BaseModel):
+    index: str | None = None
+    food_items: MatchCounts = Field(default_factory=MatchCounts)
+    composition: MatchCounts = Field(default_factory=MatchCounts)
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+class FoodSync(BaseModel):
+    """One run of scrape -> index in OpenSearch -> match every fdiet food against the index."""
+
+    id: str
+    status: FoodSyncStatus = FoodSyncStatus.QUEUED
+    phase: FoodSyncPhase = FoodSyncPhase.PREFLIGHT
+    options: FoodSyncOptions
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    error: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    scrape: dict[str, ScrapeEntry] = Field(default_factory=dict)
+    ingest: IngestProgress = Field(default_factory=IngestProgress)
+    match: MatchProgress = Field(default_factory=MatchProgress)

@@ -50,7 +50,9 @@ import java.util.stream.Stream;
 @Service
 public class CompositionFoodService implements ICompositionFoodService {
 
-    private static final Sort BY_SOURCE_AND_NAME = Sort.by("source", "nameEn");
+    // The id breaks ties between foods sharing an English name, so a caller paging through
+    // every food (the scrapper's food sync) never sees one twice or misses one.
+    private static final Sort BY_SOURCE_AND_NAME = Sort.by("source", "nameEn", "id");
 
     private final CompositionFoodRepository repository;
     private final ICompositionFoodMapper mapper;

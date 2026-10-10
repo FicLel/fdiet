@@ -62,6 +62,31 @@ class Settings(BaseSettings):
     # ALDI sections (the first segment of /productos/<section>/...) that are not food.
     aldi_excluded_categories: list[str] = ["bazar", "cuidado-personal", "limpieza-y-hogar", "mascotas"]
 
+    # Logs. "json" writes one JSON object per line (what docker compose ships to OpenSearch);
+    # "text" is for a terminal. Either way every line carries the food sync, job and
+    # supermarket it belongs to.
+    log_format: str = "text"
+    log_level: str = "INFO"
+    # A running scrape logs its progress every this many products.
+    log_progress_every: int = 250
+
+    # The food sync: scrape, index the snapshots in OpenSearch, match fdiet's foods.
+    opensearch_url: str = "http://localhost:9200"
+    # Indices are <prefix>-products-<timestamp> and <prefix>-food-matches-<timestamp>, read
+    # through the aliases <prefix>-products and <prefix>-food-matches.
+    opensearch_prefix: str = "fdiet"
+    opensearch_timeout_seconds: float = 60.0
+    # Documents per _bulk request, queries per _msearch request.
+    opensearch_bulk_size: int = 500
+    opensearch_msearch_size: int = 100
+    # The fdiet backend whose foods are matched (GET /api/food, GET /api/composition).
+    fdiet_api_url: str = "http://localhost:5000"
+    fdiet_api_page_size: int = 200
+    # Candidates kept per food and supermarket.
+    food_sync_matches_per_supermarket: int = 3
+    # How often a food sync waiting on its scrape jobs looks at them again.
+    food_sync_poll_seconds: float = 5.0
+
 
 @lru_cache
 def get_settings() -> Settings:

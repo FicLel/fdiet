@@ -89,6 +89,49 @@ original text**, as fdiet stores composition data: `{"name": "energía", "value"
 "unit": "Kcal", "raw": "154 Kcal"}`. A value that is not a plain number (`<0,5`, `trazas`) is
 `null` with `raw` kept.
 
+## The food sync (scrape -> OpenSearch -> match fdiet's foods)
+
+Searching seven supermarkets live for each of fdiet's ~110 k foods would take days and be
+anything but polite. The food sync does it the other way round, once, in the background:
+
+1. **preflight** - OpenSearch and the fdiet backend must answer, before hours of scraping.
+2. **scrape** - one scrape job per supermarket asked for, through the same `JobManager`, so
+   cooldowns, robots, throttling and refusal handling all apply. A supermarket inside its
+   cooldown or refused is not scraped again; its last complete snapshot is used and the run's
+   `warnings` say so.
+3. **ingest** - every supermarket's `latest.jsonl` into a new index `fdiet-products-<ts>`,
+   then the alias `fdiet-products` moves onto it atomically and the old index is dropped.
+4. **match** - every food of `GET /api/food` (branded, by **EAN** and by name) and of
+   `GET /api/composition` (CIQUAL / BLS, by **Spanish name and aliases** only) searched in
+   that index, collapsed per supermarket (best 3 of each), into `fdiet-food-matches-<ts>` behind
+   the alias `fdiet-food-matches`. A match is `ean` (same barcode, compared as GTIN-14) or
+   `name` (a ranked candidate; like every name similarity in fdiet, offered, never decided).
+
+A failed or cancelled run deletes its half-built index and leaves the aliases on the last
+complete ones. One food sync at a time. Its status is written to
+`data/food-syncs/<id>.json` at every step; a run found `running` after a restart is
+`interrupted` (nothing resumes it; start a new one with `scrape=false` to reuse the snapshots).
+
+| | |
+| --- | --- |
+| `POST /food-sync?scrape=&force=&supermarket=` | fire and forget (202 + the run). `scrape=false` indexes and matches the snapshots on disk; `supermarket` is repeatable (default all); 409 while one runs |
+| `GET /food-sync`, `GET /food-sync/latest`, `GET /food-sync/{id}` | status: `phase` (`preflight`, `scrape`, `ingest`, `match`, `done`), each scrape job, products indexed per supermarket, foods matched (`total`, `processed`, `skipped`, `ean_matched`, `name_matched`, `unmatched`) per half of the catalogue |
+| `POST /food-sync/{id}/cancel` | stops it and the scrape jobs it started |
+| `GET /search/products?q=&ean=&supermarket=` | the indexed products, from OpenSearch |
+| `GET /food-matches/{food_item\|composition}/{id}` | where one fdiet food is sold, per the last food sync |
+
+Modules: `app/foodsync/` - `manager.py` (the run), `phases.py` (ingest, match),
+`matching.py` (pure: query and answer), `indices.py` (mappings, Spanish analyser),
+`opensearch.py` (httpx REST client), `fdiet_api.py` (the backend's pages).
+
+## Logs
+
+`app/logs.py`. Every line carries the `sync_id`, `phase`, `job_id` and `supermarket` it
+belongs to (contextvars, so a line from deep inside the HTTP client still says which run it
+is). A running scrape logs its progress every `SCRAPER_LOG_PROGRESS_EVERY` products; retries,
+refusals and item failures are warnings. `SCRAPER_LOG_FORMAT=json` (set in docker compose)
+writes one JSON object per line, which Fluent Bit ships to OpenSearch (`fdiet-logs-*`).
+
 ## Licensing
 
 Unlike every dataset in `reference-data/`, **scraped catalogue data carries no open licence**:
@@ -105,4 +148,6 @@ each retailer's terms (and get advice) before using the data beyond private, int
   sitemap walker, `parsing.py` the shared helpers.
 - `app/jobs.py` - background runs, one per supermarket, cooldowns.
 - `app/store.py` - snapshot writer / reader.
+- `app/foodsync/` - the food sync (above).
+- `app/logs.py` - JSON / text log lines with their run context.
 - `app/main.py` - the FastAPI routes.

@@ -947,6 +947,24 @@ Mercadona's robots.txt forbids `/api`, so it runs only with `tienda.mercadona.es
 `scrapper/.env` sets it. It reads the public API that datania/mercadona-catalog documents
 (categories, then `/api/products/<id>/` for EAN and ingredients; no nutrition table).
 
+**The food sync** (`scrapper/app/foodsync/`, `POST /food-sync`, status at `GET /food-sync/{id}`)
+is fire and forget: scrape every supermarket (through the same jobs and cooldowns), index the
+`latest.jsonl` snapshots in OpenSearch (`fdiet-products`), then page through this backend's
+`GET /api/food` and `GET /api/composition` and search each food there — branded by EAN
+(GTIN-14) and name, composition foods by Spanish name and aliases only — into
+`fdiet-food-matches`. Each index is built fresh and put behind its alias atomically. A `name`
+match is a candidate, never a decision. The backend is only read, over HTTP; nothing is written
+back to MySQL. The composition listing sorts by `source, nameEn, id` so that paging is stable.
+
+## Docker
+
+`compose.yaml` runs MySQL, the backend (`Dockerfile`), the UI (`UI/Dockerfile`, nginx proxying
+`/api`), the scrapper (`scrapper/Dockerfile`), OpenSearch + Dashboards and Fluent Bit, which
+ships every app container's output into `fdiet-logs-*` (backend: Spring's ECS JSON; scrapper:
+`SCRAPER_LOG_FORMAT=json`). Ports on 127.0.0.1 only; OpenSearch's security plugin is off.
+Compose reads the `FDIET_*` entries of `.env`, never `MYSQL_*` (those are gradlew's).
+Runbook with every command: `docker/README.md`.
+
 ## Dependencies
 
 Declared in `build.gradle`: Spring Web, Spring Data JPA, Bean Validation, MySQL connector,

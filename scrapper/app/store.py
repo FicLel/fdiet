@@ -8,6 +8,7 @@ sees a half-written catalogue and a failed sync leaves the previous one in place
 import json
 import os
 import shutil
+from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 from typing import IO
@@ -62,6 +63,17 @@ class SnapshotReader:
         if not path.exists():
             return None
         return SnapshotMeta.model_validate_json(path.read_text(encoding="utf-8"))
+
+    def iter_products(self, supermarket: str) -> Iterator[Product]:
+        """The latest snapshot one line at a time, bypassing the cache: for a reader that
+        goes through it once, such as the OpenSearch ingest."""
+        path = self.data_dir / supermarket / LATEST
+        if not path.exists():
+            return
+        with path.open(encoding="utf-8") as handle:
+            for line in handle:
+                if line.strip():
+                    yield Product.model_validate_json(line)
 
     def products(self, supermarket: str) -> list[Product]:
         path = self.data_dir / supermarket / LATEST

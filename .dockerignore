@@ -1,0 +1,17 @@
+# Only what the backend image needs goes into the build context.
+.git
+.gradle
+.idea
+.vscode
+**/build/
+.env
+fdiet.db
+UI
+scrapper
+product
+reports
+research_notes
+graphify-out
+docker
+*.xlsx
+!reference-data/**/*.xlsx

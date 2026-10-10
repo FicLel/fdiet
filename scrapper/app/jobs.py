@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 
+from app import logs
 from app.config import Settings
 from app.models import ItemFailure, Job, JobStatus
 from app.net.client import BlockedError, PoliteClient, RobotsDisallowedError, ScrapeError
@@ -97,13 +98,17 @@ class JobManager:
             self._tasks.pop(job.id, None)
 
     def _record_failure(self, job: Job, failure: ItemFailure) -> None:
+        log.warning("item failed: %s: %s", failure.url, failure.error, extra={"url": failure.url})
         job.failures += 1
         job.recent_failures.append(failure)
         del job.recent_failures[:-MAX_RECENT_FAILURES]
 
     async def _run(self, job: Job, scraper) -> None:
+        logs.bind(job_id=job.id, supermarket=job.supermarket)
         job.status = JobStatus.RUNNING
         job.started_at = _now()
+        log.info("sync %s of %s started", job.id, job.supermarket, extra={"limit": job.limit})
+        progress_every = max(1, self.settings.log_progress_every)
         writer = SnapshotWriter(self.settings.data_dir, job.supermarket, job.started_at)
         job.output_file = str(writer.path)
         seen: set[str] = set()
@@ -118,6 +123,8 @@ class JobManager:
                     seen.add(product.source_id)
                     writer.write(product)
                     job.products = writer.count
+                    if writer.count % progress_every == 0:
+                        log.info("%d products so far", writer.count, extra=_progress(job))
                     if job.limit and writer.count >= job.limit:
                         break
             if writer.count == 0:
@@ -146,4 +153,13 @@ class JobManager:
             self._refused_at[job.supermarket] = job.finished_at
         if job.status is JobStatus.SUCCEEDED and job.limit is None:
             writer.promote(job.supermarket, job.finished_at)
-        log.info("sync %s of %s: %s, %d products, %d requests", job.id, job.supermarket, job.status, job.products, job.requests)
+        level = logging.INFO if job.status in (JobStatus.SUCCEEDED, JobStatus.CANCELLED) else logging.WARNING
+        log.log(level, "sync %s of %s finished: %s, %d products, %d requests%s", job.id, job.supermarket, job.status,
+                job.products, job.requests, f" ({job.error})" if job.error else "",
+                extra={**_progress(job), "status": str(job.status), "error": job.error})
+
+
+def _progress(job: Job) -> dict[str, object]:
+    elapsed = ((job.finished_at or _now()) - job.started_at).total_seconds() if job.started_at else 0.0
+    return {"products": job.products, "requests": job.requests, "failures": job.failures,
+            "elapsed_seconds": round(elapsed, 1)}
